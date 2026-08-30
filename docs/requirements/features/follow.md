@@ -20,7 +20,7 @@
   - 「フォロワー」= 自分をフォローしているユーザーの一覧。
 - 各行 = ユーザー行（アバター + 表示名 + フォロー状態ボタン）。**カーソルページングによる無限スクロール**（[../non-functional.md](../non-functional.md)）。
 - **行タップでそのユーザーのプロフィールへ**（そこにその人の公開レシピ一覧がある。[profile.md](profile.md)）。
-- ユーザープロフィールのフォロー数 / フォロワー数タップでも、この画面（該当タブ選択状態）へ遷移。
+- ユーザープロフィールのフォロー数 / フォロワー数タップでも、この画面（該当タブ選択状態）へ遷移。自分のプロフィールから遷移した場合は `GET /users/me/following` / `GET /users/me/followers`、他ユーザーのプロフィールから遷移した場合は `GET /users/{id}/following` / `GET /users/{id}/followers` を使い、プロフィールのユーザーの一覧を表示する。
 - 空状態: 「まだ誰もフォローしていません」/「まだフォロワーがいません」。
 
 ## 3. 振る舞い・ルール
@@ -41,7 +41,8 @@
 -- フォロー（A → B）
 BEGIN;
 INSERT INTO follows (follower_id, followee_id) VALUES (:a, :b) ON CONFLICT DO NOTHING;
--- 1行入ったときだけ（id 昇順でロックを取り、デッドロックを避ける）
+-- 1行入ったときだけ、関与する2行を id 昇順でロックしてから更新する
+SELECT id FROM users WHERE id IN (:a, :b) ORDER BY id FOR UPDATE;
 UPDATE users SET following_count = following_count + 1 WHERE id = :a;
 UPDATE users SET follower_count  = follower_count  + 1 WHERE id = :b;
 COMMIT;
@@ -49,7 +50,8 @@ COMMIT;
 -- フォロー解除
 BEGIN;
 DELETE FROM follows WHERE follower_id = :a AND followee_id = :b;  -- 削除件数を確認
--- 1行消えたときだけ
+-- 1行消えたときだけ、関与する2行を id 昇順でロックしてから更新する
+SELECT id FROM users WHERE id IN (:a, :b) ORDER BY id FOR UPDATE;
 UPDATE users SET following_count = following_count - 1 WHERE id = :a;
 UPDATE users SET follower_count  = follower_count  - 1 WHERE id = :b;
 COMMIT;
@@ -88,13 +90,28 @@ COMMIT;
 
 ### GET `/users/me/following`（認証必要）
 
+- 自分がフォローしているユーザー一覧。`GET /users/{id}/following` の `{id}` に自分の ID を指定した場合と同義のショートカット。
+
 ```json
 { "items": [ { "id": "…", "displayName": "…", "avatarUrl": "…", "isFollowing": true } ], "nextCursor": null }
 ```
 
 ### GET `/users/me/followers`（認証必要）
 
-- 自分をフォローしているユーザー一覧。各要素の `isFollowing` = 自分が相手をフォローしているか（フォローバック判定に使う）。
+- 自分をフォローしているユーザー一覧。`GET /users/{id}/followers` の `{id}` に自分の ID を指定した場合と同義のショートカット。
+- 各要素の `isFollowing` = 閲覧者（認証ユーザー）が相手をフォローしているか（フォローバック判定に使う）。
+
+### GET `/users/{id}/following`（認証必要）
+
+- `{id}` のユーザーがフォローしているユーザー一覧。カーソルページング（`limit`, `cursor`）。
+- レスポンス形式は `GET /users/me/following` と同じ。各要素の `isFollowing` = 閲覧者（認証ユーザー）がその要素のユーザーをフォローしているか。
+- 200 / 401 / 404（存在しないユーザー）
+
+### GET `/users/{id}/followers`（認証必要）
+
+- `{id}` のユーザーをフォローしているユーザー一覧。カーソルページング（`limit`, `cursor`）。
+- レスポンス形式は `GET /users/me/following` と同じ。各要素の `isFollowing` = 閲覧者（認証ユーザー）がその要素のユーザーをフォローしているか。
+- 200 / 401 / 404（存在しないユーザー）
 
 （フォロー数 / フォロワー数・`isFollowing` は `GET /users/{id}` に含む。[profile.md](profile.md)）
 
@@ -102,7 +119,7 @@ COMMIT;
 
 | 項目 | ルール |
 | --- | --- |
-| `{id}` | 存在するユーザー。自分自身は 400 |
+| `{id}` | 存在するユーザー。フォロー操作で自分自身を指定した場合は 400 |
 
 ## 7. 受け入れ基準
 
@@ -111,6 +128,7 @@ COMMIT;
 - [ ] 同じ相手を二重フォローしても 1 件のまま（冪等）
 - [ ] 自分自身をフォローしようとすると 400
 - [ ] 「フォロー中」「フォロワー」タブの一覧が実データと一致する
+- [ ] 他ユーザーのプロフィールから、そのユーザーの「フォロー中」「フォロワー」一覧を閲覧できる
 - [ ] 相互フォロー（双方が follow）が成立し、両者の一覧に相手が出る
 - [ ] ユーザー行 / プロフィールからフォロー状態を切り替えられる
 - [ ] フォロー・フォロワー一覧の名前をタップすると、その人のプロフィール（＝その人のレシピ一覧を含む）へ遷移する

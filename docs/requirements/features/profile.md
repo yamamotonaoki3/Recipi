@@ -40,13 +40,14 @@
 - 表示名を変更すると、以後の自分の投稿・一覧・プロフィール・感想の表示名に反映される。
 - メール / X / Instagram / その他 URL には**項目ごとの公開トグル**がある。既定はすべて非公開（OFF）。
 - 他ユーザーのプロフィール取得（`GET /users/{id}`）では、**公開トグル OFF の項目をレスポンスに含めない**。本人取得時のみ全項目 + 各トグル状態を返す（[non-functional.md](../non-functional.md) データ可視性ルール）。
-- アバターの実体は S3 互換ストレージに保存（[image.md](image.md)）。`users.avatar_key` / `avatar_url` に記録。
+- アバターの実体は S3 互換ストレージに保存（[image.md](image.md)）。`users.avatar_key` を記録し、表示用 URL はキーから生成する。
 - 「秘密の質問・答え」はサインアップ時に登録する（[auth.md](auth.md)）。プロフィール編集からの変更手段は未確定（→ [../todo.md](../todo.md)）。
 - **アカウント削除**（`DELETE /users/me`）:
   - 本人のみ。確認 UI 必須。
+  - 削除は**単一のアプリケーショントランザクション**で行う。削除前に `users.token_version` を原子的に `+1` する。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（共通方針は [non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」）。
   - 削除で本人の `recipes`（→ `ingredients` / `steps` / その `recipe` への `favorites` / `recipe_comments`）、`follows`（`follower_id` = me と `followee_id` = me の両方向）、`favorites`（`user_id` = me）、`recipe_comments`（`user_id` = me）、`refresh_tokens`（`user_id` = me）、`notifications`（`user_id` = me と `actor_id` = me）を CASCADE 削除。サムネ・手順画像・**感想画像**・アバターはストレージ削除ジョブ対象。
   - ストレージ上の画像（レシピ画像・アバター）はアプリ側で削除ジョブ対象にする。
-  - サーバーは冪等（2 回目は 204 または 404）。
+  - 削除は成功時 204。既発行のアクセストークンは、認証ミドルウェアのユーザー存在チェック（および削除前の `token_version` 加算）により以降 401 になる。リフレッシュトークンは CASCADE 削除される。専用の冪等機構は設けない（トークン検証の共通方針は [auth.md](auth.md)）。
 
 ## 4. データモデル
 
@@ -56,7 +57,6 @@
 | --- | --- | --- |
 | `display_name` | string | NOT NULL（1〜30 文字） |
 | `avatar_key` | string | NULL 可 |
-| `avatar_url` | string | NULL 可 |
 | `email_public` | boolean | NOT NULL DEFAULT false |
 | `x_url` | string | NULL 可（URL 形式） |
 | `x_public` | boolean | NOT NULL DEFAULT false |
@@ -103,7 +103,7 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 
 ### DELETE `/users/me`（認証必要）
 
-- 204（削除成功 / 既に削除済み）
+- 削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。
 - 関連データを CASCADE 削除
 
 ### GET `/users/{id}/recipes`（認証必要）
@@ -128,7 +128,7 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 - [ ] アバターを設定 / 変更 / 削除でき、一覧カード・詳細・プロフィールに反映される
 - [ ] アカウント削除の確認ダイアログを経ないと削除できない
 - [ ] アカウント削除後、そのユーザーのレシピ・フォロー・お気に入り・感想が残らない
-- [ ] 削除済みアカウントのトークンでのアクセスは 401
+- [ ] アカウント削除後、削除前に発行された既存のアクセストークンでリクエストすると 401 になる
 
 ## 8. 未確定・メモ
 

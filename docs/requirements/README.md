@@ -42,6 +42,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | 非機能要件 | [non-functional.md](non-functional.md) |
 | 開発ロードマップ / MVP 候補ライン | [roadmap.md](roadmap.md) |
 | 未確定事項・要調査（TODO） | [todo.md](todo.md) |
+| 学び・手直しの記録 | [../lessons-learned.md](../lessons-learned.md) |
 
 ## ドキュメントの関係
 

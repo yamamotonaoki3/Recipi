@@ -9,8 +9,10 @@
 - アクセストークンは短命。期限切れ時は `POST /auth/refresh` でリフレッシュトークンを使って更新（ローテーション方式。[features/auth.md](features/auth.md)）
 - リクエスト / レスポンスは `application/json`（画像アップロードのみ `multipart/form-data`）
 - **一覧系・感想スレッドはすべてカーソルページング**（`limit`, `cursor`）で、レスポンスに `nextCursor` を返す（無限スクロール）。オフセットページングは使わない
+- ソートは `(時刻, id)` の全順序とし、`cursor` は両方を保持する
 - 1 ページ 20 件目安
 - 日時は ISO 8601（UTC）
+- レスポンスの `thumbnailUrl` / `avatarUrl` / `imageUrl` は、サーバーが永続化されたオブジェクトキーから生成する表示用 URL（派生値）。署名付き URL はレスポンスごとに生成し、DB には永続化しない
 
 ### 統一エラーレスポンス
 
@@ -41,17 +43,17 @@
 | PATCH | `/users/me` | 必要 | `displayName`, `emailPublic`, `xUrl`, `xPublic`, `instagramUrl`, `instagramPublic`, `otherUrl`, `otherPublic` |
 | PUT | `/users/me/avatar` | 必要 | アバター画像アップロード（multipart） |
 | DELETE | `/users/me/avatar` | 必要 | アバター削除 |
-| DELETE | `/users/me` | 必要 | アカウント削除（冪等）。関連データを CASCADE 削除 |
+| DELETE | `/users/me` | 必要 | アカウント削除。削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。関連データを CASCADE 削除 |
 | GET | `/users/{id}/recipes` | 必要 | そのユーザーのレシピ一覧（他人には公開のみ、本人には非公開も） |
 
 ### レシピ — [features/recipe.md](features/recipe.md) / フィード = [features/home-feed.md](features/home-feed.md) / 検索 = [features/search.md](features/search.md)
 
 | メソッド | パス | 認証 | 概要 |
 | --- | --- | --- | --- |
-| GET | `/recipes` | 必要 | フィード / 検索。query: `feed=all\|following\|followers\|favorites`（既定 `all`）, `q`, `limit`, `cursor` |
+| GET | `/recipes` | 必要 | フィード / 検索。query: `feed=all\|following\|followers\|favorites`（既定 `all`）, `q`（`feed` と併用可、`favorites` 含む）, `limit`, `cursor` |
 | GET | `/recipes/{id}` | 任意 | 詳細（非公開は本人のみ）。`isFavorited` / `favoriteCount` / `commentCount` / `author` / `thumbnailUrl` / `steps[].imageUrl` |
 | POST | `/recipes` | 必要 | 作成。body に `thumbnailKey`（任意）, `steps[].imageKey`（任意） |
-| PUT | `/recipes/{id}` | 必要 | 全項目更新（本人のみ）。材料・手順は配列で全入れ替え |
+| PUT | `/recipes/{id}` | 必要 | 全項目更新（本人のみ）。材料・手順は配列で全入れ替え。`thumbnailKey` は省略 = 維持、`null` = 削除。手順画像を残す場合は既存の `steps[].imageKey` を再送 |
 | DELETE | `/recipes/{id}` | 必要 | 削除（本人のみ） |
 | GET | `/users/me/recipes` | 必要 | 自分の投稿一覧（公開 / 非公開） |
 
@@ -75,7 +77,7 @@
 | PUT | `/users/me/avatar` | 必要 | アバター設定 / 差し替え（multipart） |
 | DELETE | `/users/me/avatar` | 必要 | アバター削除 |
 
-サムネ・手順画像・感想画像は `POST /images` で `key` を得て、レシピの `POST` / `PUT` body の `thumbnailKey` / `steps[].imageKey`、感想の `POST` / `PATCH` body の `imageKey` で紐付ける。`recipe_images` エンドポイントは廃止。
+サムネ・手順画像・感想画像は `POST /images` で `key` を得て、レシピの `POST` / `PUT` body の `thumbnailKey` / `steps[].imageKey`、感想の `POST` / `PATCH` body の `imageKey` で紐付ける。キーは本人所有かつ未使用、または更新対象自身に紐付いているものに限り、他人のキー・別リソースのキーは 400。単一画像のサムネイル・感想画像は更新時にキー省略 = 変更なし、同じ既存キー = 維持、`null` = 削除、新しい未使用キー = 差し替え。全入れ替えの手順画像は、維持する既存キーを再送し、キーのない手順は画像なしとする。差し替え・削除で外れた旧画像はストレージ削除ジョブ対象。`recipe_images` エンドポイントは廃止。
 
 ### フォロー — [features/follow.md](features/follow.md)
 
@@ -83,8 +85,10 @@
 | --- | --- | --- | --- |
 | POST | `/users/{id}/follow` | 必要 | フォロー（冪等）。自分自身は 400 |
 | DELETE | `/users/{id}/follow` | 必要 | フォロー解除（冪等） |
-| GET | `/users/me/following` | 必要 | フォロー中のユーザー一覧 |
-| GET | `/users/me/followers` | 必要 | フォロワー一覧 |
+| GET | `/users/{id}/following` | 必要 | そのユーザーがフォローしているユーザー一覧（カーソルページング）。各要素に閲覧者から見た `isFollowing` を含む |
+| GET | `/users/{id}/followers` | 必要 | そのユーザーのフォロワー一覧（カーソルページング）。各要素に閲覧者から見た `isFollowing` を含む |
+| GET | `/users/me/following` | 必要 | 自分がフォローしているユーザー一覧。`/users/{id}/following` に自分の ID を指定した場合と同義 |
+| GET | `/users/me/followers` | 必要 | 自分のフォロワー一覧。`/users/{id}/followers` に自分の ID を指定した場合と同義 |
 
 ### お気に入り — [features/favorite.md](features/favorite.md)
 
@@ -100,13 +104,13 @@
 | --- | --- | --- | --- |
 | GET | `/recipes/{id}/comments` | 任意 | 感想一覧（新しい順、カーソルページング / 無限スクロール） |
 | POST | `/recipes/{id}/comments` | 必要 | 感想投稿。body に `body` ＋ `imageKey`（任意）。レシピ投稿者本人は 403、非公開レシピは 404 |
-| PATCH | `/comments/{commentId}` | 必要 | 感想編集（投稿者本人のみ）。`body` / `imageKey`（`null` で画像削除） |
+| PATCH | `/comments/{commentId}` | 必要 | 感想編集（投稿者本人のみ）。`body` / `imageKey`（省略 = 変更なし、同じ既存キー = 維持、`null` = 削除、未使用キー = 差し替え） |
 | DELETE | `/comments/{commentId}` | 必要 | 感想削除（感想の投稿者 or レシピの投稿者）。感想画像もストレージ削除ジョブ対象 |
 
 ### 通知 — [features/notification.md](features/notification.md)
 
 | メソッド | パス | 認証 | 概要 |
 | --- | --- | --- | --- |
-| GET | `/notifications` | 必要 | 通知一覧（新しい順、ページング、未読含む） |
-| GET | `/notifications/unread-count` | 必要 | 未読件数 |
+| GET | `/notifications` | 必要 | 通知一覧（新しい順、カーソルページング）。レスポンスに `unreadCount` も含む |
+| GET | `/notifications/unread-count` | 必要 | 未読件数のみ（バッジ更新用、一覧を取らない場面） |
 | POST | `/notifications/read` | 必要 | 既読化（`{ ids?: [...] }`、省略時は全既読） |

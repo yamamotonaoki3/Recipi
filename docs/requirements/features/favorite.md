@@ -19,7 +19,7 @@
   - **自分が投稿した非公開レシピ**（自分には見えるため）
   - 他人の非公開レシピは不可（404 相当）
 - 登録 / 解除は冪等（二重登録しても 1 件、未登録の解除も 204）。
-- お気に入り一覧には自分の非公開レシピも表示される。**他人のレシピ**が後から非公開化 / 削除されたら一覧に表示しない（`favorites` レコード自体は残してよい。[../non-functional.md](../non-functional.md)）。
+- お気に入り一覧には自分の非公開レシピも表示される。**他人のレシピ**が後から**非公開化**されたら一覧に表示しない（`favorites` 行は残る）。レシピが**削除**された場合は `favorites.recipe_id` の `ON DELETE CASCADE` で `favorites` 行も消える（[../non-functional.md](../non-functional.md)）。
 - **お気に入り数はカウント列キャッシュ**（`recipes.favorite_count`）。集計クエリはしない。
 
 ### お気に入り数の更新（トランザクション）
@@ -99,4 +99,4 @@ COMMIT;
 ## 8. 未確定・メモ
 
 - お気に入りの並び替え（レシピ新着順など）→ 将来
-- お気に入り解除時に `recipe_favorited` 通知を取り消すか → [notification.md](notification.md) / [../todo.md](../todo.md)
+- お気に入り解除時も、既存の `recipe_favorited` 通知は削除しない（[notification.md](notification.md)）。

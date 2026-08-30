@@ -54,13 +54,13 @@
 | 操作 | 認証 | 認可 |
 | --- | --- | --- |
 | 作成 | 必要 | ログインユーザーが投稿者になる |
-| 詳細 | 任意 | 公開レシピは誰でも。非公開は投稿者本人のみ（他人は 403 / 404） |
+| 詳細 | 任意 | 公開レシピは誰でも。非公開は投稿者本人のみ。他人がアクセスした場合は**存在を伏せるため 404**（403 ではなく 404。感想エンドポイントと統一） |
 | 更新 | 必要 | 投稿者本人のみ（他人は 403） |
 | 削除 | 必要 | 投稿者本人のみ（他人は 403）。関連する材料 / 手順 / お気に入り / 感想 / 通知も削除。サムネ・手順画像はストレージ削除ジョブ対象 |
 | 自分の投稿一覧 | 必要 | 本人の公開 / 非公開すべて |
 
 - `PUT` は全項目更新。材料・手順は送られた配列で**全入れ替え**。
-- 画像は**先に `POST /images`（[image.md](image.md)）でアップロードして `key` を得て**、レシピの `POST` / `PUT` の body で `thumbnailKey` と各 `steps[].imageKey` に指定して紐付ける。
+- 新しい画像は**先に `POST /images`（[image.md](image.md)）でアップロードして `key` を得て**、レシピの `POST` / `PUT` の body で `thumbnailKey` と各 `steps[].imageKey` に指定して紐付ける。更新時は、更新対象のレシピ自身に既に紐付いているキーも再送できる。
 - サーバーは `title` から `title_normalized`、各材料 `name` から `name_normalized` を生成する（[search.md](search.md)）。
 - サーバーは材料の `unit` のうち `units` 未登録のものを自動追加する（[unit.md](unit.md)）。
 - 公開レシピの新規投稿時、投稿者のフォロワー全員に通知（[notification.md](notification.md) `followee_new_recipe`）。
@@ -69,9 +69,9 @@
 
 | テーブル | 主なカラム |
 | --- | --- |
-| `recipes` | `id` PK / `user_id` FK（CASCADE）/ `title`（1〜120）/ `title_normalized`（index）/ `description`（0〜2000）/ `servings` NOT NULL CHECK(1〜99) / `is_public` NOT NULL / `thumbnail_key` NULL / `thumbnail_url` NULL / `favorite_count` NOT NULL DEFAULT 0 / `comment_count` NOT NULL DEFAULT 0 / `created_at` / `updated_at` |
+| `recipes` | `id` PK / `user_id` FK（CASCADE）/ `title`（1〜120）/ `title_normalized`（index）/ `description`（0〜2000）/ `servings` NOT NULL CHECK(1〜99) / `is_public` NOT NULL / `thumbnail_key` NULL / `favorite_count` NOT NULL DEFAULT 0 / `comment_count` NOT NULL DEFAULT 0 / `created_at` / `updated_at` |
 | `ingredients` | `id` PK / `recipe_id` FK（CASCADE）/ `name`（1〜60）/ `name_normalized`（index）/ `quantity` NUMERIC NULL CHECK(>0) / `unit` VARCHAR NULL / `position` / UNIQUE(`recipe_id`, `position`) |
-| `steps` | `id` PK / `recipe_id` FK（CASCADE）/ `position` / `body`（1〜1000）/ `image_key` NULL / `image_url` NULL / UNIQUE(`recipe_id`, `position`) |
+| `steps` | `id` PK / `recipe_id` FK（CASCADE）/ `position` / `body`（1〜1000）/ `image_key` NULL / UNIQUE(`recipe_id`, `position`) |
 
 > `recipe_images` テーブルは廃止。画像は `recipes.thumbnail_*` と `steps.image_*` に統合。
 
@@ -79,8 +79,8 @@
 
 ### GET `/recipes/{id}`（認証任意）
 
-- 公開レシピ: 誰でも。非公開: 本人のみ（他は 403 / 404）
-- レスポンスに `author`（id / 表示名 / アバター URL）, `isFavorited`, `favoriteCount`, `commentCount`, `thumbnailUrl`, `ingredients[]`, `steps[]`（各 `body` と `imageUrl`）を含む
+- 公開レシピ: 誰でも。非公開: 本人のみ。他人がアクセスした場合は 404（存在を伏せる）
+- レスポンスに `author`（id / 表示名 / アバター URL）, `isFavorited`, `favoriteCount`, `commentCount`, `thumbnailUrl`, `ingredients[]`, `steps[]`（各 `body` と `imageUrl`）を含む。各画像 URL は保存されたキーからサーバーが生成する表示用の派生値
 
 ### POST `/recipes`（認証必要）
 
@@ -110,7 +110,10 @@
 
 ### PUT `/recipes/{id}`（認証必要、本人のみ）
 
-- body は `POST` と同形式。材料・手順は配列で全入れ替え。画像は `thumbnailKey` / `steps[].imageKey` の指定に従って差し替え（省略 = 変更なし、`null` = 削除、実装時に確定 → [../todo.md](../todo.md)）。
+- body は `POST` と同形式。材料・手順は配列で全入れ替え。
+- サムネイルは単一画像のため、`thumbnailKey` は**省略 = 変更なし**、**現在と同じ既存キーを再送 = 維持**、**`null` = 削除**、**新しい未使用キー = 差し替え**とする。
+- 手順は全入れ替えで安定 ID を持たないため、クライアントは画像を残したい手順について既存の `steps[].imageKey` を再送する。`imageKey` が省略または `null` の手順は画像なしになる。
+- 指定した画像キーは、リクエストした本人が所有し、かつ未使用または更新対象のこのレシピ自身に既に紐付いているものに限る。他人のキーや別リソースに紐付いているキーは 400。差し替え・削除・手順の全入れ替えで参照から外れた旧画像はストレージ削除ジョブ対象。
 
 ### DELETE `/recipes/{id}`（認証必要、本人のみ）
 
@@ -138,6 +141,8 @@
 - [ ] 材料・手順を並べ替えると、その順序で保存・表示される（手順画像も一緒に動く）
 - [ ] サムネイル画像を設定 / 変更 / 削除でき、詳細・一覧カードに反映される
 - [ ] 各手順に画像を添付 / 削除でき、詳細で本文の下に縦に表示される（カルーセルは無い）
+- [ ] `PUT` で `thumbnailKey` を省略するとサムネイルが維持され、`null` で削除、未使用キーで差し替えできる
+- [ ] `PUT` で画像を残したい手順の既存 `imageKey` を再送すると画像が維持され、`imageKey` を送らない手順は画像なしになる
 - [ ] 空の手順行を残して保存しても、その行は保存されない
 - [ ] 非公開レシピは他人の詳細アクセスで見えない
 - [ ] 自分のレシピ一覧で非公開に「非公開」バッジが付く
@@ -148,6 +153,6 @@
 ## 8. 未確定・メモ
 
 - 材料・手順の並べ替え UI（ドラッグ / 上下ボタン）の確定 → [../todo.md](../todo.md)
-- `PUT` 時の画像キー省略 / null の意味（変更なし / 削除）の確定 → [../todo.md](../todo.md)
+- `PUT` 時の画像キー省略 / `null` の意味は定義済み → [image.md](image.md) / [../todo.md](../todo.md)
 - 一時アップロード画像（未参照）の GC → [../todo.md](../todo.md)
 - レシピの複製・下書き保存は対象外（将来）

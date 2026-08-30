@@ -25,7 +25,7 @@
 - 削除できるのは**感想の投稿者本人**、または**そのレシピの投稿者**（モデレーション）。
 - レシピが削除される、または感想の投稿者がアカウント削除すると、感想も削除される（CASCADE。[../data-model.md](../data-model.md)）。感想画像もストレージ削除ジョブ対象。
 - 感想の新規投稿時、レシピ投稿者に通知（[notification.md](notification.md) `recipe_commented`）。編集では通知しない。
-- **感想画像**: 1 感想に 1 枚（任意）。`POST /images`（[image.md](image.md)）で一時アップロード → 感想の作成 / 更新 body で `imageKey` を指定して紐付ける。S3 互換ストレージに保存。差し替え時に旧画像、感想削除時にその画像はストレージ削除ジョブ対象。
+- **感想画像**: 1 感想に 1 枚（任意）。`POST /images`（[image.md](image.md)）で一時アップロード → 感想の作成 / 更新 body で `imageKey` を指定して紐付ける。S3 互換ストレージに保存。更新時は `imageKey` の省略 = 変更なし、同じ既存キーの再送 = 維持、`null` = 削除、新しい未使用キー = 差し替え。差し替え・削除で参照から外れた旧画像と、感想削除時の画像はストレージ削除ジョブ対象。
 
 ## 4. データモデル
 
@@ -38,9 +38,10 @@
 | `user_id` | uuid | FK → `users.id`（ON DELETE CASCADE） |
 | `body` | string | NOT NULL（1〜1000 文字） |
 | `image_key` | string | NULL 可 |
-| `image_url` | string | NULL 可 |
 | `created_at` | timestamptz | |
 | `updated_at` | timestamptz | |
+
+レスポンスの `imageUrl` と `author.avatarUrl` は、保存された各オブジェクトキーからサーバーが生成する表示用の派生値（[image.md](image.md)）。
 
 - index(`recipe_id`, `created_at` DESC)
 - **感想数はカウント列キャッシュ**（`recipes.comment_count`。NOT NULL DEFAULT 0, CHECK >= 0。[../data-model.md](../data-model.md)）。`GET /recipes/{id}` のレスポンスの `commentCount` はこの列を返す。
@@ -68,12 +69,14 @@
 
 ### POST `/recipes/{id}/comments`（認証必要）
 
-- body: `{ "body": "...", "imageKey": "uploads/ef56…" }`（`imageKey` は任意、`POST /images` で取得）
+- body: `{ "body": "...", "imageKey": "uploads/ef56…" }`（`body` は必須。`imageKey` は任意、`POST /images` で取得）
 - 201。レシピ投稿者本人は 403。非公開レシピは 404。
 
 ### PATCH `/comments/{commentId}`（認証必要、感想の投稿者のみ）
 
-- body: `{ "body": "...", "imageKey": "..." }`（`body` / `imageKey` とも任意。`imageKey` 省略 = 変更なし、`null` = 画像削除。実装時に確定 → [../todo.md](../todo.md)）
+- body: `{ "body": "...", "imageKey": "..." }`（`body` / `imageKey` とも任意。`body` は送られた場合のみ 1〜1000 文字で検証する。`imageKey` は省略 = 変更なし、現在と同じ既存キーを再送 = 維持、`null` = 削除、新しい未使用キー = 差し替え）
+- `body` / `imageKey` の少なくとも一方を指定して変更を含める必要がある。両方を省略した空の PATCH（`{}`）は 400。
+- 指定した画像キーは、リクエストした本人が所有し、かつ未使用または更新対象のこの感想自身に既に紐付いているものに限る。他人のキーや別リソースに紐付いているキーは 400。差し替え・削除で参照から外れた旧画像はストレージ削除ジョブ対象。
 - 200 / 403（他人の感想）/ 404
 
 ### DELETE `/comments/{commentId}`（認証必要）
@@ -84,7 +87,9 @@
 
 | 項目 | ルール |
 | --- | --- |
-| body | 必須。1〜1000 文字。前後空白トリム |
+| POST の body | 必須。1〜1000 文字。前後空白トリム |
+| PATCH の body | 任意。存在する場合は 1〜1000 文字。前後空白トリム |
+| PATCH の変更項目 | `body` / `imageKey` の少なくとも一方を指定。両方を省略した空の PATCH は 400 |
 | imageKey / 感想画像 | 任意。1 感想に 1 枚。形式・サイズは [image.md](image.md) 共通ルール |
 
 ## 7. 受け入れ基準
@@ -100,6 +105,7 @@
 - [ ] レシピ詳細の `commentCount` が実データと一致する
 - [ ] 画像付きの感想を投稿でき、感想一覧に画像が表示される
 - [ ] 感想の編集で画像を差し替え / 削除できる
+- [ ] 感想の編集で `imageKey` を省略または同じ既存キーを再送すると画像が維持され、別リソースのキーは 400 になる
 - [ ] 感想一覧が無限スクロールで全件たどれる
 
 ## 8. 未確定・メモ
@@ -107,6 +113,6 @@
 - 退会ユーザーの感想の扱い（現状 CASCADE 削除。「退会したユーザー」表示で残す案）→ [../todo.md](../todo.md)
 - レシピ投稿者による削除時の通知 / 論理削除 vs 物理削除 → [../todo.md](../todo.md)
 - 画像のみ（本文なし）の感想を許すか → [../todo.md](../todo.md)
-- `PATCH` 時の `imageKey` 省略 / `null` の意味（変更なし / 削除）→ [../todo.md](../todo.md)
+- `PATCH` 時の `imageKey` 省略 / `null` の意味は定義済み → [image.md](image.md) / [../todo.md](../todo.md)
 - 感想への返信・スレッド・いいねは対象外（将来）
 - 不適切表現の通報・NG ワード → 将来

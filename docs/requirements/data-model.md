@@ -25,8 +25,8 @@ erDiagram
         string display_name
         string security_question
         string security_answer_hash
+        int token_version "DEFAULT 0"
         string avatar_key "NULL可"
-        string avatar_url "NULL可"
         boolean email_public "既定false"
         string x_url "NULL可"
         boolean x_public "既定false"
@@ -48,7 +48,6 @@ erDiagram
         int servings
         boolean is_public
         string thumbnail_key "NULL可"
-        string thumbnail_url "NULL可"
         int favorite_count "既定0"
         int comment_count "既定0"
         timestamptz created_at
@@ -69,7 +68,6 @@ erDiagram
         int position
         string body
         string image_key "NULL可"
-        string image_url "NULL可"
     }
     recipe_comments {
         uuid id PK
@@ -77,7 +75,6 @@ erDiagram
         uuid user_id FK
         string body
         string image_key "NULL可"
-        string image_url "NULL可"
         timestamptz created_at
         timestamptz updated_at
     }
@@ -123,11 +120,11 @@ erDiagram
 
 | テーブル | 主なカラム / 制約 / インデックス | 詳細 |
 | --- | --- | --- |
-| `users` | `email` UNIQUE NOT NULL / `password_hash` NOT NULL / `display_name` NOT NULL（1〜30）/ `security_question` NOT NULL / `security_answer_hash` NOT NULL / `avatar_key`・`avatar_url` NULL 可 / `email_public`・`x_public`・`instagram_public`・`other_public` BOOLEAN NOT NULL DEFAULT false / `x_url`・`instagram_url`・`other_url` NULL 可（URL 形式）/ `follower_count`・`following_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md), [features/follow.md](features/follow.md) |
-| `recipes` | `user_id` FK → `users.id`（ON DELETE CASCADE）/ `servings` NOT NULL CHECK(1〜99) / `is_public` NOT NULL / `title` NOT NULL（1〜120）/ `title_normalized` NOT NULL（index、必要なら `pg_trgm`）/ `description`（0〜2000）/ `thumbnail_key`・`thumbnail_url` NULL 可 / `favorite_count`・`comment_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) / index(`user_id`) / index(`is_public`, `created_at` DESC) | [features/recipe.md](features/recipe.md) |
+| `users` | `email` UNIQUE NOT NULL / `password_hash` NOT NULL / `display_name` NOT NULL（1〜30）/ `security_question` NOT NULL / `security_answer_hash` NOT NULL / `token_version` INT NOT NULL DEFAULT 0 / `avatar_key` NULL 可 / `email_public`・`x_public`・`instagram_public`・`other_public` BOOLEAN NOT NULL DEFAULT false / `x_url`・`instagram_url`・`other_url` NULL 可（URL 形式）/ `follower_count`・`following_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md), [features/follow.md](features/follow.md) |
+| `recipes` | `user_id` FK → `users.id`（ON DELETE CASCADE）/ `servings` NOT NULL CHECK(1〜99) / `is_public` NOT NULL / `title` NOT NULL（1〜120）/ `title_normalized` NOT NULL（index、必要なら `pg_trgm`）/ `description`（0〜2000）/ `thumbnail_key` NULL 可 / `favorite_count`・`comment_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) / index(`user_id`) / index(`is_public`, `created_at` DESC) | [features/recipe.md](features/recipe.md) |
 | `ingredients` | `recipe_id` FK（ON DELETE CASCADE）/ UNIQUE(`recipe_id`, `position`) / `name` NOT NULL（1〜60）/ `name_normalized` NOT NULL・index（必要なら `pg_trgm`）/ `quantity` NUMERIC NULL・CHECK(quantity > 0) / `unit` VARCHAR NULL（0〜20） | [features/recipe.md](features/recipe.md), [features/search.md](features/search.md), [features/unit.md](features/unit.md) |
-| `steps` | `recipe_id` FK（ON DELETE CASCADE）/ UNIQUE(`recipe_id`, `position`) / `body` NOT NULL（1〜1000）/ `image_key`・`image_url` NULL 可 / `position` は 1 起点の連番 | [features/recipe.md](features/recipe.md), [features/image.md](features/image.md) |
-| `recipe_comments` | `id` PK / `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `user_id` FK → `users.id`（ON DELETE CASCADE）/ `body` NOT NULL（1〜1000）/ `image_key`・`image_url` NULL 可 / index(`recipe_id`, `created_at` DESC) | [features/comment.md](features/comment.md) |
+| `steps` | `recipe_id` FK（ON DELETE CASCADE）/ UNIQUE(`recipe_id`, `position`) / `body` NOT NULL（1〜1000）/ `image_key` NULL 可 / `position` は 1 起点の連番 | [features/recipe.md](features/recipe.md), [features/image.md](features/image.md) |
+| `recipe_comments` | `id` PK / `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `user_id` FK → `users.id`（ON DELETE CASCADE）/ `body` NOT NULL（1〜1000）/ `image_key` NULL 可 / index(`recipe_id`, `created_at` DESC) | [features/comment.md](features/comment.md) |
 | `units` | `normalized` UNIQUE NOT NULL / `value` NOT NULL / `placement` NOT NULL DEFAULT `suffix`（`suffix` / `prefix`。`大さじ` `小さじ` のみ `prefix`） | [features/unit.md](features/unit.md) |
 | `follows` | PK(`follower_id`, `followee_id`) / 両カラム FK → `users.id`（ON DELETE CASCADE）/ CHECK(`follower_id` <> `followee_id`) / index(`followee_id`) | [features/follow.md](features/follow.md) |
 | `favorites` | PK(`user_id`, `recipe_id`) / `user_id` FK → `users.id`（ON DELETE CASCADE）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ index(`recipe_id`) | [features/favorite.md](features/favorite.md) |
@@ -136,6 +133,8 @@ erDiagram
 
 > `recipe_images` テーブルは廃止（画像は `recipes.thumbnail_*` と `steps.image_*` に統合）。
 
+> 一時アップロードは所有者と使用状態を保持する（例: `uploads` テーブル、またはキーに対応する `user_id` と `consumed` フラグ）。具体スキーマは実装時に確定する（→ [todo.md](todo.md)）。
+
 ## 共通方針
 
 - 主キーは UUID を基本とする（分散生成しやすく、URL に ID を晒しても連番推測されない）。
@@ -143,6 +142,8 @@ erDiagram
 - `*_normalized`（`recipes.title_normalized` / `ingredients.name_normalized` / `units.normalized`）はサーバーが生成する（トリム・小文字化・全角/半角そろえ）。検索（[features/search.md](features/search.md)）と単位の重複判定（[features/unit.md](features/unit.md)）に使う。正規化の具体仕様は → [todo.md](todo.md)。
 - `units` の初期データは Flyway のシードマイグレーションで投入する（[features/unit.md](features/unit.md)）。
 - パスワード・秘密の答えはハッシュ化して保存（`password_hash` / `security_answer_hash`）。
+- リフレッシュトークンの検証用データは `token_hash` で保持する。
+- 画像は `avatar_key` / `thumbnail_key` / `image_key` を正として永続化し、表示用 URL はレスポンス構築時にキーから生成する。署名付き URL は失効するため DB に永続化しない。公開バケットを採用する場合も、安定 URL はキーから生成する派生値として扱う（[features/image.md](features/image.md)）。
 
 ## カウント列キャッシュ（非正規化カウント）
 
@@ -159,5 +160,6 @@ erDiagram
 - `refresh_tokens`（`user_id` = me）
 - `notifications`（`user_id` = me と `actor_id` = me）
 - ストレージ上の画像（サムネ・手順画像・感想画像・アバター）はアプリ側で削除ジョブ対象にする。
-- 他ユーザーの `follower_count` / `following_count` / `recipes.favorite_count` などカウント列は、削除処理内で減算するか補正ジョブで整合させる（実装時に確定 → [todo.md](todo.md)）。
+- アカウント削除は**単一のアプリケーショントランザクション**で行う。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（実装方法の詳細は [todo.md](todo.md) #10）。
+- 削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。
 - 詳細は [features/profile.md](features/profile.md)。
