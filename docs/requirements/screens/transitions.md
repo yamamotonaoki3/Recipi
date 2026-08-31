@@ -36,11 +36,13 @@ flowchart TD
     Detail --> Editor[レシピ作成/編集]
     Create --> Editor
     Editor -->|保存| Detail
-    Detail -->|投稿者名| UserProfile
+    Detail -->|投稿者名（他人）| UserProfile
+    Detail -->|投稿者名（自分）| MyPage
     MyRecipes --> Detail
     UserProfile --> Detail
     UserProfile -->|フォロー/フォロワー数| Connections
-    Connections -->|行タップ| UserProfile
+    Connections -->|行タップ（他人）| UserProfile
+    Connections -->|行タップ（自分）| MyPage
     ProfileEdit -->|アカウント削除| Login
 ```
 
@@ -76,7 +78,8 @@ flowchart LR
 flowchart LR
     S[検索] -->|語を入力| SR[結果一覧]
     SR --> D[レシピ詳細]
-    D -->|投稿者名| U[ユーザープロフィール]
+    D -->|投稿者名（他人）| U[ユーザープロフィール]
+    D -->|投稿者名（自分）| M[マイページ]
     U -->|フォロー| U
     U -->|その人のレシピ| D
 ```

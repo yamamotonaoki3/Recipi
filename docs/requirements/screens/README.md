@@ -4,7 +4,7 @@ Recipi の画面構成・画面遷移・共通コンポーネント。要件（�
 
 ## 読み方
 
-1. [navigation.md](navigation.md) — 全体のナビゲーション構造（ボトムナビ / ナビゲーションレール）、バックスタック、認証ゲート
+1. [navigation.md](navigation.md) — 全体のナビゲーション構造（ボトムナビ / ナビゲーションレール）、画面の実装レイヤー図、バックスタック、認証ゲート
 2. [components.md](components.md) — 画面をまたいで使う共通コンポーネントの定義
 3. [transitions.md](transitions.md) — 全体遷移図 ＋ 主要フロー別の遷移図
 4. 各画面ファイル（下表）

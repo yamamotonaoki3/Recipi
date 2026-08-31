@@ -20,6 +20,71 @@
 - 「＋」はモーダル起動なので、閉じると直前の destination に戻る。
 - 「通知」バッジの数は `GET /notifications/unread-count`（または一覧レスポンスの `unreadCount`）。既読化で減る。
 
+## 画面の実装レイヤー
+
+> 状態管理 / DI / ナビゲーションの具体ライブラリは未確定（→ [`../todo.md`](../todo.md)）。ここでは役割レベルの構造を示す。名称は「相当」（例: ViewModel 相当 = 画面の状態を保持し再構成に耐える層）。
+
+### ナビゲーション階層
+
+```mermaid
+flowchart TD
+    Entry["プラットフォーム別エントリ<br/>Android: Activity / iOS: iosApp / Desktop: desktopApp main"]
+    Entry --> Root["App ルート Composable（composeApp/commonMain）"]
+    Root --> Splash["スプラッシュ（認証判定）"]
+    Splash -->|未ログイン| AuthFlow["認証フロー<br/>ログイン / サインアップ / パスワードリセット"]
+    Splash -->|ログイン済み| Shell
+
+    subgraph Shell["メインシェル（adaptive: ボトムバー ⇔ ナビゲーションレール）"]
+      direction LR
+      D1["ホーム"]
+      D2["検索"]
+      D3["＋ 作成（モーダル）"]
+      D4["通知"]
+      D5["マイページ"]
+    end
+
+    D1 --> S_Home["ホーム画面（4サブタブ）"]
+    D2 --> S_Search["検索画面"]
+    D4 --> S_Notif["通知一覧画面"]
+    D5 --> S_MyPage["マイページ画面"]
+
+    S_Home -. push .-> S_Detail["レシピ詳細"]
+    S_Search -. push .-> S_Detail
+    S_Notif -. push .-> S_Detail
+    S_Notif -. push .-> S_UserProfile["ユーザープロフィール（他人）"]
+    S_MyPage -. push .-> S_MyRecipes["自分のレシピ一覧"]
+    S_MyPage -. push .-> S_Connections["フォロー・フォロワー"]
+    S_MyPage -. push .-> S_ProfileEdit["プロフィール編集"]
+    S_Detail -. push .-> S_UserProfile
+    S_Detail -. モーダル .-> S_Editor["レシピ作成 / 編集"]
+    D3 -. モーダル .-> S_Editor
+```
+
+- 認証フローとメインシェルは別スタック。ログイン成功でメインシェルに差し替え（認証フローは履歴に残さない）。
+- 各 destination は独立したスタックを持ち、`push` は現在の destination のスタックに積む（[バックスタック](#バックスタック)）。
+- 破線 `モーダル` はスタックに積まないフルスクリーンダイアログ。
+
+### 1 画面の内部レイヤー（共通）
+
+```mermaid
+flowchart TD
+    Screen["画面 Composable<br/>（レイアウト・入力・状態の描画）"]
+    Screen --> Common["共通コンポーネント<br/>レシピカード / ユーザー行 / 感想アイテム / 確認ダイアログ 等<br/>（components.md）"]
+    Screen --> State["状態保持層（ViewModel 相当）<br/>画面の状態・イベント処理・楽観更新"]
+    State --> Data["データ取得層（Repository 相当）<br/>API 呼び出し・ページング・キャッシュ方針"]
+    Data --> KtorClient["Ktor Client<br/>HTTP・認証ヘッダ・トークン更新（single-flight）"]
+    KtorClient --> Api[("Ktor Server<br/>（../api.md）")]
+
+    State -. 型・ルールを共有 .-> Shared["shared モジュール<br/>@Serializable DTO / バリデーション / 表示整形（単位の前置表記 等）"]
+    Data -. 使用 .-> Shared
+    KtorClient -. 使用 .-> Shared
+```
+
+- **状態保持層**: 画面ごとに 1 つ。API レスポンス（`shared` の DTO）を画面表示用の状態に変換して保持。♡ やフォローの楽観更新もここ。
+- **データ取得層**: エンドポイント単位のまとまり。カーソルページング（[`../non-functional.md`](../non-functional.md)）の cursor 管理もここ。
+- **Ktor Client**: アクセストークン付与、401 時のリフレッシュ（single-flight）、`token_version` 不一致でのログアウト誘導（[`../features/auth.md`](../features/auth.md)）。
+- **`shared` モジュール**: バックエンドと同じ DTO・バリデーション・表示整形ロジックを使う（[`../architecture.md`](../architecture.md)）。
+
 ## バックスタック
 
 - **destination ごとに独立したナビゲーションスタック**を保持する。タブを切り替えても各タブの位置は保たれる。
