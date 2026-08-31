@@ -26,13 +26,17 @@
 | 23 | いいね（お気に入りと別の反応）、感想への返信、タグ / カテゴリ、通報 / NG ワードの優先順位 | MVP 完了後 | [overview.md](overview.md) |
 | 24 | 学習用引き渡し資料（Ktor / Exposed / Compose Multiplatform）を `learning-handover` で作成（後日学習用、非ブロッキング） | 実装着手前に別タスク | [tech-stack.md](tech-stack.md) |
 | 25 | ブラウザ（Web）版（Compose for Web / Wasm）の採否と時期 | MVP 完了後 | [tech-stack.md](tech-stack.md) |
-| 26 | デスクトップの最小 OS バージョン、ウィンドウ最小サイズ、レスポンシブ / 2 ペイン表示（一覧＋詳細の横並び） | Phase 0 / 各フェーズ | [screens.md](screens.md) |
+| 26 | デスクトップの最小 OS バージョン、ウィンドウ最小サイズ、ボトムバー ⇔ ナビゲーションレールの切替ブレークポイント、レスポンシブ / 2 ペイン表示（一覧＋詳細の横並び） | Phase 0 / 各フェーズ | [screens/navigation.md](screens/navigation.md) |
 | 27 | `expect` / `actual` で吸収するプラットフォーム固有機能の洗い出し（画像ピッカー、カメラ、セキュアストレージ、共有 等）と Desktop 実装 | Phase 0 | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md) |
 | 28 | Desktop のセキュアストレージ（リフレッシュトークン永続化。OS クレデンシャルストアが使えない場合の暗号化方式） | Phase 1 | [non-functional.md](non-functional.md) |
 | 29 | `prefix` 単位をユーザーが増やせるようにするか、`カップ` の配置（`1 カップ` / `カップ 1`）、単位と数量の間のスペース有無 | Phase 2 | [features/unit.md](features/unit.md) |
 | 30 | 画像のみ（本文なし）の感想を許すか。`PATCH /comments` の `imageKey` 省略 / `null` の意味は定義済み | Phase 7 | [features/comment.md](features/comment.md), [features/image.md](features/image.md) |
 | 31 | デスクトップアプリの配布方法・コード署名（署名なしは OS 警告が出る。証明書は有料）。課題提出時は署名不要 | Phase 10 | [tech-stack.md](tech-stack.md) |
 | 32 | 一時アップロード画像は所有者と参照先を保持し、本人所有かつ「未使用または更新対象自身に紐付け済み」を許可する要件まで定義済み。`uploads` テーブル等の具体的な物理スキーマを Phase 3 で確定 | 定義済み（物理スキーマは Phase 3） | [data-model.md](data-model.md), [features/image.md](features/image.md) |
+| 33 | 外部ディープリンク（URL スキーム / ユニバーサルリンク）の採否 | MVP 完了後 | [screens/navigation.md](screens/navigation.md) |
+| 34 | 通知バッジの更新方式（他 destination 滞在中に `unread-count` をポーリングするか、間隔） | Phase 8 | [screens/notifications.md](screens/notifications.md) |
+| 35 | レシピ作成画面をデスクトップでフルスクリーンダイアログにするか、大きめダイアログにするか | Phase 2 | [screens/recipe-editor.md](screens/recipe-editor.md) |
+| 36 | 破壊的操作の取り消し（Undo スナックバー）を入れるか | MVP 完了後 | [screens/components.md](screens/components.md) |
 
 ## 決定済み（対象外で確定）
 

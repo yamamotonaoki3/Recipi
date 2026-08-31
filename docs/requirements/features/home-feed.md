@@ -2,14 +2,15 @@
 
 ## 1. 目的・概要
 
-ログイン後の初期画面。上部にトップアプリバー（検索バー + 通知ベル + アカウントメニュー、[../screens.md](../screens.md)）、その下に 4 つのタブを持ち、レシピのフィードを切り替えて表示する。
+ログイン後の中心画面。ボトムナビゲーション（モバイル）/ ナビゲーションレール（デスクトップ）の「ホーム」destination（[../screens/navigation.md](../screens/navigation.md)）。4 つのサブタブでレシピのフィードを切り替えて表示する。
 
 ## 2. 画面・UI
 
-- トップアプリバー
-- タブ: **全体 / フォロー / フォロワー / お気に入りレシピ**
-- 本文: レシピカード（[../screens.md](../screens.md)）の縦リスト。**カーソルページングによる無限スクロール**（[../non-functional.md](../non-functional.md)）
-- レシピ作成導線（FAB またはアカウントメニュー）
+- 画面設計は [../screens/home.md](../screens/home.md)
+- アプリバー: ロゴのみ（**検索バーは無し**。検索は「検索」destination = [../screens/search.md](../screens/search.md)）
+- サブタブ: **全体 / フォロー / フォロワー / お気に入りレシピ**
+- 本文: レシピカード（[../screens/components.md](../screens/components.md)）の縦リスト。**カーソルページングによる無限スクロール**（[../non-functional.md](../non-functional.md)）
+- レシピ作成はボトムナビの「＋」（[../screens/recipe-editor.md](../screens/recipe-editor.md)）。画面内 FAB は置かない
 
 | タブ | 表示内容 |
 | --- | --- |
@@ -32,8 +33,8 @@
 - お気に入りレシピタブは [favorite.md](favorite.md) のルールに従う（自分の非公開レシピは表示、他人のレシピで非公開化 / 削除済みは除外）。
 - 全体 / フォロー / フォロワーは新着順（`recipes.created_at DESC`）。お気に入りレシピは `favorites.created_at DESC`。いずれもカーソルページング。
 - フォロー / フォロー解除・お気に入りの増減の結果は、次にタブを表示（再取得）したときに反映。リアルタイム更新はしない。
-- 検索バーに入力して確定すると、現在のタブ（フィード）を保ったまま検索結果画面へ（[search.md](search.md)）。`q` は全フィード（`all` / `following` / `followers` / `favorites`）で併用可能。お気に入りレシピタブで `q` を指定した場合は、自分がお気に入り登録したレシピ集合の中を、通常の検索マッチ規則で絞り込む。
-- アカウントメニューに「お気に入りレシピ」項目は置かない（このタブに一本化。[../screens.md](../screens.md)）。
+- 検索は「検索」destination（[search.md](search.md) / [../screens/search.md](../screens/search.md)）で行う。`q` は全フィード（`all` / `following` / `followers` / `favorites`）で併用可能。お気に入りレシピを指定した場合は、自分がお気に入り登録したレシピ集合の中を、通常の検索マッチ規則で絞り込む。
+- お気に入りレシピは独立画面ではなくこのサブタブに一本化（マイページのメニューにも置かない。[../screens/my-page.md](../screens/my-page.md)）。
 
 ## 4. データモデル
 
