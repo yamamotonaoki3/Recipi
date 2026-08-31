@@ -7,3 +7,6 @@ build/
 target/
 .DS_Store
 *.log
+
+# Claude Code の内部設定（コミットしない）
+.claude/
