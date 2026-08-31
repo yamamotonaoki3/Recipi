@@ -4,7 +4,7 @@
 
 - **モバイル（コンパクト幅）**: 画面下部に**ボトムナビゲーション**（5 destination）。
 - **デスクトップ / タブレット（中〜広幅）**: 画面左に**ナビゲーションレール**（同じ 5 destination）。
-- 同一の Compose UI で、ウィンドウ幅のブレークポイントに応じて adaptive に切り替える（compact = ボトムバー、medium / expanded = レール）。ブレークポイントの具体値は実装時に確定（→ [`../todo.md`](../todo.md)）。
+- 各クライアントで、ウィンドウ幅のブレークポイントに応じて adaptive に切り替える（compact = ボトムバー、medium / expanded = レール）。ブレークポイントの具体値は実装時に確定（→ [`../todo.md`](../todo.md)）。
 - 現行案の「上部バーに検索バー常駐 + アカウントメニュー」は廃止。検索は独立 destination、アカウント関連は「マイページ」destination に集約する。
 
 ## 5 つの destination
@@ -22,14 +22,14 @@
 
 ## 画面の実装レイヤー
 
-> 状態管理 / DI / ナビゲーションの具体ライブラリは未確定（→ [`../todo.md`](../todo.md)）。ここでは役割レベルの構造を示す。名称は「相当」（例: ViewModel 相当 = 画面の状態を保持し再構成に耐える層）。
+> 各トラックの状態管理 / DI / ナビゲーションの具体ライブラリは未確定（→ [`../todo.md`](../todo.md)）。ここでは役割レベルの構造を示す。名称は「相当」（例: ViewModel 相当 = 画面の状態を保持し再描画に耐える層）。
 
 ### ナビゲーション階層
 
 ```mermaid
 flowchart TD
-    Entry["プラットフォーム別エントリ<br/>Android: Activity / iOS: iosApp / Desktop: desktopApp main"]
-    Entry --> Root["App ルート Composable（composeApp/commonMain）"]
+    Entry["プラットフォーム別エントリ<br/>（各クライアントの Android / iOS / Desktop エントリ）"]
+    Entry --> Root["App ルート（各クライアントのルート画面 / ルーター）"]
     Root --> Splash["スプラッシュ（認証判定）"]
     Splash -->|未ログイン| AuthFlow["認証フロー<br/>ログイン / サインアップ / パスワードリセット"]
     Splash -->|ログイン済み| Shell
@@ -66,24 +66,26 @@ flowchart TD
 
 ### 1 画面の内部レイヤー（共通）
 
+> どちらのフロントトラック（TypeScript / Expo、Kotlin / Compose）も同じ層構造を持つ。層の呼び名はトラックで異なる（例: 状態保持層 = Kotlin では ViewModel 相当、TS では hooks / ストア相当）。
+
 ```mermaid
 flowchart TD
-    Screen["画面 Composable<br/>（レイアウト・入力・状態の描画）"]
+    Screen["画面コンポーネント<br/>（レイアウト・入力・状態の描画）"]
     Screen --> Common["共通コンポーネント<br/>レシピカード / ユーザー行 / 感想アイテム / 確認ダイアログ 等<br/>（components.md）"]
-    Screen --> State["状態保持層（ViewModel 相当）<br/>画面の状態・イベント処理・楽観更新"]
-    State --> Data["データ取得層（Repository 相当）<br/>API 呼び出し・ページング・キャッシュ方針"]
-    Data --> KtorClient["Ktor Client<br/>HTTP・認証ヘッダ・トークン更新（single-flight）"]
-    KtorClient --> Api[("FastAPI<br/>（../api.md）")]
+    Screen --> State["状態保持層（ViewModel / hooks 相当）<br/>画面の状態・イベント処理・楽観更新"]
+    State --> Data["データ取得層（Repository / query 相当）<br/>API 呼び出し・ページング・キャッシュ方針"]
+    Data --> Http["HTTP クライアント層<br/>（Kotlin: Ktor Client ／ TS: openapi-fetch）<br/>認証ヘッダ・トークン更新（single-flight）"]
+    Http --> Api[("FastAPI<br/>（../api.md）")]
 
-    State -. 型・整形を利用 .-> Shared["shared モジュール<br/>OpenAPI 生成 API クライアント / DTO / 表示整形（単位の前置表記 等）"]
-    Data -. 使用 .-> Shared
-    KtorClient -. 使用 .-> Shared
+    State -. 型・整形を利用 .-> Gen["OpenAPI 生成の API クライアント / 型<br/>＋ 表示整形（単位の前置表記 等）<br/>（Kotlin: shared モジュール ／ TS: expoApp 内）"]
+    Data -. 使用 .-> Gen
+    Http -. 使用 .-> Gen
 ```
 
-- **状態保持層**: 画面ごとに 1 つ。API レスポンス（`shared` の DTO）を画面表示用の状態に変換して保持。♡ やフォローの楽観更新もここ。
-- **データ取得層**: エンドポイント単位のまとまり。カーソルページング（[`../non-functional.md`](../non-functional.md)）の cursor 管理もここ。
-- **Ktor Client**: アクセストークン付与、401 時のリフレッシュ（single-flight）、`token_version` 不一致でのログアウト誘導（[`../features/auth.md`](../features/auth.md)）。
-- **`shared` モジュール**: OpenAPI（FastAPI が出力）から生成した API クライアント / DTO と、フロント内部の表示整形ロジックを置く（[`../architecture.md`](../architecture.md)、[`../tech-stack.md`](../tech-stack.md)）。
+- **状態保持層**: 画面ごとに 1 つ。API レスポンス（生成した型）を画面表示用の状態に変換して保持。♡ やフォローの楽観更新もここ。
+- **データ取得層**: エンドポイント単位のまとまり。カーソルページング（[`../non-functional.md`](../non-functional.md)）の cursor 管理もここ（TS は TanStack Query の `useInfiniteQuery`）。
+- **HTTP クライアント層**: アクセストークン付与、401 時のリフレッシュ（single-flight）、`token_version` 不一致でのログアウト誘導（[`../features/auth.md`](../features/auth.md)）。
+- **OpenAPI 生成物 ＋ 表示整形**: OpenAPI（FastAPI が出力）から生成した API クライアント / 型と、クライアント内部の表示整形ロジック。Kotlin は `shared` モジュール、TS は `expoApp` 内に持つ（[`../architecture.md`](../architecture.md)、[`../tech-stack.md`](../tech-stack.md)）。
 
 ## バックスタック
 

@@ -4,6 +4,31 @@
 
 ## フロントエンド
 
+フロントエンドは **2 つの実装トラック**を持つ。どちらも同じバックエンド（1 本の FastAPI）を、同じ API 契約（`openapi.json` ＋ 本要件定義書）で叩く。
+
+- **(A) TypeScript（必須トラック）**: カリキュラム指定。期限ありで進める。
+- **(B) Kotlin Multiplatform（随時トラック）**: 開発者の学習用。非ブロッキングで自分のペースで進める（自動連続実行の完了条件には含めない。[roadmap.md](roadmap.md) / root CLAUDE.md）。
+
+画面仕様（[screens/](screens/)）は **framework 非依存**で書き、両トラックが同じ仕様に従う。
+
+### (A) TypeScript トラック（必須）
+
+| 項目 | 採用 | 備考 |
+| --- | --- | --- |
+| 言語 | TypeScript | |
+| フレームワーク | React Native + **Expo**（Expo SDK） | RN 0.85 系、New Architecture（Fabric / TurboModules）。2026 の RN 標準構成 |
+| ルーティング | **Expo Router**（ファイルベース） | React Navigation の上に乗る。web / ネイティブ共通 |
+| 対象プラットフォーム | iOS / Android（Expo ネイティブ）＋ **Desktop（Windows・macOS）** | Desktop は下記のとおり RN Web ビルドを Tauri で包む |
+| Desktop シェル | **Tauri 2**（システム WebView + Rust コア） | RN Web（React Native Web）ビルドを読み込み、`.msi` / `.dmg` を生成。Electron より軽量 |
+| UI / スタイル | **NativeWind**（Tailwind for RN） | デザイントークン・ダークモード対応の詳細は → [todo.md](todo.md) |
+| HTTP / 型 | **openapi-typescript**（型生成）＋ **openapi-fetch**（軽量クライアント） | `openapi.json` から型と fetch を生成。詳細は「型共有」節 |
+| データ取得 / キャッシュ | **TanStack Query** | 一覧のカーソルページング（`useInfiniteQuery`）、楽観更新 |
+| 状態管理 | Zustand / Jotai（実装時に選定） | → [todo.md](todo.md) |
+| ネイティブ機能 | Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
+| ビルド / 配布 | EAS Build（クラウド）or ローカルビルド、Tauri の `.msi` / `.dmg` | → [todo.md](todo.md) |
+
+### (B) Kotlin Multiplatform トラック（随時）
+
 | 項目 | 採用 | 備考 |
 | --- | --- | --- |
 | 言語 | Kotlin | |
@@ -41,18 +66,18 @@
 
 ## 型共有（OpenAPI コード生成）
 
-バックエンドが Python、フロントエンドが Kotlin のため、コンパイル時に DTO を共有できない。代わりに **API 契約（OpenAPI）を単一の正**とし、そこから Kotlin コードを生成する。
+バックエンド（Python）と 2 つのフロント（TypeScript / Kotlin）は言語が違うため、コンパイル時に型を共有できない。代わりに **API 契約（OpenAPI）を単一の正**とし、そこから各言語のコードを生成する。
 
 - FastAPI が型ヒントとレスポンスモデルから **OpenAPI 3.1** 仕様（`openapi.json`）を自動生成する。
-- **OpenAPI Generator** で、その仕様から Kotlin の API クライアント / DTO を生成する（Ktor Client 向けジェネレータを想定。最終選定は → [todo.md](todo.md)）。
-- 生成物はフロントの `shared` モジュールに取り込む。CI で `openapi.json` を再生成し差分が出たら失敗させる（契約テスト）。
+- **Kotlin トラック**: **OpenAPI Generator** で Kotlin の API クライアント / DTO を生成（Ktor Client 向けジェネレータを想定。最終選定は → [todo.md](todo.md)）。生成物は `shared` モジュールに取り込む。
+- **TypeScript トラック**: **openapi-typescript** で型定義（`schema.ts`）を生成し、**openapi-fetch** で型安全な fetch クライアントを構成する。生成物は `expoApp` に取り込む。生成の CI 組み込み・差分チェックの詳細は → [todo.md](todo.md)。
+- CI で `openapi.json` を再生成し、いずれかの生成物に差分が出たら失敗させる（契約テスト）。
 
-## 共有モジュール（`shared`）
+## 共有ロジックの置き場
 
-- 今後の `shared`（KMP `commonMain`）の役割は次の 2 つ:
-  1. **フロント内部の共通ロジック**（材料の単位の前置 / 後置表示の組み立てなど。[features/unit.md](features/unit.md)）。
-  2. **OpenAPI から生成した API クライアント / DTO の置き場**。
-- バリデーションはサーバー（Pydantic）とクライアント（生成物 ＋ 手書きの入力チェック）で別実装になる。文字数上限などの規則値は本要件定義書を正とする。
+- **Kotlin トラック**: `shared`（KMP `commonMain`）に、(1) フロント内部の共通ロジック（材料の単位の前置 / 後置表示の組み立てなど。[features/unit.md](features/unit.md)）、(2) OpenAPI から生成した API クライアント / DTO を置く。詳細は [architecture.md](architecture.md)。
+- **TypeScript トラック**: `expoApp` 内に同等物（表示整形・入力チェック・生成した API クライアント）を持つ。`shared` は参照しない。
+- バリデーションはサーバー（Pydantic）と各クライアントで別実装になる。文字数上限などの規則値は本要件定義書を正とする。
 
 ## インフラ / 実行環境
 
@@ -61,18 +86,21 @@
 
 ## ライセンス・費用
 
-- **Kotlin Multiplatform / Compose Multiplatform は無料・オープンソース（Apache 2.0、JetBrains 製）。** ビルド・実行・配布にライセンス料はかからない（デスクトップアプリ含む）。IDE も IntelliJ IDEA Community / Android Studio は無料。
+- **TypeScript トラック（React Native / Expo / Expo Router / React Native Web / Tauri / NativeWind / TanStack Query / openapi-typescript / openapi-fetch）はすべて OSS で無料**（MIT / Apache 2.0）。Expo は EAS のクラウドビルドに無料枠＋有料プランがあるが、ローカルビルドなら費用は発生しない（→ [todo.md](todo.md)）。
+- **Kotlin Multiplatform / Compose Multiplatform も無料・オープンソース（Apache 2.0、JetBrains 製）。** ビルド・実行・配布にライセンス料はかからない（デスクトップアプリ含む）。IDE も IntelliJ IDEA Community / Android Studio は無料。
 - 費用が発生するのは**ストア配布・コード署名**で、これはフレームワーク非依存:
   - Apple Developer Program $99/年（iOS 配布、macOS アプリの notarization）
   - Google Play Developer $25（一度きり。APK 直接配布は不要）
   - Microsoft Store 登録 約 $19（一度きり。`.exe` / `.msi` 直接配布は不要）
   - Windows コード署名証明書 年 $100〜400 程度（任意。SmartScreen 警告回避用）
-- **課題提出・メンターへのデモ**: `packageDistributionForCurrentOS` で生成した `.msi` / `.dmg` を渡す、または自分の PC で `./gradlew run` ＋ 画面共有。いずれも無料。コード署名なしだと OS が「発行元不明」の警告を出すが、Windows は「詳細情報 → 実行」、macOS は右クリック →「開く」で回避できる。Java ランタイムは同梱されるためメンター側の事前準備は不要。
+- **課題提出・メンターへのデモ（TypeScript トラック）**: Tauri で生成した `.msi` / `.dmg` を渡す、または `npm run tauri dev` ＋ 画面共有。コード署名なしだと OS が「発行元不明」の警告を出すが、Windows は「詳細情報 → 実行」、macOS は右クリック →「開く」で回避できる。署名は課題提出時は不要。
+- **課題提出・メンターへのデモ（Kotlin トラック）**: `packageDistributionForCurrentOS` で生成した `.msi` / `.dmg` を渡す、または `./gradlew run` ＋ 画面共有。Java ランタイムは同梱されるためメンター側の事前準備は不要。
 - **バックエンドの Python スタック（FastAPI / Uvicorn / SQLModel / SQLAlchemy / Alembic / Pydantic / psycopg / argon2-cffi / PyJWT）はすべて OSS で無料**（MIT / Apache 2.0 / BSD / PSF）。Python 本体も同様。
 
 ## 学習方針
 
-- FastAPI / SQLModel / Python はいずれも開発者にとって未経験。Compose Multiplatform も未経験。
-- Python を選んだ主目的は、**今後アプリ内に AI 認識機能を取り入れる**こと（Python の AI エコシステムを活かす学習）。
-- パッケージ管理は学習のためまず従来方式（venv + pip + requirements.txt）で進め、後で `uv` に置き換えて何が変わるか比較する（→ [todo.md](todo.md)）。
-- `learning-handover` スキルで学習用引き渡し資料（FastAPI / SQLModel / Compose Multiplatform）を作成するが、**学習完了を待たずに本実装を進める**（資料は後日学習用、非ブロッキング）。作成は実装着手前に別タスクで行う。
+- **TypeScript / React / Expo はカリキュラム指定の必須トラック**。期限に沿って進める。開発者は React も未経験。
+- **Kotlin Multiplatform / Compose は開発者が自分で試したい随時トラック**。必須トラックの進捗をブロックしない範囲で、自分のペースで実装する。
+- FastAPI / SQLModel / Python も未経験。Python を選んだ主目的は、**今後アプリ内に AI 認識機能を取り入れる**こと（Python の AI エコシステムを活かす学習）。
+- パッケージ管理（backend）は学習のためまず従来方式（venv + pip + requirements.txt）で進め、後で `uv` に置き換えて比較する（→ [todo.md](todo.md)）。
+- `learning-handover` スキルで学習用引き渡し資料（React Native / Expo / FastAPI / SQLModel、随時トラック用に Compose Multiplatform）を作成するが、**学習完了を待たずに本実装を進める**（資料は後日学習用、非ブロッキング）。作成は実装着手前に別タスクで行う。
