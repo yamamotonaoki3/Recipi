@@ -1,6 +1,8 @@
 # データモデル（集約ビュー）
 
 > これは全体を一望するための集約ビュー。各カラムの意味・バリデーションは該当する `features/*.md` を正とする。
+>
+> **実装方針**: テーブルは SQLModel（SQLAlchemy 2.0）で定義し、スキーマ変更は Alembic マイグレーションで管理する（[tech-stack.md](tech-stack.md)）。ただし **DB レベルの制約が正**であり、SQLModel のモデル定義で表現できない制約（複合外部キー、部分インデックス、`CHECK`、トリガー、カウント列のトランザクション方針）は Alembic の手書きマイグレーションで作成する。以下の制約表・CASCADE 方針はすべて DB 側で担保する。
 
 ## ER 図
 
@@ -154,7 +156,7 @@ erDiagram
 - `*_normalized`（`recipes.title_normalized` / `ingredients.name_normalized` / `units.normalized`）はサーバーが生成する（トリム・小文字化・全角/半角そろえ）。検索（[features/search.md](features/search.md)）と単位の重複判定（[features/unit.md](features/unit.md)）に使う。正規化の具体仕様は → [todo.md](todo.md)。`ingredient_groups.name` と `ingredients.ref_recipe_title` は正規化しない（検索対象外）。
 - **材料グループ**: レシピは 1 個以上の `ingredient_groups` を持つ（グループ未使用のレシピ = 名前なしグループ 1 つ）。各グループは 1 個以上の `ingredients` を持つ。`ingredients.position` はグループ内の 1 起点連番。詳細は [features/recipe.md](features/recipe.md)。
 - **材料のレシピ参照**: `ingredients.ref_recipe_id` が非 NULL の行は「別レシピへのリンク付き材料」。指定できるのはそのレシピの投稿者本人が所有するレシピのみ（自己参照不可）。参照先が削除されると `ref_recipe_id` は SET NULL になり、`ref_recipe_title`（スナップショット）だけが残る。詳細は [features/recipe.md](features/recipe.md)。
-- `units` の初期データは Flyway のシードマイグレーションで投入する（[features/unit.md](features/unit.md)）。
+- `units` の初期データは Alembic のシードマイグレーションで投入する（[features/unit.md](features/unit.md)）。
 - パスワード・秘密の答えはハッシュ化して保存（`password_hash` / `security_answer_hash`）。
 - リフレッシュトークンの検証用データは `token_hash` で保持する。
 - 画像は `avatar_key` / `thumbnail_key` / `image_key` を正として永続化し、表示用 URL はレスポンス構築時にキーから生成する。署名付き URL は失効するため DB に永続化しない。公開バケットを採用する場合も、安定 URL はキーから生成する派生値として扱う（[features/image.md](features/image.md)）。

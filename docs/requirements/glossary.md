@@ -41,4 +41,12 @@
 | マイページ | 自分のプロフィール概要 ＋ アカウント関連メニュー（自分のレシピ一覧 / フォロー・フォロワー / プロフィール編集 / ログアウト）の destination。旧「アカウントメニュー」を画面化したもの |
 | destination | ボトムナビ / レールで切り替える主要な行き先。5 つ |
 | アプリバー | 各画面の上部の薄いバー（タイトル + 戻る + 文脈アクション）。旧「トップアプリバー」（検索バー常駐 + アカウントメニュー）は廃止 |
+| FastAPI | バックエンドの Web フレームワーク（Python）。型ヒントから OpenAPI 3.1 を自動生成し、Pydantic v2 でリクエスト / レスポンスを検証する。[tech-stack.md](tech-stack.md) 参照 |
+| ASGI | Python の非同期 Web サーバー / アプリ間インターフェース。FastAPI は ASGI アプリで、Uvicorn（ASGI サーバー）で動かす |
+| Uvicorn | FastAPI を動かす ASGI サーバー。開発では `--reload` でホットリロード。本番の実行構成は未定（[todo.md](todo.md)） |
+| Pydantic | FastAPI が使うデータ検証 / シリアライズライブラリ（v2）。API のリクエスト / レスポンスモデルを型で定義する |
+| SQLModel | バックエンドの ORM。SQLAlchemy 2.0 と Pydantic を組み合わせたもので、FastAPI 作者製。DB モデルと API モデルを親和的に書ける。複雑な制約は生 SQLAlchemy に降りる。[tech-stack.md](tech-stack.md) 参照 |
+| Alembic | SQLAlchemy 用の DB マイグレーションツール（読み: アレンビック）。スキーマ変更とシードデータ投入を管理する。SQLModel で表現できない制約は手書きマイグレーションで補う。[data-model.md](data-model.md) 参照 |
+| OpenAPI コード生成 | FastAPI が出力する OpenAPI 3.1 仕様（`openapi.json`）から、OpenAPI Generator で Kotlin の API クライアント / DTO を生成する仕組み。バックエンド（Python）とフロントエンド（Kotlin）で型を一致させる手段。[tech-stack.md](tech-stack.md) 参照 |
+| `shared` モジュール | フロントエンドの KMP 共有モジュール（`commonMain`）。フロント内部の共通ロジック（単位の表示整形 等）と、OpenAPI から生成した API クライアント / DTO を置く。[architecture.md](architecture.md) 参照 |
 | MVP | 初回リリースに含める機能範囲。未確定。[roadmap.md](roadmap.md) 参照 |
