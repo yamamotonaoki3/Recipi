@@ -6,7 +6,7 @@
 
 ## 2. 画面・UI
 
-レシピ詳細画面の下部「感想セクション」（[screens.md](../screens.md) / [recipe.md](recipe.md)）:
+レシピ詳細画面の下部「感想セクション」（[../screens/recipe-detail.md](../screens/recipe-detail.md) / [recipe.md](recipe.md)）:
 
 - **感想を書く入力欄 + 画像添付ボタン + 送信ボタン**（複数行テキスト、画像は端末のカメラ / ギャラリーから 1 枚）
   - レシピ投稿者本人が見ているときは入力欄・送信ボタンを表示しない。

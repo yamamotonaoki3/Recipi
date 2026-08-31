@@ -8,11 +8,11 @@
 | Phase 1 | 認証: signup（秘密の質問含む）/ login /「ログインを保持」/ アクセス＋リフレッシュトークン（ローテーション）/ `/auth/refresh` / `/auth/logout` / パスワードリセット ＋ ログイン / サインアップ / パスワードリセット画面 ＋ プロフィール編集（表示名のみ） | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md) |
 | Phase 2 | レシピ CRUD（画像なし）＋ 単位マスター（`placement` 含む）・`GET /units`・単位の表示整形ロジック（`shared`）・作成編集画面の行編集 UX | [features/recipe.md](features/recipe.md), [features/unit.md](features/unit.md) |
 | Phase 3 | 画像: `POST /images`（一時アップロード）＋ レシピのサムネイル ＋ 手順ごとの画像（`recipe_images` は無し。感想画像は Phase 7） | [features/image.md](features/image.md) |
-| Phase 4 | ホーム「全体」タブ ＋ レシピ検索（`q`、スペース分割・正規化）＋ トップアプリバー | [features/home-feed.md](features/home-feed.md), [features/search.md](features/search.md) |
+| Phase 4 | ボトムナビゲーション / ナビゲーションレール ＋ ホーム「全体」タブ ＋ 検索 destination（`q`、スペース分割・正規化） | [screens/navigation.md](screens/navigation.md), [features/home-feed.md](features/home-feed.md), [features/search.md](features/search.md) |
 | Phase 5 | フォロー / フォロワー（`follows`、フォロー API、**カウント列キャッシュ**、ユーザープロフィール、フォロー・フォロワー 2 タブ画面）＋ ホーム「フォロー」「フォロワー」タブ ＋ プロフィール拡張（アバター・SNS リンク・公開トグル） | [features/follow.md](features/follow.md), [features/profile.md](features/profile.md), [features/image.md](features/image.md) |
 | Phase 6 | お気に入り（`favorites`、♡ API、`recipes.favorite_count`、ホーム「お気に入りレシピ」タブ、自分の非公開レシピ可） | [features/favorite.md](features/favorite.md) |
 | Phase 7 | 感想（コメント）（`recipe_comments`、コメント API、`recipes.comment_count`、**感想画像**、レシピ詳細の感想セクション、無限スクロール） | [features/comment.md](features/comment.md), [features/image.md](features/image.md) |
-| Phase 8 | 通知（`notifications`、ベルマーク、通知一覧、4 種のイベント生成・fan-out） | [features/notification.md](features/notification.md) |
+| Phase 8 | 通知（`notifications`、通知タブのバッジ、通知一覧、4 種のイベント生成・fan-out） | [features/notification.md](features/notification.md) |
 | Phase 9 | アカウント削除（`DELETE /users/me`、CASCADE、確認 UI） | [features/profile.md](features/profile.md) |
 | Phase 10 | 仕上げ（バリデーション強化、エラー UX、空状態、カウント補正ジョブ、E2E 動作確認、デスクトップ配布パッケージ） | 全体 |
 

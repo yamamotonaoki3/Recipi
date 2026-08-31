@@ -12,7 +12,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 1. [overview.md](overview.md) — 全体像・想定ユーザー・ユースケース・対象外・リリース段階
 2. [glossary.md](glossary.md) — 用語の定義（先に目を通すと機能ドキュメントが読みやすい）
 3. `features/` の各機能ドキュメント（下表）
-4. 横断ドキュメント（[screens.md](screens.md) / [data-model.md](data-model.md) / [api.md](api.md) / [non-functional.md](non-functional.md)）
+4. 横断ドキュメント（[screens/](screens/) / [data-model.md](data-model.md) / [api.md](api.md) / [non-functional.md](non-functional.md)）
 
 ### 機能ドキュメント
 
@@ -36,7 +36,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | --- | --- |
 | 技術スタック | [tech-stack.md](tech-stack.md) |
 | アーキテクチャ・リポジトリ構成 | [architecture.md](architecture.md) |
-| 画面一覧・共通コンポーネント・画面遷移図 | [screens.md](screens.md) |
+| 画面設計（ナビゲーション / 共通コンポーネント / 画面遷移図 / 画面別） | [screens/](screens/)（索引: [screens/README.md](screens/README.md)） |
 | データモデル（全体 ER 図・全テーブル定義） | [data-model.md](data-model.md) |
 | API 一覧・共通仕様 | [api.md](api.md) |
 | 非機能要件 | [non-functional.md](non-functional.md) |
@@ -48,7 +48,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 
 - **各 `features/*.md` がその機能の「正」**。仕様の詳細・受け入れ基準はここに書く。
 - [data-model.md](data-model.md) と [api.md](api.md) は**集約ビュー**（全体を一望するためのまとめ）。記述が食い違った場合は `features/*.md` を正とし、集約ビューを直す。
-- [screens.md](screens.md) は画面の全体像と共通コンポーネント。各機能に固有の画面詳細は該当 `features/*.md` にも書く。
+- [screens/](screens/) は画面構成・ナビゲーション・画面遷移。各機能に固有の画面詳細は該当 `features/*.md` にも書く。機能仕様と食い違ったら `features/*.md` を正とする。
 
 ## 各機能ドキュメントの構成（テンプレート）
 
@@ -61,4 +61,4 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 7. 受け入れ基準
 8. 未確定・メモ
 
-最終更新: 2026-08-31（レビュー反映第 2 回: 感想画像 / 全一覧・感想の無限スクロール / 単位の前置表記 placement / デスクトップ対応（Compose Multiplatform Desktop））
+最終更新: 2026-08-31（画面設計を `screens/` に分割。ボトムナビゲーション採用。旧「上部バーの検索バー + アカウントメニュー」を廃し、検索は独立 destination、アカウント関連は「マイページ」に集約）

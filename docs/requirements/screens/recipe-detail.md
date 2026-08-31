@@ -1,0 +1,62 @@
+# レシピ詳細
+
+## 1. 目的
+
+1 つのレシピを見る。お気に入り登録、感想の閲覧・投稿もここで行う。機能仕様は [`../features/recipe.md`](../features/recipe.md) / [`../features/comment.md`](../features/comment.md) / [`../features/favorite.md`](../features/favorite.md)。
+
+## 2. ナビゲーション
+
+- 入口: [ホーム](home.md) / [検索](search.md) / [自分のレシピ一覧](my-recipes.md) / [ユーザープロフィール](user-profile.md) のカード、[通知一覧](notifications.md)の通知、[レシピ作成/編集](recipe-editor.md)の保存後。
+- 出口: [レシピ作成/編集](recipe-editor.md)（本人の「編集」）/ [ユーザープロフィール](user-profile.md) または [マイページ](my-page.md)（投稿者名タップ。他人 / 自分で分岐）。削除後は前の画面へ。
+- 戻る: 呼び出し元へ。
+- 認証: **必要**（当面アプリは全画面ログイン必須。[navigation.md](navigation.md)）。API 仕様上は `GET /recipes/{id}` が公開レシピを匿名で返せるが、当面クライアントは使わない。非公開レシピは投稿者本人のみ、他人は 404。
+
+## 3. レイアウト（上 → 下）
+
+1. アプリバー: 戻る矢印。本人が見ているときは右に「編集」「削除」
+2. **サムネイル画像 1 枚**（無ければプレースホルダ）。カルーセルは無い
+3. タイトル
+4. 投稿者行: アバター + 表示名 + フォローボタン。タップで、投稿者が他人なら[ユーザープロフィール](user-profile.md)、自分なら[マイページ](my-page.md)。**自分のレシピを見ているときはフォローボタンを出さない**
+5. メタ: 何人分・投稿日
+6. ♡ ボタン + お気に入り数
+7. 説明
+8. 材料リスト: 「材料名 + 数量・単位」（単位の前置 / 後置は [`../features/unit.md`](../features/unit.md) の表示ルール。例 `じゃがいも 3 個` / `砂糖 大さじ 2` / `塩 少々`）
+9. 手順リスト: 番号付き。各手順は本文 ＋（あれば）その手順の画像を縦に表示
+10. 感想セクション:
+    - 感想を書く入力欄 + 画像添付ボタン + 送信ボタン（**レシピ投稿者本人には非表示**）
+    - [感想アイテム](components.md)の一覧（新しい順、無限スクロール）
+
+## 4. 状態
+
+| 状態 | 表示 |
+| --- | --- |
+| loading | スケルトン |
+| 404（非公開 / 削除済み / 不在） | 「表示できません」＋前の画面へ戻る導線 |
+| 感想 empty | 「まだ感想がありません。作ってみたら感想を書いてみましょう」 |
+| 画像なし | サムネ・手順画像はプレースホルダ or 非表示 |
+
+## 5. アクションと結果
+
+- ♡ ボタン → `POST` / `DELETE /recipes/{id}/favorite`（トグル）。楽観更新（即座に数を ±1）、失敗時ロールバック。
+- フォローボタン → `POST` / `DELETE /users/{id}/follow`。楽観更新。
+- 「編集」→ [レシピ作成/編集](recipe-editor.md)（編集モード）。
+- 「削除」→ [確認ダイアログ](components.md) →`DELETE /recipes/{id}` → 前の画面へ、スナックバー「レシピを削除しました」。
+- 感想「送信」→ 画像があれば `POST /images` で先にアップロード → `POST /recipes/{id}/comments`（`body`, `imageKey`）→ 一覧の先頭に追加表示。
+- 感想「編集」→ インライン or ダイアログで本文 / 画像を編集 → `PATCH /comments/{commentId}`。
+- 感想「削除」→ 確認ダイアログ → `DELETE /comments/{commentId}` → 一覧から除去。
+
+## 6. 使用 API
+
+- `GET /recipes/{id}`
+- `POST` / `DELETE /recipes/{id}/favorite`
+- `POST` / `DELETE /users/{id}/follow`
+- `DELETE /recipes/{id}`
+- `GET /recipes/{id}/comments`
+- `POST /recipes/{id}/comments` / `PATCH` / `DELETE /comments/{commentId}`
+- `POST /images`
+- （[`../api.md`](../api.md)）
+
+## 7. プラットフォーム差分
+
+- モバイル: 画像添付は端末のカメラ / ギャラリー。
+- デスクトップ: 画像添付は OS のファイル選択ダイアログ。本文はスクロール、感想入力欄は下部に固定 or セクション内。
