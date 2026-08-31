@@ -15,7 +15,8 @@
 
 ## 3. 振る舞い・ルール
 
-- 検索対象は **`recipes.title` と `ingredients.name`**。
+- 検索対象は **`recipes.title` と `ingredients.name`**（材料がどのグループに属していても対象。参照付き材料は `ingredients.name` = スナップショットが対象）。
+- **材料グループ名（`ingredient_groups.name`）と `ingredients.ref_recipe_title` は検索対象にしない**（→ [../todo.md](../todo.md)）。
 - 入力文字列を**空白区切りの語**に分割し、**各語について「タイトルに部分一致 OR いずれかの材料名に部分一致」**を満たすレシピを返す。**語どうしは AND**。
   - 例: `玉ねぎ 豚肉` → 「玉ねぎ」を（タイトル or 材料）に含み、かつ「豚肉」も（タイトル or 材料）に含むレシピ。
 - 検索対象の可視性は各フィードのルールに従う（[home-feed.md](home-feed.md) / [../non-functional.md](../non-functional.md)）。`all` / `following` / `followers` は公開レシピのみ、`favorites` は自分の非公開レシピを含み、他人のレシピで非公開化 / 削除済みのものは除外する。
