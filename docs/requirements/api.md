@@ -51,15 +51,19 @@
 | メソッド | パス | 認証 | 概要 |
 | --- | --- | --- | --- |
 | GET | `/recipes` | 必要 | フィード / 検索。query: `feed=all\|following\|followers\|favorites`（既定 `all`）, `q`（`feed` と併用可、`favorites` 含む）, `limit`, `cursor` |
-| GET | `/recipes/{id}` | 任意 | 詳細（非公開は本人のみ）。`isFavorited` / `favoriteCount` / `commentCount` / `author` / `thumbnailUrl` / `steps[].imageUrl` |
-| POST | `/recipes` | 必要 | 作成。body に `thumbnailKey`（任意）, `steps[].imageKey`（任意） |
-| PUT | `/recipes/{id}` | 必要 | 全項目更新（本人のみ）。材料・手順は配列で全入れ替え。`thumbnailKey` は省略 = 維持、`null` = 削除。手順画像を残す場合は既存の `steps[].imageKey` を再送 |
-| DELETE | `/recipes/{id}` | 必要 | 削除（本人のみ） |
-| GET | `/users/me/recipes` | 必要 | 自分の投稿一覧（公開 / 非公開） |
+| GET | `/recipes/{id}` | 任意 | 詳細（非公開は本人のみ）。`isFavorited` / `favoriteCount` / `commentCount` / `author` / `thumbnailUrl` / `ingredientGroups[]`（各材料に `refRecipe`）/ `steps[].imageUrl` |
+| POST | `/recipes` | 必要 | 作成。body に `ingredientGroups[]`（`{ name, ingredients: [{ name, quantity, unit, refRecipeId }] }`）, `thumbnailKey`（任意）, `steps[].imageKey`（任意） |
+| PUT | `/recipes/{id}` | 必要 | 全項目更新（本人のみ）。材料グループ・材料・手順は配列で全入れ替え。`thumbnailKey` は省略 = 維持、`null` = 削除。手順画像を残す場合は既存の `steps[].imageKey` を再送 |
+| DELETE | `/recipes/{id}` | 必要 | 削除（本人のみ）。自分の他レシピの材料がこのレシピを `ref_recipe_id` で参照していたら SET NULL |
+| GET | `/users/me/recipes` | 必要 | 自分の投稿一覧（公開 / 非公開）。query: `q`（任意。タイトル + 材料名。マッチ規則は通常検索と同じ）, `limit`, `cursor`。材料の「レシピから選ぶ」ピッカーはこれを使う（自分のレシピ限定） |
 
 一覧レスポンスの各要素には `favoriteCount`（`recipes.favorite_count`）/ `author`（id・表示名・アバター URL）/ `thumbnailUrl` を含める。
 
-**検索マッチ規則（`q`）**: `q` を空白（半角・全角・連続）で語に分割 → 各語を個別に正規化 → 各語について `title_normalized` 部分一致 OR `ingredients.name_normalized` 部分一致 を AND。スペース無しは 1 語扱い。詳細は [features/search.md](features/search.md)。
+**材料グループ**: レシピは 1 個以上の材料グループを持つ（グループ未使用 = 名前なしグループ 1 つ = 見出しなしのフラット表示）。詳細は [features/recipe.md](features/recipe.md)。
+
+**材料のレシピ参照**: `ingredients[].refRecipeId` を指定できるのは投稿者本人が所有するレシピのみ（自己参照不可、違反は 400）。レスポンスの `refRecipe` は `{ id, title }` / `{ id: null, title }`（参照先削除済み）/ `null`。
+
+**検索マッチ規則（`q`）**: `q` を空白（半角・全角・連続）で語に分割 → 各語を個別に正規化 → 各語について `title_normalized` 部分一致 OR `ingredients.name_normalized` 部分一致 を AND。スペース無しは 1 語扱い。**材料グループ名（`ingredient_groups.name`）と `ingredients.ref_recipe_title` は検索対象外**。詳細は [features/search.md](features/search.md)。
 
 ### 単位 — [features/unit.md](features/unit.md)
 

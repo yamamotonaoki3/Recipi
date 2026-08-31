@@ -66,7 +66,7 @@
 }
 ```
 
-- 単位の登録専用エンドポイントは設けない。レシピ作成 / 更新（[recipe.md](recipe.md) の `POST` / `PUT /recipes`）時にサーバーが `ingredients[].unit` を見て未登録単位を自動 upsert する（`placement` は `suffix`）。
+- 単位の登録専用エンドポイントは設けない。レシピ作成 / 更新（[recipe.md](recipe.md) の `POST` / `PUT /recipes`）時にサーバーが各材料（`ingredientGroups[].ingredients[].unit`）の `unit` を見て未登録単位を自動 upsert する（`placement` は `suffix`）。
 
 ## 6. バリデーション
 

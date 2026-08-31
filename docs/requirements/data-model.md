@@ -13,10 +13,12 @@ erDiagram
     users ||--o{ recipe_comments : "投稿"
     users ||--o{ refresh_tokens : "所有"
     users ||--o{ notifications : "受信"
-    recipes ||--o{ ingredients : "含む"
+    recipes ||--o{ ingredient_groups : "含む"
+    ingredient_groups ||--o{ ingredients : "含む"
     recipes ||--o{ steps : "含む"
     recipes ||--o{ favorites : "被登録"
     recipes ||--o{ recipe_comments : "対象"
+    recipes ||--o{ ingredients : "材料として参照される（ref_recipe_id）"
 
     users {
         uuid id PK
@@ -53,9 +55,18 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    ingredient_groups {
+        uuid id PK
+        uuid recipe_id FK
+        string name "NULL可・0〜40"
+        int position
+    }
     ingredients {
         uuid id PK
         uuid recipe_id FK
+        uuid group_id FK
+        uuid ref_recipe_id FK "NULL可・SET NULL"
+        string ref_recipe_title "NULL可・0〜120"
         string name
         string name_normalized
         numeric quantity "NULL可"
@@ -122,7 +133,8 @@ erDiagram
 | --- | --- | --- |
 | `users` | `email` UNIQUE NOT NULL / `password_hash` NOT NULL / `display_name` NOT NULL（1〜30）/ `security_question` NOT NULL / `security_answer_hash` NOT NULL / `token_version` INT NOT NULL DEFAULT 0 / `avatar_key` NULL 可 / `email_public`・`x_public`・`instagram_public`・`other_public` BOOLEAN NOT NULL DEFAULT false / `x_url`・`instagram_url`・`other_url` NULL 可（URL 形式）/ `follower_count`・`following_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md), [features/follow.md](features/follow.md) |
 | `recipes` | `user_id` FK → `users.id`（ON DELETE CASCADE）/ `servings` NOT NULL CHECK(1〜99) / `is_public` NOT NULL / `title` NOT NULL（1〜120）/ `title_normalized` NOT NULL（index、必要なら `pg_trgm`）/ `description`（0〜2000）/ `thumbnail_key` NULL 可 / `favorite_count`・`comment_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) / index(`user_id`) / index(`is_public`, `created_at` DESC) | [features/recipe.md](features/recipe.md) |
-| `ingredients` | `recipe_id` FK（ON DELETE CASCADE）/ UNIQUE(`recipe_id`, `position`) / `name` NOT NULL（1〜60）/ `name_normalized` NOT NULL・index（必要なら `pg_trgm`）/ `quantity` NUMERIC NULL・CHECK(quantity > 0) / `unit` VARCHAR NULL（0〜20） | [features/recipe.md](features/recipe.md), [features/search.md](features/search.md), [features/unit.md](features/unit.md) |
+| `ingredient_groups` | `id` PK / `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `name` VARCHAR NULL（0〜40。NULL / 空 = 名前なしグループ）/ `position` INT / UNIQUE(`recipe_id`, `position`) / **UNIQUE(`id`, `recipe_id`)**（`ingredients` からの複合 FK の参照先） | [features/recipe.md](features/recipe.md) |
+| `ingredients` | `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ **複合 FK (`group_id`, `recipe_id`) → `ingredient_groups`(`id`, `recipe_id`)（ON DELETE CASCADE）** — 材料の `recipe_id` が親グループの `recipe_id` と一致することを DB レベルで保証 / UNIQUE(`group_id`, `position`) / `name` NOT NULL（1〜60）/ `name_normalized` NOT NULL・index（必要なら `pg_trgm`）/ `quantity` NUMERIC NULL・CHECK(quantity > 0) / `unit` VARCHAR NULL（0〜20）/ `ref_recipe_id` FK → `recipes.id`（**ON DELETE SET NULL**）NULL 可 / `ref_recipe_title` VARCHAR NULL（0〜120。参照行の目印兼スナップショット）/ CHECK(`ref_recipe_id` <> `recipe_id`。自己参照不可) / index(`ref_recipe_id`) | [features/recipe.md](features/recipe.md), [features/search.md](features/search.md), [features/unit.md](features/unit.md) |
 | `steps` | `recipe_id` FK（ON DELETE CASCADE）/ UNIQUE(`recipe_id`, `position`) / `body` NOT NULL（1〜1000）/ `image_key` NULL 可 / `position` は 1 起点の連番 | [features/recipe.md](features/recipe.md), [features/image.md](features/image.md) |
 | `recipe_comments` | `id` PK / `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `user_id` FK → `users.id`（ON DELETE CASCADE）/ `body` NOT NULL（1〜1000）/ `image_key` NULL 可 / index(`recipe_id`, `created_at` DESC) | [features/comment.md](features/comment.md) |
 | `units` | `normalized` UNIQUE NOT NULL / `value` NOT NULL / `placement` NOT NULL DEFAULT `suffix`（`suffix` / `prefix`。`大さじ` `小さじ` のみ `prefix`） | [features/unit.md](features/unit.md) |
@@ -139,7 +151,9 @@ erDiagram
 
 - 主キーは UUID を基本とする（分散生成しやすく、URL に ID を晒しても連番推測されない）。
 - `created_at` / `updated_at` は `timestamptz`。アプリ側またはトリガーで更新。
-- `*_normalized`（`recipes.title_normalized` / `ingredients.name_normalized` / `units.normalized`）はサーバーが生成する（トリム・小文字化・全角/半角そろえ）。検索（[features/search.md](features/search.md)）と単位の重複判定（[features/unit.md](features/unit.md)）に使う。正規化の具体仕様は → [todo.md](todo.md)。
+- `*_normalized`（`recipes.title_normalized` / `ingredients.name_normalized` / `units.normalized`）はサーバーが生成する（トリム・小文字化・全角/半角そろえ）。検索（[features/search.md](features/search.md)）と単位の重複判定（[features/unit.md](features/unit.md)）に使う。正規化の具体仕様は → [todo.md](todo.md)。`ingredient_groups.name` と `ingredients.ref_recipe_title` は正規化しない（検索対象外）。
+- **材料グループ**: レシピは 1 個以上の `ingredient_groups` を持つ（グループ未使用のレシピ = 名前なしグループ 1 つ）。各グループは 1 個以上の `ingredients` を持つ。`ingredients.position` はグループ内の 1 起点連番。詳細は [features/recipe.md](features/recipe.md)。
+- **材料のレシピ参照**: `ingredients.ref_recipe_id` が非 NULL の行は「別レシピへのリンク付き材料」。指定できるのはそのレシピの投稿者本人が所有するレシピのみ（自己参照不可）。参照先が削除されると `ref_recipe_id` は SET NULL になり、`ref_recipe_title`（スナップショット）だけが残る。詳細は [features/recipe.md](features/recipe.md)。
 - `units` の初期データは Flyway のシードマイグレーションで投入する（[features/unit.md](features/unit.md)）。
 - パスワード・秘密の答えはハッシュ化して保存（`password_hash` / `security_answer_hash`）。
 - リフレッシュトークンの検証用データは `token_hash` で保持する。
@@ -153,7 +167,9 @@ erDiagram
 
 ## アカウント削除時の CASCADE（`DELETE FROM users WHERE id = :me`）
 
-- `recipes`（→ さらに `ingredients` / `steps` / その `recipe` への `favorites` / `recipe_comments` / `notifications`）
+- `recipes`（→ さらに `ingredient_groups` → `ingredients` / `steps` / その `recipe` への `favorites` / `recipe_comments` / `notifications`）
+  - 参照は自分のレシピ間のみなので、アカウント削除ではその人の全レシピが消え、参照していた材料も CASCADE で一緒に消える（`ref_recipe_id` SET NULL の出番はない）。
+  - `ref_recipe_id` の SET NULL は、**個別のレシピ削除**（`DELETE /recipes/{id}`）で、その人の他レシピの材料が消えたレシピを参照していたときの挙動（[features/recipe.md](features/recipe.md)）。
 - `follows`（`follower_id` = me と `followee_id` = me の両方向）
 - `favorites`（`user_id` = me）
 - `recipe_comments`（`user_id` = me）
