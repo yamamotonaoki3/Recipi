@@ -42,7 +42,15 @@ Ktor / Exposed / Compose Multiplatform は未経験。`learning-handover` で学
 4. **内部設定・周知不要なものは GitHub に上げない**
    - `.claude/`（スキル・エージェント・設定等、Claude Code の内部動作設定）は `.gitignore` で除外し、リポジトリにコミットしない。
    - 個人環境依存でチーム外への周知が不要な設定ファイルもコミット対象外とする。
-5. **新しい技術選定が必要になったとき**
+5. **環境変数はローカル開発 / テスト / 本番で分離し、切り替えられるようにする**
+   - 用途別に `.env` ファイルを分ける:
+     - `.env.local` … ローカル開発（Docker Compose）
+     - `.env.test` … 自動テスト / 結合テスト。接続先は**ローカルまたはテスト専用環境に限定**し、本番・ステージング DB に接続しうる設定でテストを実行しない（グローバル CLAUDE.md「テストデータの標準要件」）。
+     - `.env.production` … 本番。実ファイルはリポジトリに置かず、デプロイ先のシークレット管理機構で注入する。
+   - 実値を持つ `.env*` は**すべて `.gitignore` 対象**。各環境に対応する `.env.example` / `.env.test.example` / `.env.production.example` を**プレースホルダのみ**でコミットする（`.gitignore` の `.env.*` 除外と `!.env.example` / `!.env.*.example` の例外を維持）。
+   - 実行時は `APP_ENV`（`local` / `test` / `production`）で読み込むファイル・設定を切り替える。
+   - 実値・現在有効な認証情報を、コミット対象ファイル・コミットメッセージ・PR / Issue 本文に書かない（グローバル CLAUDE.md「秘密情報の標準取り扱い要件」、[docs/requirements/architecture.md](docs/requirements/architecture.md) §秘密情報の扱い）。
+6. **新しい技術選定が必要になったとき**
    - 要件定義書（[docs/requirements/](docs/requirements/)）に明記の無い技術要素の選定が必要になった場合は、`resolve-tech-stack` スキルに従う。Claude 単独で決めず、必ずユーザーに確認し、決定したらバージョンを明記して利用可否を検査する。
 
 ---
