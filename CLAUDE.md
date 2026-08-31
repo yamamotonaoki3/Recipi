@@ -9,17 +9,17 @@
 ## 技術スタック
 
 - **フロントエンド**: Kotlin Multiplatform + Compose Multiplatform（**Android / iOS / Desktop** を単一コードベース）、Ktor Client、kotlinx.serialization。ブラウザ（Web）版は当面対象外
-- **バックエンド**: Kotlin + Ktor Server、Exposed（ORM）、HikariCP、Flyway、JWT 認証（アクセス＋リフレッシュトークン / ローテーション）
+- **バックエンド**: Python 3.14.7 + FastAPI（Uvicorn）、SQLModel（SQLAlchemy 2.0）、Alembic、psycopg 3、Pydantic v2、Argon2id（argon2-cffi）、JWT 認証（ライブラリは PyJWT / Authlib から選定、アクセス＋リフレッシュトークン / ローテーション）。パッケージ管理は venv + pip + requirements.txt（従来方式で学習、後で uv と比較）
 - **DB**: PostgreSQL
 - **画像保存**: S3 互換クラウドストレージ（ローカルは MinIO）
-- **共有**: KMP `shared` モジュールに DTO・バリデーション・表示整形ロジックを置き backend / frontend で共用
+- **型共有**: FastAPI が出力する OpenAPI 3.1 → OpenAPI Generator で Kotlin クライアント / DTO を自動生成し `shared` に取り込む（コンパイル時共有はしない）
 - **インフラ**: ローカルは Docker Compose（api + postgres + minio）。本番デプロイ先は未定
-- **リポジトリ構成**: モノレポ（`shared` / `backend` / `composeApp` / `iosApp` / `desktopApp`）
-- バージョンは実装着手前に `resolve-tech-stack` で確定する
+- **リポジトリ構成**: モノレポ。`backend/` は独立した Python プロジェクト（Gradle 非登録）、フロントは Gradle（`shared` / `composeApp` / `iosApp` / `desktopApp`）
+- バージョンは実装着手前に `resolve-tech-stack` で確定する（バックエンドの Python 構成は確定済み）
 
 ## 学習方針
 
-Ktor / Exposed / Compose Multiplatform は未経験。`learning-handover` で学習用引き渡し資料を作成するが、**学習完了を待たずに本実装を進める**（引き渡し資料は後日学習用）。
+FastAPI / SQLModel / Python は未経験（Compose Multiplatform も）。Python を選んだ主目的は**今後アプリ内に AI 認識機能を取り入れる**こと。`learning-handover` で学習用引き渡し資料を作成するが、**学習完了を待たずに本実装を進める**（引き渡し資料は後日学習用）。
 
 ## 開発ワークフロー（Issue → ブランチ → PR）
 

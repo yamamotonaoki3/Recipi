@@ -73,9 +73,9 @@ flowchart TD
     Screen --> State["状態保持層（ViewModel 相当）<br/>画面の状態・イベント処理・楽観更新"]
     State --> Data["データ取得層（Repository 相当）<br/>API 呼び出し・ページング・キャッシュ方針"]
     Data --> KtorClient["Ktor Client<br/>HTTP・認証ヘッダ・トークン更新（single-flight）"]
-    KtorClient --> Api[("Ktor Server<br/>（../api.md）")]
+    KtorClient --> Api[("FastAPI<br/>（../api.md）")]
 
-    State -. 型・ルールを共有 .-> Shared["shared モジュール<br/>@Serializable DTO / バリデーション / 表示整形（単位の前置表記 等）"]
+    State -. 型・整形を利用 .-> Shared["shared モジュール<br/>OpenAPI 生成 API クライアント / DTO / 表示整形（単位の前置表記 等）"]
     Data -. 使用 .-> Shared
     KtorClient -. 使用 .-> Shared
 ```
@@ -83,7 +83,7 @@ flowchart TD
 - **状態保持層**: 画面ごとに 1 つ。API レスポンス（`shared` の DTO）を画面表示用の状態に変換して保持。♡ やフォローの楽観更新もここ。
 - **データ取得層**: エンドポイント単位のまとまり。カーソルページング（[`../non-functional.md`](../non-functional.md)）の cursor 管理もここ。
 - **Ktor Client**: アクセストークン付与、401 時のリフレッシュ（single-flight）、`token_version` 不一致でのログアウト誘導（[`../features/auth.md`](../features/auth.md)）。
-- **`shared` モジュール**: バックエンドと同じ DTO・バリデーション・表示整形ロジックを使う（[`../architecture.md`](../architecture.md)）。
+- **`shared` モジュール**: OpenAPI（FastAPI が出力）から生成した API クライアント / DTO と、フロント内部の表示整形ロジックを置く（[`../architecture.md`](../architecture.md)、[`../tech-stack.md`](../tech-stack.md)）。
 
 ## バックスタック
 

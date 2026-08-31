@@ -6,7 +6,7 @@
 | 2 | 本番デプロイ先（Fly.io / Render / AWS 等）の選定 | Phase 10 前後 | [architecture.md](architecture.md) |
 | 3 | iOS ビルドに必要な macOS / Xcode 環境の有無・調達 | Phase 0 | [tech-stack.md](tech-stack.md) |
 | 4 | Compose Multiplatform の画像ピッカー / カメラ / 画像トリミングライブラリの具体選定 | Phase 3 / Phase 5 | [features/image.md](features/image.md) |
-| 5 | PostgreSQL・各ライブラリのバージョン確定（`resolve-tech-stack`）、このマシンでの利用可否検査 | 実装着手前 | [tech-stack.md](tech-stack.md) |
+| 5 | PostgreSQL メジャーバージョン・フロント / バックの各ライブラリのバージョン確定（`resolve-tech-stack`）、このマシンでの利用可否検査。Python は 3.14.7 で固定（`.python-version` = 3.14.7 / `requires-python = ">=3.14,<3.15"` / `python:3.14.7-slim`）、backend の C 拡張ライブラリの Windows wheel は 3.14.7 で確認済み | 実装着手前 | [tech-stack.md](tech-stack.md) |
 | 6 | Android minSdk / iOS 対応下限の確定 | Phase 0 | [non-functional.md](non-functional.md) |
 | 7 | フロントの状態管理 / DI / ナビゲーションライブラリの選定 | Phase 0 | [tech-stack.md](tech-stack.md) |
 | 8 | S3 互換ストレージの本番サービス選定（R2 / S3 等）、署名付き URL か公開バケットか | Phase 3〜10 | [features/image.md](features/image.md) |
@@ -24,7 +24,7 @@
 | 21 | 材料・手順の並べ替え UI（ドラッグ / 上下ボタン）の確定 | Phase 2 | [features/recipe.md](features/recipe.md) |
 | 22 | メールアドレス変更フロー（再確認メール） | MVP 完了後 | [features/auth.md](features/auth.md) |
 | 23 | いいね（お気に入りと別の反応）、感想への返信、タグ / カテゴリ、通報 / NG ワードの優先順位 | MVP 完了後 | [overview.md](overview.md) |
-| 24 | 学習用引き渡し資料（Ktor / Exposed / Compose Multiplatform）を `learning-handover` で作成（後日学習用、非ブロッキング） | 実装着手前に別タスク | [tech-stack.md](tech-stack.md) |
+| 24 | 学習用引き渡し資料（FastAPI / SQLModel / Alembic / Compose Multiplatform）を `learning-handover` で作成（後日学習用、非ブロッキング） | 実装着手前に別タスク | [tech-stack.md](tech-stack.md) |
 | 25 | ブラウザ（Web）版（Compose for Web / Wasm）の採否と時期 | MVP 完了後 | [tech-stack.md](tech-stack.md) |
 | 26 | デスクトップの最小 OS バージョン、ウィンドウ最小サイズ、ボトムバー ⇔ ナビゲーションレールの切替ブレークポイント、レスポンシブ / 2 ペイン表示（一覧＋詳細の横並び） | Phase 0 / 各フェーズ | [screens/navigation.md](screens/navigation.md) |
 | 27 | `expect` / `actual` で吸収するプラットフォーム固有機能の洗い出し（画像ピッカー、カメラ、セキュアストレージ、共有 等）と Desktop 実装 | Phase 0 | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md) |
@@ -39,6 +39,13 @@
 | 36 | 破壊的操作の取り消し（Undo スナックバー）を入れるか | MVP 完了後 | [screens/components.md](screens/components.md) |
 | 37 | 材料グループ: グループ数・グループあたり材料数の上限、名前なしグループが複数あるときの詳細表示（見出しなしで連結 / 区切り線） | Phase 2 | [features/recipe.md](features/recipe.md) |
 | 38 | 材料のレシピ参照: 「レシピから選ぶ」ピッカーの UI 詳細（一覧 / 検索 / 最近作ったもの）、循環参照（A↔B）の表示上の扱い、`ingredient_groups.name` / `ref_recipe_title` を検索対象に含めるか | Phase 2 / Phase 4 | [features/recipe.md](features/recipe.md), [features/search.md](features/search.md) |
+| 39 | パッケージ管理: まず venv + pip + requirements.txt で進め、その後 `uv` に置き換えて何が変わるか比較・検証する（学習後） | Phase 0 後の学習 | [tech-stack.md](tech-stack.md) |
+| 40 | 本番 ASGI 実行構成の確定（Uvicorn workers / Gunicorn + Uvicorn worker / Granian）、ワーカー数、リバースプロキシ | Phase 10 前後 | [tech-stack.md](tech-stack.md), [architecture.md](architecture.md) |
+| 41 | JWT ライブラリの最終確定（PyJWT / Authlib。python-jose はメンテ停滞のため回避）、Bearer 認証依存性の実装詳細（JSON ログインエンドポイントと組み合わせる） | Phase 1 | [tech-stack.md](tech-stack.md), [features/auth.md](features/auth.md) |
+| 42 | OpenAPI コード生成: OpenAPI Generator の Kotlin ジェネレータ選定（`kotlin` + Ktor Client / `kotlin-multiplatform`）、生成物の置き場所（`shared`）、CI での `openapi.json` 再生成と差分チェックの仕組み | Phase 0 / 各フェーズ | [tech-stack.md](tech-stack.md), [architecture.md](architecture.md) |
+| 43 | SQLModel のモデル定義で表現できない DB 制約（複合外部キー・部分インデックス・`CHECK`・トリガー）を Alembic の手書きマイグレーションで補う運用の詳細、Alembic autogenerate と手書きの併用方針 | Phase 0 / 各フェーズ | [data-model.md](data-model.md), [tech-stack.md](tech-stack.md) |
+| 44 | 構造化ログの実現手段（標準 `logging` の JSON フォーマッタ / `structlog`）、リクエスト ID の付与方式（ミドルウェア） | Phase 0 / Phase 10 | [non-functional.md](non-functional.md) |
+| 45 | AI 認識機能: モデルの提供方式（クラウド API / ローカル推論）、対象タスク（レシピ画像からの材料・料理名認識など）、`/api/v1/ai/...` 名前空間、推論のコスト / レイテンシ | MVP 完了後 | [tech-stack.md](tech-stack.md), [overview.md](overview.md) |
 
 ## 決定済み（対象外で確定）
 
@@ -46,6 +53,6 @@
 - 画像カルーセル — 廃止（サムネイル + 手順画像に統合）
 - プッシュ通知・メール通知 — 対象外（アプリ内通知のみ）
 - ブラウザ（Web）版 — 当面対象外（デスクトップアプリで対応。将来 Compose for Web を検討）
-- 技術スタック — Kotlin Multiplatform + Compose Multiplatform（Android / iOS / Desktop）+ Ktor で確定
+- 技術スタック — フロント: Kotlin Multiplatform + Compose Multiplatform（Android / iOS / Desktop）で確定。バックエンド: Python + FastAPI + SQLModel + Alembic で確定（AI 認識機能の学習目的。`resolve-tech-stack` で確認済み）。型共有は OpenAPI 3.1 → OpenAPI Generator（Kotlin）
 
 > このリストはレビューで随時追加する。
