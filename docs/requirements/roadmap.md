@@ -1,16 +1,19 @@
 # 開発ロードマップ / MVP 候補ライン
 
-機能を Phase に分ける。各 Phase は **backend → frontend の順**（CLAUDE.md「Issue駆動・複数Issue自動連続実行ルール」に従い、フロントは対応するバックエンド PR がマージ・動作確認済みになるまで着手しない）。各 Phase を backend / frontend 別 Issue に分割する。
+機能を Phase に分ける。各 Phase は **backend → frontend の順**（CLAUDE.md「Issue駆動・複数Issue自動連続実行ルール」に従い、フロントは対応するバックエンド PR がマージ・動作確認済みになるまで着手しない）。
 
+- 各 Phase の Issue は **backend / frontend-ts / frontend-kotlin の 3 系統**に分割する。
+- **frontend-ts（TypeScript / Expo）が必須トラック**。**frontend-kotlin（KMP / Compose）は随時・非ブロッキング**で、自動連続実行の完了判定には含めない（[tech-stack.md](tech-stack.md) / root CLAUDE.md）。
 - backend は Python（FastAPI / SQLModel / Alembic）で実装する（[tech-stack.md](tech-stack.md)）。
-- 各 backend Phase の完了時に `openapi.json` を更新し、対応する frontend Phase の冒頭で OpenAPI Generator による Kotlin クライアントを再生成する（[architecture.md](architecture.md)）。
+- 各 backend Phase の完了時に `openapi.json` を更新し、対応する frontend Phase の冒頭で API クライアントを再生成する（TS: openapi-typescript、Kotlin: OpenAPI Generator。[architecture.md](architecture.md)）。
 
 | Phase | 内容 | 関連ドキュメント |
 | --- | --- | --- |
 | Phase 0（backend） | scaffold: FastAPI プロジェクト雛形（`app/`）、venv + pip + requirements.txt、Alembic 初期化、Docker Compose（api + postgres + minio）、`.env.development.example` ほか、CI 雛形 | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md) |
-| Phase 0（frontend） | scaffold: Gradle マルチモジュール、`shared` / `composeApp`（android/ios/**desktop**）/ `desktopApp` 雛形、OpenAPI Generator による Kotlin クライアント生成設定、CI 雛形 | [architecture.md](architecture.md) |
+| Phase 0（frontend-ts） | scaffold: `expoApp` 雛形（Expo / Expo Router / NativeWind）、openapi-typescript + openapi-fetch の生成設定、TanStack Query、Tauri 2 デスクトップシェル雛形（RN Web ビルド読み込み）、EAS / ローカルビルド方針、CI 雛形 | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md) |
+| Phase 0（frontend-kotlin）※随時 | scaffold: Gradle マルチモジュール、`shared` / `composeApp`（android/ios/**desktop**）/ `desktopApp` 雛形、OpenAPI Generator による Kotlin クライアント生成設定、CI 雛形 | [architecture.md](architecture.md) |
 | Phase 1 | 認証: signup（秘密の質問含む）/ login /「ログインを保持」/ アクセス＋リフレッシュトークン（ローテーション）/ `/auth/refresh` / `/auth/logout` / パスワードリセット ＋ ログイン / サインアップ / パスワードリセット画面 ＋ プロフィール編集（表示名のみ） | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md) |
-| Phase 2 | レシピ CRUD（画像なし）＋ **材料グループ（`ingredient_groups`）・材料のレシピ参照（`ref_recipe_id`）**＋ 単位マスター（`placement` 含む）・`GET /units`・単位の表示整形ロジック（`shared`）・作成編集画面の行編集 UX | [features/recipe.md](features/recipe.md), [features/unit.md](features/unit.md) |
+| Phase 2 | レシピ CRUD（画像なし）＋ **材料グループ（`ingredient_groups`）・材料のレシピ参照（`ref_recipe_id`）**＋ 単位マスター（`placement` 含む）・`GET /units`・単位の表示整形ロジック（各クライアント）・作成編集画面の行編集 UX | [features/recipe.md](features/recipe.md), [features/unit.md](features/unit.md) |
 | Phase 3 | 画像: `POST /images`（一時アップロード）＋ レシピのサムネイル ＋ 手順ごとの画像（`recipe_images` は無し。感想画像は Phase 7） | [features/image.md](features/image.md) |
 | Phase 4 | ボトムナビゲーション / ナビゲーションレール ＋ ホーム「全体」タブ ＋ 検索 destination（`q`、スペース分割・正規化） | [screens/navigation.md](screens/navigation.md), [features/home-feed.md](features/home-feed.md), [features/search.md](features/search.md) |
 | Phase 5 | フォロー / フォロワー（`follows`、フォロー API、**カウント列キャッシュ**、ユーザープロフィール、フォロー・フォロワー 2 タブ画面）＋ ホーム「フォロー」「フォロワー」タブ ＋ プロフィール拡張（アバター・SNS リンク・公開トグル） | [features/follow.md](features/follow.md), [features/profile.md](features/profile.md), [features/image.md](features/image.md) |
@@ -20,7 +23,7 @@
 | Phase 9 | アカウント削除（`DELETE /users/me`、CASCADE、確認 UI） | [features/profile.md](features/profile.md) |
 | Phase 10 | 仕上げ（バリデーション強化、エラー UX、空状態、カウント補正ジョブ、E2E 動作確認、デスクトップ配布パッケージ） | 全体 |
 
-各フェーズのフロント Issue では **Android / iOS / Desktop の 3 プラットフォームで動作確認**する。
+各フェーズのフロント Issue では、そのトラックの対象プラットフォームで動作確認する。**frontend-ts**: iOS / Android / Tauri デスクトップ（Windows・macOS）。**frontend-kotlin**（随時）: Android / iOS / Compose デスクトップ。
 
 ## MVP 候補ライン（未確定）
 

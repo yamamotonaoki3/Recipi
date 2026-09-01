@@ -22,7 +22,9 @@
 - パスワードリセット成功時は、そのアカウントの全リフレッシュトークン（全チェーン）を失効させる。
 - リフレッシュトークン本体はハッシュで `refresh_tokens` に保存し、失効管理する。
 - 「ログインを保持」OFF のときは、リフレッシュトークンを端末のセキュアストレージに永続化しない。
-- セキュアストレージの実体はプラットフォームごとに `expect` / `actual` で実装（iOS: Keychain、Android: Keystore/EncryptedSharedPreferences、Desktop: OS のクレデンシャルストア。相当機能が無い場合の扱いは → [todo.md](todo.md)）。
+- セキュアストレージの実体はプラットフォームごとに実装する（iOS: Keychain、Android: Keystore / EncryptedSharedPreferences、Desktop: OS のクレデンシャルストア。相当機能が無い場合の扱いは → [todo.md](todo.md)）。
+  - **TypeScript トラック**: `expo-secure-store`（iOS Keychain / Android Keystore）、デスクトップは Tauri の keyring / Stronghold プラグイン。
+  - **Kotlin トラック**: `expect` / `actual` で `androidMain` / `iosMain` / `desktopMain` に実装。
 
 ### パスワードリセット（[features/auth.md](features/auth.md)）
 
@@ -95,8 +97,13 @@
 
 ## 対応プラットフォーム
 
+フロントエンドは 2 トラック（[tech-stack.md](tech-stack.md)）。どちらも Android / iOS / Desktop（Windows・macOS）を対象とする。
+
+- **TypeScript トラック（必須）**: iOS / Android = Expo（React Native）。Desktop = React Native Web ビルドを Tauri 2 でパッケージ。
+- **Kotlin トラック（随時）**: Android / iOS / Desktop = Compose Multiplatform（Desktop は JVM）。
+
 - **Android**: minSdk は実装時に確定（目安 API 26 / Android 8.0 以上）。
 - **iOS**: 対応下限は実装時に確定（目安 iOS 15 以上）。
 - **Desktop**: Windows / macOS。最小 OS バージョン・ウィンドウ最小サイズは実装時に確定。
-- ブラウザ（Web）版は対象外（将来検討）。
+- ブラウザ（Web）単体配信は対象外（将来検討）。TS トラックの RN Web ビルドは Tauri デスクトップの土台としてのみ使う。
 - → [todo.md](todo.md)

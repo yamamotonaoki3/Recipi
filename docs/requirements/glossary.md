@@ -15,7 +15,15 @@
 | 感想画像 | 感想（コメント）に添付できる画像 1 枚。S3 互換ストレージに保存 |
 | `placement`（単位の配置） | 単位を数値の前に出すか後ろに出すか。`suffix`（既定、`200 g`）/ `prefix`（`大さじ 2`）。`prefix` は `大さじ` `小さじ` のみ |
 | カーソルページング | 一覧を「前回の末尾位置（cursor）から次の N 件」で取得する方式。オフセット方式と違い、新規投稿による重複・抜けが起きない。全一覧と感想スレッドで採用（無限スクロール） |
-| デスクトップアプリ | Windows / macOS にインストールして使うアプリ。Compose Multiplatform Desktop（JVM）でモバイルと UI を共有 |
+| デスクトップアプリ | Windows / macOS にインストールして使うアプリ。**TypeScript トラック**は React Native Web ビルドを Tauri 2 でパッケージ、**Kotlin トラック**は Compose Multiplatform Desktop（JVM）。[tech-stack.md](tech-stack.md) 参照 |
+| フロントエンドトラック | フロントの 2 系統の実装。**TypeScript トラック**（React Native + Expo。カリキュラム指定の必須）と **Kotlin トラック**（KMP + Compose。開発者の学習用・随時）。どちらも同じ FastAPI を同じ API 契約で叩く。[tech-stack.md](tech-stack.md) 参照 |
+| React Native | JS / TS で iOS・Android のネイティブアプリを作るフレームワーク。UI はネイティブ部品を描画する |
+| Expo | React Native の標準ツールチェーン。ビルド・OTA 更新・カメラ / セキュアストレージ等のモジュールを提供。TypeScript トラックのベース |
+| Expo Router | Expo のファイルベースのルーティング。`app/` ディレクトリの構造がそのまま画面遷移になる（Next.js App Router 風） |
+| React Native Web | React Native のコンポーネントを Web（DOM）向けに描画する仕組み。TypeScript トラックではデスクトップ（Tauri）の土台に使う |
+| Tauri | Web フロントを OS のシステム WebView + Rust コアで包み、軽量なデスクトップアプリ（`.msi` / `.dmg`）にするフレームワーク。TypeScript トラックの Desktop シェル |
+| NativeWind | Tailwind CSS の記法を React Native で使えるようにするスタイリングライブラリ。TypeScript トラックの UI |
+| openapi-typescript | OpenAPI 仕様から TypeScript の型定義を生成するツール。`openapi-fetch`（型安全な fetch クライアント）と組み合わせて使う。[tech-stack.md](tech-stack.md) 参照 |
 | 単位マスター（`units`） | アプリ全体で共有する材料単位の候補リスト。入力補完に使う。未登録の単位は保存時に自動追加される |
 | 正規化 / `normalized` / `*_normalized` | 検索・重複判定のために、前後空白除去・小文字化・全角/半角そろえをした文字列 |
 | ホームフィード | ログイン後のホーム画面。「全体 / フォロー / フォロワー / お気に入りレシピ」の 4 タブ。すべて無限スクロール |
@@ -47,6 +55,6 @@
 | Pydantic | FastAPI が使うデータ検証 / シリアライズライブラリ（v2）。API のリクエスト / レスポンスモデルを型で定義する |
 | SQLModel | バックエンドの ORM。SQLAlchemy 2.0 と Pydantic を組み合わせたもので、FastAPI 作者製。DB モデルと API モデルを親和的に書ける。複雑な制約は生 SQLAlchemy に降りる。[tech-stack.md](tech-stack.md) 参照 |
 | Alembic | SQLAlchemy 用の DB マイグレーションツール（読み: アレンビック）。スキーマ変更とシードデータ投入を管理する。SQLModel で表現できない制約は手書きマイグレーションで補う。[data-model.md](data-model.md) 参照 |
-| OpenAPI コード生成 | FastAPI が出力する OpenAPI 3.1 仕様（`openapi.json`）から、OpenAPI Generator で Kotlin の API クライアント / DTO を生成する仕組み。バックエンド（Python）とフロントエンド（Kotlin）で型を一致させる手段。[tech-stack.md](tech-stack.md) 参照 |
-| `shared` モジュール | フロントエンドの KMP 共有モジュール（`commonMain`）。フロント内部の共通ロジック（単位の表示整形 等）と、OpenAPI から生成した API クライアント / DTO を置く。[architecture.md](architecture.md) 参照 |
+| OpenAPI コード生成 | FastAPI が出力する OpenAPI 3.1 仕様（`openapi.json`）から、各言語の API クライアント / 型を生成する仕組み。**Kotlin** は OpenAPI Generator、**TypeScript** は openapi-typescript。バックエンド（Python）と 2 つのフロントで型を一致させる手段。[tech-stack.md](tech-stack.md) 参照 |
+| `shared` モジュール | **Kotlin トラック専用**の KMP 共有モジュール（`commonMain`）。フロント内部の共通ロジック（単位の表示整形 等）と、OpenAPI から生成した Kotlin API クライアント / DTO を置く。TypeScript トラックは参照せず、`expoApp` 内に同等物を持つ。[architecture.md](architecture.md) 参照 |
 | MVP | 初回リリースに含める機能範囲。未確定。[roadmap.md](roadmap.md) 参照 |

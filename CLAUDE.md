@@ -8,18 +8,21 @@
 
 ## 技術スタック
 
-- **フロントエンド**: Kotlin Multiplatform + Compose Multiplatform（**Android / iOS / Desktop** を単一コードベース）、Ktor Client、kotlinx.serialization。ブラウザ（Web）版は当面対象外
+- **フロントエンド**: **2 トラック**。どちらも 1 本の FastAPI を共通の OpenAPI 契約で叩く。
+  - **(A) TypeScript（必須トラック）**: React Native + Expo（Expo Router / New Architecture）、NativeWind、openapi-typescript + openapi-fetch、TanStack Query。Desktop（Windows・macOS）は React Native Web ビルドを **Tauri 2** でパッケージ。カリキュラム指定
+  - **(B) Kotlin Multiplatform（随時トラック・非ブロッキング）**: Compose Multiplatform（Android / iOS / Desktop）、Ktor Client、kotlinx.serialization。開発者の学習用
+  - ブラウザ（Web）単体配信は当面対象外
 - **バックエンド**: Python 3.14.7 + FastAPI（Uvicorn）、SQLModel（SQLAlchemy 2.0）、Alembic、psycopg 3、Pydantic v2、Argon2id（argon2-cffi）、JWT 認証（ライブラリは PyJWT / Authlib から選定、アクセス＋リフレッシュトークン / ローテーション）。パッケージ管理は venv + pip + requirements.txt（従来方式で学習、後で uv と比較）
 - **DB**: PostgreSQL
 - **画像保存**: S3 互換クラウドストレージ（ローカルは MinIO）
-- **型共有**: FastAPI が出力する OpenAPI 3.1 → OpenAPI Generator で Kotlin クライアント / DTO を自動生成し `shared` に取り込む（コンパイル時共有はしない）
-- **インフラ**: ローカルは Docker Compose（api + postgres + minio）。本番デプロイ先は未定
-- **リポジトリ構成**: モノレポ。`backend/` は独立した Python プロジェクト（Gradle 非登録）、フロントは Gradle（`shared` / `composeApp` / `iosApp` / `desktopApp`）
-- バージョンは実装着手前に `resolve-tech-stack` で確定する（バックエンドの Python 構成は確定済み）
+- **型共有**: FastAPI が出力する OpenAPI 3.1 →（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）で各クライアントの型を自動生成（コンパイル時共有はしない）
+- **インフラ**: ローカルは Docker Compose（api + postgres + minio。フロントは compose 外）。本番デプロイ先は未定
+- **リポジトリ構成**: モノレポ。`backend/`（Python、Gradle 非登録）、`expoApp/`（TS、Gradle 非登録）、Kotlin フロントは Gradle（`shared` / `composeApp` / `iosApp` / `desktopApp`）
+- バージョンは実装着手前に `resolve-tech-stack` で確定する（バックエンドの Python 構成・フロントの 2 トラック構成は確定済み）
 
 ## 学習方針
 
-FastAPI / SQLModel / Python は未経験（Compose Multiplatform も）。Python を選んだ主目的は**今後アプリ内に AI 認識機能を取り入れる**こと。`learning-handover` で学習用引き渡し資料を作成するが、**学習完了を待たずに本実装を進める**（引き渡し資料は後日学習用）。
+**TypeScript / React / Expo はカリキュラム指定の必須トラック**（期限あり）。**Kotlin Multiplatform / Compose は開発者が自分で試したい随時トラック**で、必須トラックの進捗をブロックしない。FastAPI / SQLModel / Python も未経験で、Python の主目的は**今後アプリ内に AI 認識機能を取り入れる**こと。`learning-handover` で学習用引き渡し資料を作成するが、**学習完了を待たずに本実装を進める**（引き渡し資料は後日学習用）。
 
 ## 開発ワークフロー（Issue → ブランチ → PR）
 
@@ -134,7 +137,9 @@ Codex レビューで採用された指摘や、実装中に発生した手直�
 
 ## Issueの分割方針
 
-1. バックエンドとフロントエンドの両方を持つため、**同じ機能でもバックエンドとフロントエンドを別Issueにする**。フロントエンドのIssueは、対応するバックエンドのPRがマージされ動作確認が済むまで着手しない。
+1. **同じ機能でも backend / frontend-ts / frontend-kotlin の 3 系統に Issue を分ける**。
+   - `frontend-ts`（TypeScript / Expo、**必須トラック**）の Issue は、対応する backend の PR がマージされ動作確認が済むまで着手しない。
+   - `frontend-kotlin`（KMP / Compose、**随時トラック**）は非ブロッキング。着手は任意で、必須トラックの進捗をブロックしない。
 2. 1 Issueは「それ単体でレビュー・マージ可能な最小単位」にする。ロードマップ上で互いに依存しないタスクはまとめてよいが、依存関係のあるタスクを1つのIssueに詰め込まない。
 3. Issue本文には次を含める：**対象領域**（backend/frontend/docs/infra等）・**参照すべきドキュメント**・**受け入れ基準**・**依存するIssue番号**。
 
@@ -145,6 +150,8 @@ Codex レビューで採用された指摘や、実装中に発生した手直�
 - 直前のIssueのPRがマージ済みである
 - 直前のIssueの受け入れ基準（動作確認項目）を満たしている
 - 次のIssueが依存する全てのIssueが完了している
+
+**自動連続実行の完了判定は backend + frontend-ts で行う。** `frontend-kotlin`（随時トラック）は完了条件に含めず、その未着手・未完了を理由に次に進むのを止めない。
 
 ## 必ず立ち止まる条件
 

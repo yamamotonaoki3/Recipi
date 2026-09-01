@@ -123,7 +123,7 @@
 
 ## 8. 未確定・メモ
 
-- 画像ピッカー / カメラ / トリミングの KMP ライブラリ選定 → [../todo.md](../todo.md)
+- 画像ピッカー / カメラ / トリミングのライブラリ選定（**TS トラック**: `expo-image-picker` / `expo-camera` / `expo-image-manipulator`、デスクトップは getUserMedia / ファイル選択。**Kotlin トラック**: KMP 対応ライブラリ）→ [../todo.md](../todo.md)
 - サムネイル生成（リサイズ）をサーバーで行うか、元画像をそのまま配信するか → 実装時に検討
 - 一時アップロードの GC の猶予時間 → [../todo.md](../todo.md)
 - 本番ストレージサービスの選定（R2 / S3 等）→ [../todo.md](../todo.md)
