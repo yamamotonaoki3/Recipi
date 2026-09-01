@@ -7,7 +7,7 @@
 ## 2. 画面・UI
 
 - 画面設計は [../screens/home.md](../screens/home.md)
-- アプリバー: ロゴ ＋ 右に**履歴アイコン**（[閲覧履歴](view-history.md)へ）。そのすぐ下に**常時固定の検索窓**（独立した「検索」destination は無い。マッチ規則は [search.md](search.md)）
+- アプリバー: ロゴ。そのすぐ下に**常時固定の検索窓**（独立した「検索」destination は無い。マッチ規則は [search.md](search.md)）
 - サブタブ: **全体 / フォロー / フォロワー / お気に入りレシピ**
 - 本文: レシピカード（[../screens/components.md](../screens/components.md)）の縦リスト。**カーソルページングによる無限スクロール**（[../non-functional.md](../non-functional.md)）
 - レシピ作成はボトムナビの「＋」（[../screens/recipe-editor.md](../screens/recipe-editor.md)）。画面内 FAB は置かない

@@ -476,7 +476,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeOverlay(); d
 const SCREENS = [
   ["#/splash","スプラッシュ","認証"],["#/login","ログイン","認証"],["#/signup","サインアップ","認証"],["#/reset","パスワードリセット","認証"],
   ["#/home","ホーム（検索窓 ＋ 4サブタブ）","メイン"],["#/create","レシピ作成","メイン"],["#/notifications","通知一覧","メイン"],["#/mypage","マイページ","メイン"],
-  ["#/history","閲覧履歴","サブ"],["#/recipe/r1","レシピ詳細","サブ"],["#/editor/r1","レシピ編集","サブ"],["#/my-recipes","自分のレシピ一覧","サブ"],
+  ["#/history","閲覧履歴","メイン"],["#/recipe/r1","レシピ詳細","サブ"],["#/editor/r1","レシピ編集","サブ"],["#/my-recipes","自分のレシピ一覧","サブ"],
   ["#/connections/me/following","フォロー・フォロワー","サブ"],["#/profile-edit","プロフィール編集","サブ"],["#/user/u_hana","ユーザープロフィール","サブ"],
 ];
 function buildIndex(){
@@ -489,6 +489,7 @@ function buildIndex(){
 
 const AUTH_FREE = ["/splash","/login","/signup","/reset"];
 let dirtyGuard = null; // hash of a screen whose unsaved changes must be confirmed before leaving
+let vLast = null;      // 直前に閲覧記録したレシピ id（永続化しない。二重 route() / 再描画での重複記録を防ぐだけ）
 function guardedDirty(){
   if(!dirtyGuard) return false;
   if(dirtyGuard==="#/create" || dirtyGuard.startsWith("#/editor")) return editorDirty();
@@ -507,13 +508,13 @@ function route(){
   if(!AUTH_FREE.includes(key) && !S.session){ location.replace("#/login"); return; }
   render(seg);
   // 閲覧記録は「別のレシピ詳細へ実際に遷移したとき」に 1 回だけ。
-  // route2 の再描画や go()→hashchange の二重 route() では再記録しない（_vLast で重複排除）。
+  // route2 の再描画や go()→hashchange の二重 route() では再記録しない（vLast は永続化しないランタイム変数）。
   // 実際は GET /recipes/{id} 成功後に POST /recipes/{id}/view を非同期で 1 回呼ぶ。
   if(seg[0]==="recipe" && seg[1]){
     const rv=S.recipes[seg[1]];
-    if(seg[1]!==S._vLast && rv && (rv.isPublic||rv.author==="me")) recordView(seg[1]);
-    S._vLast = seg[1];
-  } else S._vLast = null;
+    if(seg[1]!==vLast && rv && (rv.isPublic||rv.author==="me")) recordView(seg[1]);
+    vLast = seg[1];
+  } else vLast = null;
   dirtyGuard = ["editor","create","profile-edit"].includes(seg[0]) ? location.hash : null;
   $("#device").querySelector(".d-scroll")?.scrollTo(0,0);
 }
@@ -565,7 +566,7 @@ function bar(title,{back:b=false,backAct="back",logo=false,actions=""}={}){
     ${b||logo?"":""}<span style="flex:1"></span>${actions}</div>`;
 }
 function nav(active){
-  const items=[["home","ホーム","🏠"],["create","","＋"],["notifications","通知","🔔"],["mypage","マイページ","👤"]];
+  const items=[["home","ホーム","🏠"],["history","履歴","🕒"],["create","","＋"],["notifications","通知","🔔"],["mypage","マイページ","👤"]];
   const unread = S.notifications.filter(n=>!n.read).length;
   return `<nav class="d-nav" aria-label="メインナビゲーション">`+items.map(([k,l,ic])=>{
     const cur = (k==="home"&&!active)||k===active;
@@ -713,7 +714,7 @@ function scrHome(){
   else if(q && !list.length) body = `<div class="empty">「${esc(q)}」に一致するレシピは見つかりませんでした</div>`;
   else if(!list.length) body = `<div class="empty">${esc(emptyMsg)}</div>`;
   else body = `<div class="stack">${list.map(recipeCard).join("")}</div>`;
-  return bar("",{logo:true, actions:`<button class="iconbtn" data-act="go:#/history" aria-label="閲覧履歴">🕒</button>`})
+  return bar("",{logo:true})
     + `<div class="home-search">
         <input class="input" id="searchInput" placeholder="レシピ・材料で検索" value="${esc(S.homeSearchQ||"")}" enterkeyhint="search">
         ${q?`<div class="chips" style="margin-top:8px"><span class="chip" style="background:var(--primary-tint);border-color:var(--primary);color:var(--primary)">${esc(q)} <button data-act="search-clear" aria-label="検索語をクリア">✕</button></span></div>`:""}
@@ -781,7 +782,7 @@ function scrHistory(){
     .filter(r=>r.isPublic || r.author==="me");   // 可視性フィルタ（お気に入りと同じ）
   const forced = stateBlock("history","まだ見たレシピがありません");
   const body = forced || (list.length? `<div class="stack">${list.map(recipeCard).join("")}</div>` : `<div class="empty">まだ見たレシピがありません</div>`);
-  return bar("閲覧履歴",{back:true, actions:`<button class="act danger" data-act="history-clear">消去</button>`})
+  return bar("閲覧履歴",{actions:`<button class="act danger" data-act="history-clear">消去</button>`})
     + vstate("history")
     + `<div class="d-scroll pad">
         ${note("<b>閲覧履歴</b>（<span class='mono'>features/view-history.md</span>）: レシピ詳細を開くとサーバーに記録（<span class='mono'>recipe_views</span>、レシピごとに 1 行・最後に見た時刻で並ぶ）。端末をまたいで同期。非公開化された他人のレシピは一覧から外れる。プロトタイプはブラウザ内に保持。")}
@@ -1078,8 +1079,11 @@ function handle(act, arg, el){
     case "back": back(); return;
     case "nav": {
       if(arg==="create"){ go("#/create"); return; }
-      // 選択中の destination を再タップ → そのタブのルートへ（ホームは検索語もクリア）
-      if(arg==="home" && (location.hash==="#/home"||location.hash==="")){ S.homeSearchQ=""; route2(); $("#device").querySelector(".d-scroll")?.scrollTo(0,0); return; }
+      // 選択中の destination を再タップ → そのタブのルートへ（最上部へスクロール、ホームは検索語もクリア）
+      if(location.hash==="#/"+arg || (arg==="home" && location.hash==="")){
+        if(arg==="home") S.homeSearchQ="";
+        route2(); $("#device").querySelector(".d-scroll")?.scrollTo(0,0); return;
+      }
       go("#/"+arg); return;
     }
     case "pwtoggle": {

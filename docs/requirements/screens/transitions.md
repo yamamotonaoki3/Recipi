@@ -16,8 +16,9 @@ flowchart TD
     Signup -->|成功| Home
     PwReset -->|成功| Login
 
-    subgraph BottomNav[ボトムナビ / レール（4 destination）]
+    subgraph BottomNav[ボトムナビ / レール（5 destination）]
       Home[ホーム 検索窓 ＋ 4サブタブ]
+      History[閲覧履歴]
       Create[＋ 作成 モーダル]
       Notif[通知一覧]
       MyPage[マイページ]
@@ -25,7 +26,6 @@ flowchart TD
 
     Home -->|検索窓に語を入力| Home
     Home --> Detail[レシピ詳細]
-    Home -->|履歴アイコン| History[閲覧履歴]
     History --> Detail
     Detail -.->|閲覧を記録| History
     Notif --> Detail

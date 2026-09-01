@@ -4,7 +4,7 @@
 
 ## ボトムナビゲーション / ナビゲーションレール
 
-- 4 destination: ホーム / ＋（作成）/ 通知 / マイページ（[navigation.md](navigation.md)）。検索は独立 destination を持たず[ホーム](home.md)上部の検索窓で行う。
+- 5 destination: ホーム / 履歴 / ＋（作成）/ 通知 / マイページ（[navigation.md](navigation.md)）。「＋」は中央（3 番目）。検索は独立 destination を持たず[ホーム](home.md)上部の検索窓で行う。
 - 各アイコン ＋ ラベル。現在の destination をハイライト。
 - 通知アイコンに未読バッジ（1〜99、それ以上は `99+`）。
 - モバイル = 下部固定バー、デスクトップ = 左レール。
