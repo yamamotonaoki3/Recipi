@@ -7,7 +7,7 @@
 ## 2. 画面・UI
 
 - 画面設計は [../screens/home.md](../screens/home.md)
-- アプリバー: ロゴのみ（**検索バーは無し**。検索は「検索」destination = [../screens/search.md](../screens/search.md)）
+- アプリバー: ロゴ。そのすぐ下に**常時固定の検索窓**（独立した「検索」destination は無い。マッチ規則は [search.md](search.md)）
 - サブタブ: **全体 / フォロー / フォロワー / お気に入りレシピ**
 - 本文: レシピカード（[../screens/components.md](../screens/components.md)）の縦リスト。**カーソルページングによる無限スクロール**（[../non-functional.md](../non-functional.md)）
 - レシピ作成はボトムナビの「＋」（[../screens/recipe-editor.md](../screens/recipe-editor.md)）。画面内 FAB は置かない
@@ -33,7 +33,7 @@
 - お気に入りレシピタブは [favorite.md](favorite.md) のルールに従う（自分の非公開レシピは表示、他人のレシピで非公開化 / 削除済みは除外）。
 - 全体 / フォロー / フォロワーは新着順（`recipes.created_at DESC`）。お気に入りレシピは `favorites.created_at DESC`。いずれもカーソルページング。
 - フォロー / フォロー解除・お気に入りの増減の結果は、次にタブを表示（再取得）したときに反映。リアルタイム更新はしない。
-- 検索は「検索」destination（[search.md](search.md) / [../screens/search.md](../screens/search.md)）で行う。`q` は全フィード（`all` / `following` / `followers` / `favorites`）で併用可能。お気に入りレシピを指定した場合は、自分がお気に入り登録したレシピ集合の中を、通常の検索マッチ規則で絞り込む。
+- 検索はホーム画面最上部の**常時固定の検索窓**（[../screens/home.md](../screens/home.md) / マッチ規則は [search.md](search.md)）で行う。検索語は**表示中のサブタブ**の `feed` と併用され、その集合の中を絞り込む（`all` / `following` / `followers` / `favorites` すべて対象）。お気に入りレシピを表示中なら、自分がお気に入り登録したレシピ集合の中を絞り込む。
 - お気に入りレシピは独立画面ではなくこのサブタブに一本化（マイページのメニューにも置かない。[../screens/my-page.md](../screens/my-page.md)）。
 
 ## 4. データモデル
@@ -51,7 +51,7 @@
 | query | 説明 |
 | --- | --- |
 | `feed` | `all`（既定）/ `following` / `followers` / `favorites` |
-| `q` | 検索語（[search.md](search.md)）。全 `feed`（`favorites` を含む）と併用可 |
+| `q` | 検索語（ホームの検索窓。[search.md](search.md)）。全 `feed`（`favorites` を含む）と併用可。空なら通常フィード |
 | `limit` / `cursor` | ページング |
 
 ```json
@@ -85,6 +85,7 @@
 - [ ] 「フォロワー」に、自分をフォローしているユーザーの公開レシピだけが出る
 - [ ] 「お気に入りレシピ」に、自分がお気に入り登録したレシピが登録日時順で出る（自分の非公開レシピも含む）
 - [ ] フォロー / お気に入りの増減の結果が、次回タブ表示（再取得）に反映される
+- [ ] 検索窓に語を入れると、表示中のサブタブの集合の中だけで絞り込まれる。空にすると通常フィードに戻る
 - [ ] 各タブはページングで全件たどれる
 - [ ] フォロー 0 / フォロワー 0 / お気に入り 0 のとき、それぞれ空状態メッセージが出る
 

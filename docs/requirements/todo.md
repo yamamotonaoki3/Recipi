@@ -11,6 +11,8 @@
 | 7 | フロントの状態管理 / DI / ナビゲーションライブラリの選定。**TS**: クライアント状態ライブラリの選定（Zustand / Jotai）、TanStack Query（採用済み）のキャッシュ / 無効化方針、Expo Router の運用。**Kotlin**: ViewModel / Koin / Compose Navigation 等 | Phase 0 | [tech-stack.md](tech-stack.md) |
 | 8 | S3 互換ストレージの本番サービス選定（R2 / S3 等）、署名付き URL か公開バケットか | Phase 3〜10 | [features/image.md](features/image.md) |
 | 9 | 検索: `pg_trgm` 拡張の採否、`title_normalized` / `name_normalized` の正規化仕様（かな / カナ・送り仮名ゆれをどこまで吸収するか）、`q` の語数・長さ上限 | Phase 4 | [features/search.md](features/search.md) |
+| 9b | ホームの検索窓: スクロール時の挙動（完全固定 / 縮小）、確定タイミング（Enter のみ / 入力停止でインクリメンタル）、検索履歴・サジェスト（将来） | Phase 4 | [screens/home.md](screens/home.md), [features/search.md](features/search.md) |
+| 9c | ボトムナビ / レールが 4 destination になったことによる「＋」の配置（中央寄せ不可）、レイアウトの見た目 | Phase 4 | [screens/navigation.md](screens/navigation.md), [screens/components.md](screens/components.md) |
 | 10 | カウント列キャッシュ: 補正ジョブの実行頻度、サーバー側リトライの上限回数。アカウント削除時は削除トランザクション内で生き残る他ユーザー・他レシピのカウントを減算する（確定）。実装方法の詳細は Phase で詰める | Phase 5〜 | [non-functional.md](non-functional.md), [features/profile.md](features/profile.md), [features/follow.md](features/follow.md) |
 | 11 | 自分の非公開レシピを自分でお気に入り → **可（確定）**。実装で漏れないよう受け入れ基準化 | Phase 6 | [features/favorite.md](features/favorite.md) |
 | 12 | 感想: 退会ユーザーの感想の扱い（現状 CASCADE 削除。「退会したユーザー」表示で残す案の是非） | Phase 7 | [features/comment.md](features/comment.md) |
