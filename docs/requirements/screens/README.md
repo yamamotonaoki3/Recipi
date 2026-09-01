@@ -6,7 +6,7 @@ Recipi の画面構成・画面遷移・共通コンポーネント。要件（�
 
 ## 読み方
 
-1. [navigation.md](navigation.md) — 全体のナビゲーション構造（ボトムナビ / ナビゲーションレール、4 destination）、画面の実装レイヤー図、バックスタック、認証ゲート
+1. [navigation.md](navigation.md) — 全体のナビゲーション構造（ボトムナビ / ナビゲーションレール、5 destination）、画面の実装レイヤー図、バックスタック、認証ゲート
 2. [components.md](components.md) — 画面をまたいで使う共通コンポーネントの定義
 3. [transitions.md](transitions.md) — 全体遷移図 ＋ 主要フロー別の遷移図
 4. 各画面ファイル（下表）
@@ -20,6 +20,7 @@ Recipi の画面構成・画面遷移・共通コンポーネント。要件（�
 | サインアップ | [signup.md](signup.md) | 不要 | - |
 | パスワードリセット | [password-reset.md](password-reset.md) | 不要 | - |
 | ホーム（常時固定の検索窓 ＋ 4 サブタブ） | [home.md](home.md) | 必要 | ホーム |
+| 閲覧履歴 | [history.md](history.md) | 必要 | 履歴 |
 | 通知一覧 | [notifications.md](notifications.md) | 必要 | 通知 |
 | レシピ作成 / 編集 | [recipe-editor.md](recipe-editor.md) | 必要 | ＋（作成） |
 | マイページ | [my-page.md](my-page.md) | 必要 | マイページ |

@@ -15,6 +15,8 @@ erDiagram
     users ||--o{ recipe_comments : "投稿"
     users ||--o{ refresh_tokens : "所有"
     users ||--o{ notifications : "受信"
+    users ||--o{ recipe_views : "閲覧"
+    recipes ||--o{ recipe_views : "被閲覧"
     recipes ||--o{ ingredient_groups : "含む"
     ingredient_groups ||--o{ ingredients : "含む"
     recipes ||--o{ steps : "含む"
@@ -127,6 +129,11 @@ erDiagram
         timestamptz read_at "NULL可"
         timestamptz created_at
     }
+    recipe_views {
+        uuid user_id FK
+        uuid recipe_id FK
+        timestamptz viewed_at
+    }
 ```
 
 ## テーブル定義・制約・インデックス
@@ -144,6 +151,7 @@ erDiagram
 | `favorites` | PK(`user_id`, `recipe_id`) / `user_id` FK → `users.id`（ON DELETE CASCADE）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ index(`recipe_id`) | [features/favorite.md](features/favorite.md) |
 | `refresh_tokens` | `id` PK / `user_id` FK → `users.id`（ON DELETE CASCADE）/ `token_hash` UNIQUE NOT NULL / `chain_id` NOT NULL / `expires_at` NOT NULL / `revoked_at` NULL 可 / index(`user_id`), index(`chain_id`) | [features/auth.md](features/auth.md) |
 | `notifications` | `id` PK / `user_id` FK → `users.id`（ON DELETE CASCADE、受信者）/ `actor_id` FK → `users.id`（ON DELETE CASCADE、行為者）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）NULL 可 / `comment_id` FK → `recipe_comments.id`（ON DELETE CASCADE）NULL 可 / `read_at` NULL 可 / index(`user_id`, `created_at` DESC) / 部分 index(`user_id`) WHERE `read_at IS NULL` | [features/notification.md](features/notification.md) |
+| `recipe_views` | PK(`user_id`, `recipe_id`)（レシピごとに 1 行）/ `user_id` FK → `users.id`（ON DELETE CASCADE）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `viewed_at` timestamptz NOT NULL / index(`user_id`, `viewed_at` DESC) / 再閲覧は `INSERT ... ON CONFLICT (user_id, recipe_id) DO UPDATE SET viewed_at = now()`（upsert）/ カウント列キャッシュには関与しない | [features/view-history.md](features/view-history.md) |
 
 > `recipe_images` テーブルは廃止（画像は `recipes.thumbnail_*` と `steps.image_*` に統合）。
 
@@ -177,6 +185,7 @@ erDiagram
 - `recipe_comments`（`user_id` = me）
 - `refresh_tokens`（`user_id` = me）
 - `notifications`（`user_id` = me と `actor_id` = me）
+- `recipe_views`（`user_id` = me。加えて、自分のレシピが消えることで `recipe_id` 側の CASCADE でも他ユーザーの `recipe_views` 行が消える）
 - ストレージ上の画像（サムネ・手順画像・感想画像・アバター）はアプリ側で削除ジョブ対象にする。
 - アカウント削除は**単一のアプリケーショントランザクション**で行う。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（実装方法の詳細は [todo.md](todo.md) #10）。
 - 削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。
