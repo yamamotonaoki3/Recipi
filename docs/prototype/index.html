@@ -138,6 +138,8 @@ h1,h2,h3{font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; text-wrap:bala
 .tiny{font-size:12px}
 .center{text-align:center}
 .divider{height:1px; background:var(--line); margin:6px 0}
+.home-search{padding:8px 12px 10px; border-bottom:1px solid var(--line); background:var(--surface)}
+.home-search .input{background:var(--surface-2); border-color:transparent}
 .sub-tabs{display:flex; gap:4px; padding:8px 10px; border-bottom:1px solid var(--line); overflow-x:auto; background:var(--surface)}
 .sub-tabs button{padding:6px 12px; border-radius:999px; font-size:12.5px; color:var(--ink-soft); white-space:nowrap}
 .sub-tabs button[aria-selected="true"]{background:var(--primary-tint); color:var(--primary); font-weight:700}
@@ -471,7 +473,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeOverlay(); d
 /* ============================ routing ============================ */
 const SCREENS = [
   ["#/splash","スプラッシュ","認証"],["#/login","ログイン","認証"],["#/signup","サインアップ","認証"],["#/reset","パスワードリセット","認証"],
-  ["#/home","ホーム（4サブタブ）","メイン"],["#/search","検索","メイン"],["#/create","レシピ作成","メイン"],["#/notifications","通知一覧","メイン"],["#/mypage","マイページ","メイン"],
+  ["#/home","ホーム（検索窓 ＋ 4サブタブ）","メイン"],["#/create","レシピ作成","メイン"],["#/notifications","通知一覧","メイン"],["#/mypage","マイページ","メイン"],
   ["#/recipe/r1","レシピ詳細","サブ"],["#/editor/r1","レシピ編集","サブ"],["#/my-recipes","自分のレシピ一覧","サブ"],
   ["#/connections/me/following","フォロー・フォロワー","サブ"],["#/profile-edit","プロフィール編集","サブ"],["#/user/u_hana","ユーザープロフィール","サブ"],
 ];
@@ -528,8 +530,8 @@ function render(seg){
     case "login": html = scrLogin(); break;
     case "signup": html = scrSignup(); break;
     case "reset": html = scrReset(); break;
+    case "search": location.replace("#/home"); return;
     case "home": html = scrHome(); break;
-    case "search": html = scrSearch(); break;
     case "notifications": html = scrNotifications(); break;
     case "create": html = scrEditor("new"); break;
     case "editor": html = scrEditor(seg[1]); break;
@@ -552,7 +554,7 @@ function bar(title,{back:b=false,backAct="back",logo=false,actions=""}={}){
     ${b||logo?"":""}<span style="flex:1"></span>${actions}</div>`;
 }
 function nav(active){
-  const items=[["home","ホーム","🏠"],["search","検索","🔍"],["create","","＋"],["notifications","通知","🔔"],["mypage","マイページ","👤"]];
+  const items=[["home","ホーム","🏠"],["create","","＋"],["notifications","通知","🔔"],["mypage","マイページ","👤"]];
   const unread = S.notifications.filter(n=>!n.read).length;
   return `<nav class="d-nav" aria-label="メインナビゲーション">`+items.map(([k,l,ic])=>{
     const cur = (k==="home"&&!active)||k===active;
@@ -678,48 +680,37 @@ function feedRecipes(feed){
   if(feed==="favorites") return [...S.favorites].map(id=>S.recipes[id]).filter(Boolean);
   return pub;
 }
+function searchFilter(list, q){
+  const terms = q.split(/[\s　]+/).filter(Boolean).map(s=>s.toLowerCase());
+  if(!terms.length) return list;
+  return list.filter(r=>{
+    const hay = (r.title+" "+r.groups.flatMap(g=>g.items.map(i=>i.name)).join(" ")).toLowerCase();
+    return terms.every(t=>hay.includes(t));
+  });
+}
 function scrHome(){
   const tabs=[["all","全体"],["following","フォロー"],["followers","フォロワー"],["favorites","お気に入りレシピ"]];
   const t = S.homeTab;
-  const list = feedRecipes(t);
+  const q = (S.homeSearchQ||"").trim();
+  const list = searchFilter(feedRecipes(t), q);
   const emptyMsg = {following:"気になる投稿者をフォローすると、ここに新着レシピが並びます",
     followers:"フォロワーが増えると、その人のレシピがここに並びます",
     favorites:"お気に入りに追加したレシピがここに表示されます", all:"まだレシピがありません"}[t];
   const forced = stateBlock("home_"+t, emptyMsg);
-  const body = forced || (list.length? `<div class="stack">${list.map(recipeCard).join("")}</div>` : `<div class="empty">${esc(emptyMsg)}</div>`);
+  let body;
+  if(forced) body = forced;
+  else if(q && !list.length) body = `<div class="empty">「${esc(q)}」に一致するレシピは見つかりませんでした</div>`;
+  else if(!list.length) body = `<div class="empty">${esc(emptyMsg)}</div>`;
+  else body = `<div class="stack">${list.map(recipeCard).join("")}</div>`;
   return bar("",{logo:true})
+    + `<div class="home-search">
+        <input class="input" id="searchInput" placeholder="レシピ・材料で検索" value="${esc(S.homeSearchQ||"")}" enterkeyhint="search">
+        ${q?`<div class="chips" style="margin-top:8px"><span class="chip" style="background:var(--primary-tint);border-color:var(--primary);color:var(--primary)">${esc(q)} <button data-act="search-clear" aria-label="検索語をクリア">✕</button></span></div>`:""}
+      </div>`
     + `<div class="sub-tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${k===t}" data-act="home-tab:${k}">${l}</button>`).join("")}</div>`
     + vstate("home_"+t)
     + `<div class="d-scroll pad">
-        ${note("<b>ホーム</b>: 4 サブタブ（<span class='mono'>home.md</span>）。「お気に入りレシピ」は自分の非公開も含む・登録日時順。フォロー/お気に入りの増減はリアルタイム反映しない（再取得時に反映）。")}
-        ${body}</div>`;
-}
-function scrSearch(){
-  const q = (S.searchQ||"").trim();
-  const feed = S.searchFeed||"all";
-  let list;
-  if(q){
-    const terms = q.split(/[\s　]+/).filter(Boolean).map(s=>s.toLowerCase());
-    list = feedRecipes(feed).filter(r=>{
-      const hay = (r.title+" "+r.groups.flatMap(g=>g.items.map(i=>i.name)).join(" ")).toLowerCase();
-      return terms.every(t=>hay.includes(t));
-    });
-  } else list = feedRecipes(feed);
-  const chips=[["all","全体"],["following","フォロー"],["followers","フォロワー"],["favorites","お気に入り"]];
-  let body;
-  const forced = stateBlock("search", "");
-  if(forced) body=forced;
-  else if(q && !list.length) body = `<div class="empty">「${esc(q)}」に一致するレシピは見つかりませんでした</div>`;
-  else body = `<div class="stack">${list.map(recipeCard).join("")}</div>`;
-  return bar("検索")
-    + `<div class="pad" style="padding-bottom:8px">
-        <input class="input" id="searchInput" placeholder="レシピ・材料で検索" value="${esc(S.searchQ||"")}" enterkeyhint="search">
-        <div class="chips" style="margin-top:8px">${chips.map(([k,l])=>`<button class="chip" aria-pressed="${k===feed}" data-act="search-feed:${k}">${l}</button>`).join("")}</div>
-        ${q?`<div class="chips" style="margin-top:8px"><span class="chip" style="background:var(--primary-tint);border-color:var(--primary);color:var(--primary)">${esc(q)} <button data-act="search-clear" aria-label="検索語をクリア">✕</button></span></div>`:""}
-      </div>`
-    + vstate("search")
-    + `<div class="d-scroll pad" style="padding-top:4px">
-        ${note("<b>検索</b>: 語は空白（半角/全角/連続）で分割し AND（<span class='mono'>search.md</span>）。材料グループ名・参照タイトルは検索対象外。検索語が空なら選択中フィードの通常一覧。")}
+        ${note("<b>ホーム</b>: 最上部に常時固定の検索窓 ＋ 4 サブタブ（<span class='mono'>home.md</span>）。検索は<b>表示中のサブタブの集合の中</b>を、語を空白（半角/全角/連続）で分割し AND で絞り込む（<span class='mono'>features/search.md</span>）。空にすると通常フィードに戻る。「お気に入りレシピ」は自分の非公開も含む。")}
         ${body}</div>`;
 }
 function notifText(n){
@@ -1009,7 +1000,10 @@ document.addEventListener("click", e=>{
 });
 document.addEventListener("input", e=>{
   const el = e.target;
-  if(el.id==="searchInput"){ return; }
+  if(el.id==="searchInput"){
+    if(!el.value.trim() && (S.homeSearchQ||"").trim()){ S.homeSearchQ=""; route2(); }
+    return;
+  }
   if(el.id==="pickQ"){
     const q = el.value.trim().toLowerCase();
     document.querySelectorAll("#pickList .card").forEach(c=>{ c.hidden = q && !c.textContent.toLowerCase().includes(q); });
@@ -1024,7 +1018,9 @@ document.addEventListener("input", e=>{
   else if(el.dataset.ds!=null){ S.draft.steps[+el.dataset.ds].text = el.value; }
 });
 document.addEventListener("keydown", e=>{
-  if(e.key==="Enter" && e.target.id==="searchInput"){ S.searchQ = e.target.value; route2(); }
+  if(e.target.id!=="searchInput") return;
+  if(e.key==="Enter"){ S.homeSearchQ = e.target.value; route2(); }
+  else if(e.key==="Escape"){ e.stopPropagation(); e.target.value=""; if((S.homeSearchQ||"").trim()){ S.homeSearchQ=""; route2(); } }
 });
 function route2(){ render(location.hash.slice(1).split("/").filter(Boolean)); }
 
@@ -1051,7 +1047,10 @@ function handle(act, arg, el){
     case "go": go(arg); return;
     case "back": back(); return;
     case "nav": {
-      if(arg==="create"){ go("#/create"); } else go("#/"+ (arg==="home"?"home":arg)); return;
+      if(arg==="create"){ go("#/create"); return; }
+      // 選択中の destination を再タップ → そのタブのルートへ（ホームは検索語もクリア）
+      if(arg==="home" && (location.hash==="#/home"||location.hash==="")){ S.homeSearchQ=""; route2(); $("#device").querySelector(".d-scroll")?.scrollTo(0,0); return; }
+      go("#/"+arg); return;
     }
     case "pwtoggle": {
       const f = document.getElementById(arg);
@@ -1085,10 +1084,9 @@ function handle(act, arg, el){
         onConfirm:()=>{ S.session=null; persist(); closeOverlay(); go("#/login"); }});
       return;
     }
-    /* home / search */
+    /* home + 検索窓 */
     case "home-tab": S.homeTab = arg; persist(); route2(); return;
-    case "search-feed": S.searchFeed = arg; route2(); return;
-    case "search-clear": S.searchQ=""; route2(); return;
+    case "search-clear": S.homeSearchQ=""; route2(); return;
     case "viewstate": { const [k,v]=arg.split(":"); S.viewState[k] = v==="normal"?undefined:v; route2(); return; }
     /* recipe detail */
     case "fav-toggle": {

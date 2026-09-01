@@ -16,16 +16,15 @@ flowchart TD
     Signup -->|成功| Home
     PwReset -->|成功| Login
 
-    subgraph BottomNav[ボトムナビ / レール]
-      Home[ホーム 4サブタブ]
-      Search[検索]
+    subgraph BottomNav[ボトムナビ / レール（4 destination）]
+      Home[ホーム 検索窓 ＋ 4サブタブ]
       Create[＋ 作成 モーダル]
       Notif[通知一覧]
       MyPage[マイページ]
     end
 
+    Home -->|検索窓に語を入力| Home
     Home --> Detail[レシピ詳細]
-    Search --> Detail
     Notif --> Detail
     Notif --> UserProfile[ユーザープロフィール 他人]
     MyPage --> MyRecipes[自分のレシピ一覧]
@@ -76,7 +75,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    S[検索] -->|語を入力| SR[結果一覧]
+    H[ホーム] -->|検索窓に語を入力| SR[結果一覧（サブタブ内で絞り込み）]
     SR --> D[レシピ詳細]
     D -->|投稿者名（他人）| U[ユーザープロフィール]
     D -->|投稿者名（自分）| M[マイページ]
