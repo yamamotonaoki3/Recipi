@@ -20,7 +20,7 @@
 { "error": { "code": "VALIDATION_ERROR", "message": "title must not be blank", "details": [] } }
 ```
 
-代表的な `code`: `VALIDATION_ERROR` (400) / `UNAUTHORIZED` (401) / `FORBIDDEN` (403) / `NOT_FOUND` (404) / `CONFLICT` (409) / `TOO_MANY_REQUESTS` (429) / `INTERNAL` (500)。
+代表的な `code`: `VALIDATION_ERROR` (400) / `UNAUTHORIZED` (401) / `FORBIDDEN` (403) / `NOT_FOUND` (404) / `CONFLICT` (409) / `TOO_MANY_REQUESTS` (429) / `INTERNAL` (500) / `AI_UNAVAILABLE` (503、AI プロバイダ障害・タイムアウト。[features/ai-proofread.md](features/ai-proofread.md))。
 
 ## エンドポイント一覧
 
@@ -126,3 +126,11 @@
 | GET | `/notifications` | 必要 | 通知一覧（新しい順、カーソルページング）。レスポンスに `unreadCount` も含む |
 | GET | `/notifications/unread-count` | 必要 | 未読件数のみ（バッジ更新用、一覧を取らない場面） |
 | POST | `/notifications/read` | 必要 | 既読化（`{ ids?: [...] }`、省略時は全既読） |
+
+### AI — [features/ai-proofread.md](features/ai-proofread.md)（Phase 11）
+
+| メソッド | パス | 認証 | 概要 |
+| --- | --- | --- | --- |
+| POST | `/ai/proofread` | 必要 | レシピの誤字脱字チェック。body に `items: [{ id, kind, text }]`（`kind` = `title` / `description` / `step` / `ingredient`。`items` 200 件 / 各 `text` 2,000 字 / 合計 8,000 字 / `id` 64 字 まで）→ `suggestions: [{ id, original, corrected, changed, note? }]`。自動適用しない。入力上限超過 400 / レート制限 429 / プロバイダ障害・タイムアウト 503（`AI_UNAVAILABLE`） |
+
+プロバイダ（`AI_PROVIDER` = `local` / `anthropic` / `stub`）はサーバー内部の切替で、リクエスト / レスポンス形は不変（[features/ai-proofread.md](features/ai-proofread.md) / [tech-stack.md](tech-stack.md)）。

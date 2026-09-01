@@ -59,4 +59,6 @@
 | Alembic | SQLAlchemy 用の DB マイグレーションツール（読み: アレンビック）。スキーマ変更とシードデータ投入を管理する。SQLModel で表現できない制約は手書きマイグレーションで補う。[data-model.md](data-model.md) 参照 |
 | OpenAPI コード生成 | FastAPI が出力する OpenAPI 3.1 仕様（`openapi.json`）から、各言語の API クライアント / 型を生成する仕組み。**Kotlin** は OpenAPI Generator、**TypeScript** は openapi-typescript。バックエンド（Python）と 2 つのフロントで型を一致させる手段。[tech-stack.md](tech-stack.md) 参照 |
 | `shared` モジュール | **Kotlin トラック専用**の KMP 共有モジュール（`commonMain`）。フロント内部の共通ロジック（単位の表示整形 等）と、OpenAPI から生成した Kotlin API クライアント / DTO を置く。TypeScript トラックは参照せず、`expoApp` 内に同等物を持つ。[architecture.md](architecture.md) 参照 |
+| AI 誤字脱字チェック | レシピ作成 / 編集画面でタイトル・説明・手順・材料名の誤字脱字を AI がチェックし修正案を出す機能（Phase 11・MVP 対象外）。自動適用しない。バックエンドの校正サービスは `AI_PROVIDER` で切替（dev = ローカル推論 / prod = クラウド LLM API / test = スタブ）。[features/ai-proofread.md](features/ai-proofread.md) 参照 |
+| `AI_PROVIDER` | バックエンドの AI 校正サービスの実装を切り替える環境変数。`local`（development・ローカル推論）/ `anthropic`（production・クラウド LLM API）/ `stub`（test・ダミー）。API 契約はプロバイダに依存しない |
 | MVP | 初回リリースに含める機能範囲。未確定。[roadmap.md](roadmap.md) 参照 |
