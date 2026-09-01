@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recipi プロトタイプ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&display=swap">
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --bg:#FCFCFA; --surface:#FFFFFF; --surface-2:#F3F5F0;
+  --ink:#1F2A24; --ink-soft:#57635B; --ink-faint:#8A948C;
+  --line:#E4E7E1; --line-strong:#D3D9CF;
+  --primary:#2F6B47; --primary-ink:#FFFFFF; --primary-tint:#E6F0E8;
+  --heart:#D9483B; --amber:#B9741F;
+  --shadow:0 1px 2px rgba(31,42,36,.06), 0 10px 30px rgba(31,42,36,.09);
+  --radius:14px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#141815; --surface:#1C221E; --surface-2:#232A25;
+    --ink:#EAEEE9; --ink-soft:#9DA99F; --ink-faint:#6F7B72;
+    --line:#2C332D; --line-strong:#3B433C;
+    --primary:#6DBB8A; --primary-ink:#0E2016; --primary-tint:#233127;
+    --heart:#F0685A; --amber:#E0A45C;
+    --shadow:0 1px 2px rgba(0,0,0,.32), 0 12px 34px rgba(0,0,0,.38);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141815; --surface:#1C221E; --surface-2:#232A25;
+  --ink:#EAEEE9; --ink-soft:#9DA99F; --ink-faint:#6F7B72;
+  --line:#2C332D; --line-strong:#3B433C;
+  --primary:#6DBB8A; --primary-ink:#0E2016; --primary-tint:#233127;
+  --heart:#F0685A; --amber:#E0A45C;
+  --shadow:0 1px 2px rgba(0,0,0,.32), 0 12px 34px rgba(0,0,0,.38);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Noto Sans JP", system-ui, -apple-system, sans-serif;
+  font-size:14px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit; color:inherit; cursor:pointer; background:none; border:none}
+input,textarea,select{font:inherit; color:inherit}
+a{color:var(--primary)}
+:focus-visible{outline:2px solid var(--primary); outline-offset:2px; border-radius:6px}
+.mono{font-family:"DM Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; text-wrap:balance; margin:0}
+
+/* ---------- page frame ---------- */
+.page{min-height:100dvh; display:flex; flex-direction:column}
+.topbar{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:10px 16px; border-bottom:1px solid var(--line);
+  background:var(--surface);
+}
+.brand{font-family:"Zen Maru Gothic",sans-serif; font-weight:700; font-size:17px; letter-spacing:.01em}
+.brand small{font-family:"DM Mono",monospace; font-weight:400; font-size:10px; color:var(--ink-faint);
+  border:1px solid var(--line-strong); border-radius:999px; padding:1px 7px; margin-left:8px; letter-spacing:.08em; text-transform:uppercase}
+.topbar .sp{flex:1}
+.tb-btn{
+  border:1px solid var(--line-strong); border-radius:999px; padding:5px 11px;
+  font-size:12px; color:var(--ink-soft); display:inline-flex; align-items:center; gap:6px;
+}
+.tb-btn[aria-pressed="true"]{background:var(--primary-tint); border-color:var(--primary); color:var(--primary)}
+
+.main{flex:1; display:flex; justify-content:center; gap:28px; padding:24px 16px 40px;
+  background:
+    radial-gradient(60% 50% at 80% 0%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
+    radial-gradient(50% 40% at 10% 100%, color-mix(in srgb, var(--amber) 8%, transparent), transparent 70%);
+}
+
+/* ---------- side panel ---------- */
+.sidepanel{width:280px; flex-shrink:0; font-size:13px}
+.sidepanel h2{font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); margin:18px 0 8px}
+.sidepanel h2:first-child{margin-top:0}
+.sidepanel p{color:var(--ink-soft); margin:0 0 10px}
+.sidepanel .idx{display:flex; flex-direction:column; gap:2px}
+.sidepanel .idx a{padding:5px 8px; border-radius:8px; text-decoration:none; color:var(--ink-soft); display:flex; justify-content:space-between; gap:8px}
+.sidepanel .idx a:hover{background:var(--surface-2); color:var(--ink)}
+.sidepanel .idx a .k{font-family:"DM Mono",monospace; font-size:10px; color:var(--ink-faint)}
+.sidepanel ul{margin:0; padding-left:18px; color:var(--ink-soft)}
+.sidepanel li{margin:3px 0}
+.panel-close{display:none}
+
+/* ---------- device ---------- */
+.device{
+  width:100%; max-width:412px; align-self:flex-start;
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:30px; box-shadow:var(--shadow);
+  overflow:hidden; display:flex; flex-direction:column;
+  height:min(860px, calc(100dvh - 128px)); position:sticky; top:24px;
+}
+.d-bar{
+  display:flex; align-items:center; gap:8px; min-height:52px;
+  padding:8px 12px; border-bottom:1px solid var(--line); background:var(--surface);
+}
+.d-bar .title{font-family:"Zen Maru Gothic",sans-serif; font-weight:700; font-size:16px; flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.d-bar .logo{font-family:"Zen Maru Gothic",sans-serif; font-weight:700; font-size:18px; color:var(--primary)}
+.iconbtn{width:34px; height:34px; border-radius:10px; display:grid; place-items:center; color:var(--ink-soft); flex-shrink:0}
+.iconbtn:hover{background:var(--surface-2)}
+.d-bar .act{font-size:13px; color:var(--primary); padding:6px 8px; border-radius:8px; flex-shrink:0}
+.d-bar .act.danger{color:var(--heart)}
+
+.d-scroll{flex:1; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch}
+.d-scroll::-webkit-scrollbar{width:8px}
+.d-scroll::-webkit-scrollbar-thumb{background:var(--line-strong); border-radius:8px}
+.pad{padding:16px}
+
+.d-nav{
+  display:flex; border-top:1px solid var(--line); background:var(--surface);
+}
+.d-nav button{
+  flex:1; padding:8px 2px 10px; display:flex; flex-direction:column; align-items:center; gap:3px;
+  font-size:10.5px; color:var(--ink-faint); position:relative;
+}
+.d-nav button .ic{width:24px; height:24px; display:grid; place-items:center}
+.d-nav button[aria-current="page"]{color:var(--primary)}
+.d-nav .plus .ic{background:var(--primary); color:var(--primary-ink); border-radius:12px; width:36px; height:30px}
+.d-nav .badge{
+  position:absolute; top:2px; left:calc(50% + 6px); background:var(--heart); color:#fff;
+  font-family:"DM Mono",monospace; font-size:9px; line-height:1; padding:2px 4px; border-radius:999px; min-width:15px; text-align:center;
+}
+
+/* ---------- generic ui ---------- */
+.stack{display:flex; flex-direction:column; gap:14px}
+.row{display:flex; align-items:center; gap:10px}
+.muted{color:var(--ink-soft)}
+.faint{color:var(--ink-faint)}
+.tiny{font-size:12px}
+.center{text-align:center}
+.divider{height:1px; background:var(--line); margin:6px 0}
+.sub-tabs{display:flex; gap:4px; padding:8px 10px; border-bottom:1px solid var(--line); overflow-x:auto; background:var(--surface)}
+.sub-tabs button{padding:6px 12px; border-radius:999px; font-size:12.5px; color:var(--ink-soft); white-space:nowrap}
+.sub-tabs button[aria-selected="true"]{background:var(--primary-tint); color:var(--primary); font-weight:700}
+.chips{display:flex; gap:6px; flex-wrap:wrap}
+.chip{border:1px solid var(--line-strong); border-radius:999px; padding:4px 10px; font-size:12px; color:var(--ink-soft)}
+.chip[aria-pressed="true"]{background:var(--primary-tint); border-color:var(--primary); color:var(--primary)}
+
+.btn{background:var(--primary); color:var(--primary-ink); border-radius:12px; padding:11px 16px; font-weight:700; font-size:14px; text-align:center; display:block; width:100%}
+.btn.secondary{background:var(--surface-2); color:var(--ink)}
+.btn.ghost{background:none; color:var(--primary); border:1px solid var(--line-strong)}
+.btn.sm{width:auto; padding:7px 14px; font-size:12.5px; border-radius:999px}
+.btn.danger{background:var(--heart); color:#fff}
+.btn[disabled]{opacity:.5}
+
+.field{display:flex; flex-direction:column; gap:5px}
+.field label{font-size:12.5px; font-weight:700; color:var(--ink-soft)}
+.field .hint{font-size:11.5px; color:var(--ink-faint)}
+.field .err{font-size:11.5px; color:var(--heart)}
+.input{
+  border:1px solid var(--line-strong); border-radius:10px; padding:10px 12px; background:var(--surface); width:100%;
+}
+textarea.input{resize:vertical; min-height:64px}
+.pw-wrap{position:relative}
+.pw-wrap .input{padding-right:44px}
+.pw-wrap button{position:absolute; right:6px; top:50%; transform:translateY(-50%); width:32px; height:32px; border-radius:8px; color:var(--ink-faint)}
+.check{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft)}
+.check input{width:16px; height:16px; accent-color:var(--primary)}
+
+.avatar{width:40px; height:40px; border-radius:50%; display:grid; place-items:center; font-family:"Zen Maru Gothic",sans-serif; font-weight:700; color:#fff; flex-shrink:0; font-size:15px}
+.avatar.lg{width:64px; height:64px; font-size:24px}
+.avatar.sm{width:28px; height:28px; font-size:11px}
+
+.card{border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--surface); display:flex; text-align:left; width:100%}
+.card .thumb{width:104px; flex-shrink:0; aspect-ratio:1; display:grid; place-items:center; font-size:30px}
+.card .cbody{padding:10px 12px; display:flex; flex-direction:column; gap:6px; min-width:0; flex:1}
+.card .ctitle{font-family:"Zen Maru Gothic",sans-serif; font-weight:700; font-size:14px; line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.card .cmeta{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-soft); margin-top:auto}
+.badge-tag{font-size:10px; font-family:"DM Mono",monospace; border:1px solid var(--line-strong); color:var(--ink-faint); border-radius:6px; padding:1px 5px}
+.heart-count{display:inline-flex; align-items:center; gap:3px; color:var(--ink-soft)}
+.heart-count .h{color:var(--heart)}
+
+.urow{display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); width:100%; text-align:left}
+.urow .uname{flex:1; font-weight:700; font-size:13.5px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+.follow-btn{border:1px solid var(--primary); color:var(--primary); border-radius:999px; padding:5px 14px; font-size:12px; font-weight:700; flex-shrink:0}
+.follow-btn.on{background:var(--primary); color:var(--primary-ink)}
+
+.notif{display:flex; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line); width:100%; text-align:left; align-items:flex-start}
+.notif.unread{background:var(--primary-tint)}
+.notif .ntext{flex:1; font-size:13px}
+.notif .ndot{width:8px; height:8px; border-radius:50%; background:var(--amber); margin-top:6px; flex-shrink:0}
+
+.empty{padding:48px 24px; text-align:center; color:var(--ink-soft)}
+.empty .big{font-size:34px; margin-bottom:10px}
+.skeleton{background:linear-gradient(90deg,var(--surface-2),color-mix(in srgb,var(--surface-2) 55%, var(--line)),var(--surface-2)); background-size:200% 100%; animation:sk 1.3s linear infinite; border-radius:8px}
+@keyframes sk{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skeleton{animation:none} .toggle::after{transition:none} *{scroll-behavior:auto!important}}
+
+.section-h{font-size:12px; font-weight:700; letter-spacing:.04em; color:var(--ink-faint); text-transform:uppercase; margin:4px 0}
+.ing-group{margin-bottom:14px}
+.ing-group .gname{font-family:"Zen Maru Gothic",sans-serif; font-weight:700; font-size:13.5px; color:var(--primary); margin-bottom:4px}
+.ing-line{display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px dashed var(--line)}
+.ing-line .qu{color:var(--ink-soft); font-family:"DM Mono",monospace; font-size:12.5px; white-space:nowrap}
+.ing-line a.reflink{font-weight:700; text-decoration:underline; text-underline-offset:2px}
+.ing-line .refdead{color:var(--ink-faint); text-decoration:line-through}
+
+.step{display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--line)}
+.step .snum{width:24px; height:24px; border-radius:50%; background:var(--primary-tint); color:var(--primary); font-family:"DM Mono",monospace; font-size:12px; display:grid; place-items:center; flex-shrink:0}
+.step .simg{margin-top:8px; aspect-ratio:16/10; background:var(--surface-2); border-radius:10px; display:grid; place-items:center; color:var(--ink-faint); font-size:12px}
+
+.comment{padding:12px 0; border-bottom:1px solid var(--line)}
+.comment .cmeta{display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--ink-faint); margin-bottom:5px}
+.comment .cactions{display:flex; gap:12px; margin-top:6px; font-size:11.5px}
+.comment .cactions button{color:var(--ink-soft)}
+.comment .cactions button.del{color:var(--heart)}
+
+.menu-list{display:flex; flex-direction:column}
+.menu-list button{display:flex; align-items:center; gap:12px; padding:14px 4px; border-bottom:1px solid var(--line); font-size:14px; text-align:left; width:100%}
+.menu-list button .chev{margin-left:auto; color:var(--ink-faint)}
+
+/* editor */
+.ed-block{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface)}
+.ed-grouphead{display:flex; gap:8px; align-items:center; margin-bottom:8px}
+.ed-item{display:grid; grid-template-columns:1fr 58px 66px auto; gap:6px; align-items:center; margin-bottom:6px}
+.ed-item .input{padding:7px 8px; font-size:12.5px}
+.ed-item .x{color:var(--ink-faint); width:24px; height:24px; display:grid; place-items:center}
+.ed-item.linked .input:first-child{border-color:var(--primary); background:var(--primary-tint)}
+.ed-row-tools{display:flex; gap:10px; margin-top:4px; font-size:11.5px}
+.ed-row-tools button{color:var(--primary)}
+.stepper{display:inline-flex; align-items:center; border:1px solid var(--line-strong); border-radius:10px; overflow:hidden}
+.stepper button{width:34px; height:34px; font-size:16px; color:var(--primary)}
+.stepper span{min-width:40px; text-align:center; font-family:"DM Mono",monospace}
+.toggle{width:44px; height:26px; border-radius:999px; background:var(--line-strong); position:relative; flex-shrink:0}
+.toggle::after{content:""; position:absolute; width:20px; height:20px; border-radius:50%; background:#fff; top:3px; left:3px; transition:left .15s}
+.toggle[aria-pressed="true"]{background:var(--primary)}
+.toggle[aria-pressed="true"]::after{left:21px}
+.thumb-pick{aspect-ratio:16/10; border:1px dashed var(--line-strong); border-radius:12px; display:grid; place-items:center; font-size:40px; color:var(--ink-faint); width:100%}
+
+/* overlays */
+.scrim{position:fixed; inset:0; background:rgba(15,20,17,.45); display:grid; place-items:center; padding:20px; z-index:50}
+.dialog{background:var(--surface); border-radius:16px; padding:20px; max-width:340px; width:100%; box-shadow:var(--shadow)}
+.dialog h3{font-size:16px; margin-bottom:8px}
+.dialog p{color:var(--ink-soft); font-size:13px; margin:0 0 18px}
+.dialog .acts{display:flex; gap:10px}
+.dialog .acts .btn{flex:1}
+.sheet{background:var(--surface); border-radius:16px 16px 0 0; width:100%; max-width:412px; max-height:70dvh; display:flex; flex-direction:column; box-shadow:var(--shadow); position:fixed; bottom:0; left:50%; transform:translateX(-50%)}
+.sheet header{padding:14px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px}
+.sheet header h3{font-size:15px; flex:1}
+.sheet .sbody{overflow-y:auto; padding:8px 16px 20px}
+.toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:var(--bg);
+  padding:10px 16px; border-radius:999px; font-size:13px; z-index:60; box-shadow:var(--shadow); max-width:90vw}
+
+/* notes mode */
+.note{display:none}
+body.notes .note{
+  display:block; margin:8px 0; padding:8px 10px; font-size:11.5px; line-height:1.5;
+  background:color-mix(in srgb, var(--amber) 12%, var(--surface));
+  border-left:3px solid var(--amber); border-radius:0 8px 8px 0; color:var(--ink-soft);
+}
+body.notes .note b{color:var(--amber)}
+.vstate{display:none}
+body.notes .vstate{display:flex; gap:4px; align-items:center; padding:6px 10px; background:var(--surface-2); font-size:11px}
+body.notes .vstate button{padding:2px 8px; border-radius:999px; border:1px solid var(--line-strong); color:var(--ink-soft)}
+body.notes .vstate button[aria-pressed="true"]{background:var(--primary); color:var(--primary-ink); border-color:var(--primary)}
+
+@media (max-width:899px){
+  .sidepanel{position:fixed; inset:0 auto 0 0; width:min(320px,86vw); background:var(--surface); z-index:70;
+    padding:20px; overflow-y:auto; box-shadow:var(--shadow); transform:translateX(-100%); transition:transform .2s}
+  body.panel-open .sidepanel{transform:none}
+  body.panel-open::after{content:""; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:69}
+  .panel-close{display:inline-flex; float:right}
+  .topbar{flex-wrap:nowrap; overflow-x:auto; padding:8px 10px; gap:8px}
+  .topbar::-webkit-scrollbar{display:none}
+  .tb-btn{font-size:11px; padding:4px 9px; white-space:nowrap}
+  .brand{font-size:15px}
+  .device{border-radius:0; height:calc(100dvh - 92px); border-left:none; border-right:none; position:static}
+  .main{padding:0}
+  .open-panel{display:inline-flex}
+}
+@media (min-width:900px){ .open-panel{display:none} }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <span class="brand">Recipi<small>叩き台</small></span>
+    <span class="sp"></span>
+    <button class="tb-btn open-panel" data-act="open-sidepanel">☰ 画面インデックス</button>
+    <button class="tb-btn" id="notesBtn" data-act="notes-toggle" aria-pressed="false">📝 設計メモ</button>
+    <button class="tb-btn" id="themeBtn" data-act="theme-cycle">◐ テーマ: 自動</button>
+    <button class="tb-btn" data-act="reset-data">↺ リセット</button>
+  </header>
+  <div class="main">
+    <aside class="sidepanel">
+      <button class="tb-btn panel-close" data-act="close-sidepanel">✕ 閉じる</button>
+      <h2>このプロトタイプについて</h2>
+      <p>要件定義書（<span class="mono">docs/requirements/</span>）を叩き台として形にしたモックアップです。実バックエンドはなく、すべてブラウザ内のモックデータで動きます。要件を煮詰めるためのたたき台としてお使いください。</p>
+      <h2>画面インデックス</h2>
+      <nav class="idx" id="screenIdx"></nav>
+      <h2>モックの割り切り</h2>
+      <ul>
+        <li>画像は色ブロック＋絵文字で代用</li>
+        <li>通信待ち・エラーは「設計メモ」ONで状態切替から確認</li>
+        <li>無限スクロール・カーソルページングは省略（1ページ表示）</li>
+        <li>検索の正規化・AND 判定は簡易実装</li>
+        <li>トークン／リフレッシュ等の認証内部は省略（入力すれば成功）</li>
+      </ul>
+      <h2>設計メモの見かた</h2>
+      <p>「設計メモ」をONにすると、各画面に <b style="color:var(--amber)">未確定事項・割り切り</b> の注記と、一覧画面の <b>状態切替</b>（通常／空／エラー）が表示されます。</p>
+    </aside>
+    <main class="device" id="device" aria-label="Recipi プロトタイプ画面"></main>
+  </div>
+</div>
+<div id="overlay"></div>
+<div id="toast-host"></div>
+
+<script>
+"use strict";
+/* ============================ mock data ============================ */
+const AV = ["#2F6B47","#B9741F","#3B6E8F","#8A5AA6","#B24A63","#4C7A3E","#A65C2E","#5B6470"];
+function seed(){
+  const users = {
+    me:      {id:"me",     name:"テスト太郎",       av:0, email:"taro@example.com", x:"https://example.com/x/taro", xPub:true, ig:"", igPub:false, other:"", otherPub:false, following:["u_dashi","u_hana","u_pan"], followers:["u_dashi","u_salad","u_yuki","u_nimono"]},
+    u_dashi: {id:"u_dashi",name:"だし巻き三郎",     av:1, following:["me"], followers:["me","u_hana"]},
+    u_salad: {id:"u_salad",name:"サラダ四葉",       av:2, following:["me","u_hana"], followers:["u_yuki"]},
+    u_pan:   {id:"u_pan",  name:"パン工房五郎",     av:3, following:[], followers:["me"]},
+    u_nimono:{id:"u_nimono",name:"煮物ばあば六実",  av:4, following:["me"], followers:[]},
+    u_hana:  {id:"u_hana", name:"E2Eユーザーはな",  av:5, email:"hana@example.com", emailPub:true, ig:"https://example.com/ig/hana", igPub:true, other:"https://example.com/blog/hana", otherPub:false, following:["u_salad"], followers:["me","u_dashi"]},
+    u_yuki:  {id:"u_yuki", name:"架空ゆき",         av:6, following:["u_salad"], followers:["me"]},
+  };
+  const R = (o)=>Object.assign({desc:"",servings:2,isPublic:true,steps:[],createdAt:"2026-08-28"},o);
+  const recipes = {
+    r1: R({id:"r1",author:"me",emoji:"🥘",title:"基本の肉じゃが",servings:3,desc:"だしと少ない調味料で作る、定番の肉じゃが。冷めても味がしみておいしい。",
+      groups:[{name:"",items:[
+        {name:"豚こま肉",qty:200,unit:"g"},{name:"じゃがいも",qty:3,unit:"個"},{name:"にんじん",qty:1,unit:"本"},
+        {name:"玉ねぎ",qty:1,unit:"個"},{name:"自家製めんつゆ",qty:4,unit:"大さじ",refRecipeId:"r3",refRecipeTitle:"自家製めんつゆ"},
+        {name:"秘伝の甘だれ",qty:1,unit:"大さじ",refRecipeId:null,refRecipeTitle:"秘伝の甘だれ"}]}],
+      steps:[{text:"じゃがいも・にんじんは乱切り、玉ねぎはくし切りにする。"},
+        {text:"鍋に油を熱し、豚肉を炒める。色が変わったら野菜を加えてさっと炒める。",img:true},
+        {text:"水とめんつゆを加え、落としぶたをして中火で15分煮る。"},
+        {text:"甘だれを加え、汁気が半分になるまで煮からめる。"}],
+      fav:24}),
+    r2: R({id:"r2",author:"me",emoji:"🍗",title:"基本のから揚げ",desc:"下味は袋でもみ込むだけ。二度揚げでカリッと。",servings:2,
+      groups:[{name:"",items:[{name:"鶏もも肉",qty:300,unit:"g"}]},
+        {name:"下味",items:[{name:"しょうゆ",qty:1,unit:"大さじ"},{name:"酒",qty:1,unit:"大さじ"},{name:"おろしにんにく",qty:null,unit:"小さじ"},{name:"塩",qty:null,unit:"少々"}]},
+        {name:"仕上げ",items:[{name:"片栗粉",qty:4,unit:"大さじ"},{name:"揚げ油",qty:null,unit:"適量"}]}],
+      steps:[{text:"鶏肉を一口大に切り、下味を袋でもみ込んで15分おく。"},{text:"片栗粉をまぶし、170℃で3分揚げて一度取り出す。"},{text:"190℃で1分揚げて油を切る。",img:true}],
+      fav:41}),
+    r3: R({id:"r3",author:"me",emoji:"🍶",title:"自家製めんつゆ",desc:"作っておくと便利。煮物・そうめん・親子丼に。",servings:1,
+      groups:[{name:"",items:[{name:"しょうゆ",qty:200,unit:"ml"},{name:"みりん",qty:200,unit:"ml"},{name:"かつお節",qty:20,unit:"g"},{name:"昆布",qty:5,unit:"g"}]}],
+      steps:[{text:"みりんを煮切る。"},{text:"しょうゆ・昆布・かつお節を加えてひと煮立ちさせ、こす。"}],fav:58}),
+    r4: R({id:"r4",author:"me",emoji:"🥬",title:"ごはんが進む回鍋肉",desc:"キャベツは大きめに、豚バラで。",servings:2,
+      groups:[{name:"",items:[{name:"豚バラ薄切り",qty:150,unit:"g"},{name:"キャベツ",qty:200,unit:"g"},{name:"ピーマン",qty:2,unit:"個"}]},
+        {name:"合わせ調味料A",items:[{name:"甜麺醤",qty:1,unit:"大さじ"},{name:"豆板醤",qty:null,unit:"小さじ"},{name:"自家製めんつゆ",qty:1,unit:"大さじ",refRecipeId:"r3",refRecipeTitle:"自家製めんつゆ"}]}],
+      steps:[{text:"合わせ調味料Aを混ぜておく。"},{text:"豚バラを炒め、脂が出たら野菜を加える。"},{text:"Aを回し入れて全体にからめる。"}],fav:33}),
+    r5: R({id:"r5",author:"me",emoji:"🔒",title:"[下書き] 週末の作り置きメモ",isPublic:false,servings:4,desc:"まだ調整中。公開しない。",
+      groups:[{name:"",items:[{name:"ブロッコリー",qty:1,unit:"個"},{name:"塩",qty:null,unit:"少々"}]}],
+      steps:[{text:"ゆでる。"}],fav:0}),
+    r6: R({id:"r6",author:"u_dashi",emoji:"🍳",title:"ふんわりだし巻き卵",desc:"弱めの中火で、巻くたびに油をなじませるのがコツ。",servings:2,
+      groups:[{name:"",items:[{name:"卵",qty:3,unit:"個"},{name:"だし",qty:3,unit:"大さじ"},{name:"砂糖",qty:null,unit:"小さじ"},{name:"薄口しょうゆ",qty:null,unit:"小さじ"}]}],
+      steps:[{text:"卵を溶き、だしと調味料を混ぜる。"},{text:"卵液を数回に分けて流し入れ、手前に巻く。",img:true}],fav:72}),
+    r7: R({id:"r7",author:"u_salad",emoji:"🥗",title:"春のポテトサラダ",desc:"新じゃがと新玉ねぎで。粒マスタード少々。",servings:3,
+      groups:[{name:"",items:[{name:"じゃがいも",qty:3,unit:"個"},{name:"新玉ねぎ",qty:null,unit:"個",qty:0.5},{name:"きゅうり",qty:1,unit:"本"},{name:"マヨネーズ",qty:2,unit:"大さじ"},{name:"粒マスタード",qty:null,unit:"小さじ"}]}],
+      steps:[{text:"じゃがいもをゆでてつぶす。"},{text:"薄切りの玉ねぎ・きゅうりを塩もみして加え、調味料であえる。"}],fav:19}),
+    r8: R({id:"r8",author:"u_pan",emoji:"🍞",title:"全粒粉の食パン",desc:"全粒粉3割。一次発酵はゆっくり。",servings:1,
+      groups:[{name:"生地B",items:[{name:"強力粉",qty:210,unit:"g"},{name:"全粒粉",qty:90,unit:"g"},{name:"水",qty:200,unit:"ml"},{name:"ドライイースト",qty:null,unit:"小さじ"},{name:"砂糖",qty:15,unit:"g"},{name:"塩",qty:5,unit:"g"}]},
+        {name:"仕上げ",items:[{name:"バター",qty:15,unit:"g"}]}],
+      steps:[{text:"材料をこね、28℃で60分一次発酵。"},{text:"成形して型に入れ、40分二次発酵。"},{text:"200℃で25分焼く。",img:true}],fav:12}),
+    r9: R({id:"r9",author:"u_nimono",emoji:"🍲",title:"だしがしみる筑前煮",desc:"根菜は下ゆで。冷ます時間で味がしみる。",servings:4,
+      groups:[{name:"",items:[{name:"鶏もも肉",qty:200,unit:"g"},{name:"れんこん",qty:150,unit:"g"},{name:"ごぼう",qty:1,unit:"本"},{name:"にんじん",qty:1,unit:"本"},{name:"こんにゃく",qty:null,unit:"枚"},{name:"だし",qty:2,unit:"カップ"}]}],
+      steps:[{text:"根菜を乱切りにして下ゆでする。"},{text:"鶏肉を炒め、野菜とだし・調味料を加えて20分煮る。"},{text:"火を止めて冷まし、味を含ませる。"}],fav:27}),
+    r10:R({id:"r10",author:"u_hana",emoji:"🍛",title:"バジル香るガパオライス",desc:"ナンプラーとバジルは最後に。目玉焼きをのせて。",servings:2,
+      groups:[{name:"",items:[{name:"鶏ひき肉",qty:200,unit:"g"},{name:"パプリカ",qty:null,unit:"個",qty:0.5},{name:"玉ねぎ",qty:null,unit:"個",qty:0.5},{name:"バジル",qty:null,unit:"適量"},{name:"ナンプラー",qty:1,unit:"大さじ"},{name:"卵",qty:2,unit:"個"}]}],
+      steps:[{text:"ひき肉と野菜を炒める。"},{text:"ナンプラー・オイスターソースで味付けし、バジルを加える。"},{text:"ごはんに盛り、目玉焼きをのせる。",img:true}],fav:64}),
+    r11:R({id:"r11",author:"u_hana",emoji:"🥕",title:"作り置きキャロットラペ",desc:"にんじん2本。レモンとクミンで。",servings:4,
+      groups:[{name:"",items:[{name:"にんじん",qty:2,unit:"本"},{name:"レモン汁",qty:1,unit:"大さじ"},{name:"オリーブ油",qty:2,unit:"大さじ"},{name:"クミン",qty:null,unit:"少々"},{name:"塩",qty:null,unit:"少々"}]}],
+      steps:[{text:"にんじんを千切りにして塩をふり、10分おいて水気を絞る。"},{text:"調味料であえ、30分なじませる。"}],fav:38}),
+    r12:R({id:"r12",author:"u_yuki",emoji:"🍝",title:"塩レモンパスタ",desc:"10分。オイルベースでさっぱり。",servings:1,
+      groups:[{name:"",items:[{name:"スパゲッティ",qty:100,unit:"g"},{name:"レモン",qty:null,unit:"個",qty:0.5},{name:"にんにく",qty:1,unit:"片"},{name:"オリーブ油",qty:2,unit:"大さじ"},{name:"塩",qty:null,unit:"少々"}]}],
+      steps:[{text:"パスタをゆで始める。"},{text:"にんにくをオイルで炒め、ゆで汁・レモンを加えて乳化させる。"},{text:"パスタをあえて塩で味を調える。"}],fav:21}),
+  };
+  const comments = [
+    {id:"c1",recipe:"r1",author:"u_dashi",at:"2026-08-29 20:12",body:"めんつゆを使うと本当にラクですね。子どもも完食でした。"},
+    {id:"c2",recipe:"r1",author:"u_hana",at:"2026-08-30 12:40",body:"甘だれのリンクが切れているみたいです（気にせず作れました）。"},
+    {id:"c3",recipe:"r2",author:"me",at:"2026-08-27 19:03",body:"（メモ）次は下味に生姜も足す。"},
+    {id:"c4",recipe:"r6",author:"me",at:"2026-08-31 08:22",body:"だしの割合ちょうどよかったです！",img:true},
+    {id:"c5",recipe:"r10",author:"u_salad",at:"2026-08-31 21:10",body:"バジル多めが好みでした。また作ります。"},
+  ];
+  const notifications = [
+    {id:"n1",type:"followed",actor:"u_dashi",at:"5分前",read:false},
+    {id:"n2",type:"favorited",actor:"u_hana",recipe:"r2",at:"1時間前",read:false},
+    {id:"n3",type:"commented",actor:"u_dashi",recipe:"r1",at:"3時間前",read:false},
+    {id:"n4",type:"new_recipe",actor:"u_dashi",recipe:"r6",at:"昨日",read:true},
+    {id:"n5",type:"favorited",actor:"u_yuki",recipe:"r3",at:"昨日",read:true},
+    {id:"n6",type:"followed",actor:"u_salad",at:"2日前",read:true},
+    {id:"n7",type:"commented",actor:"u_hana",recipe:"r1",at:"2日前",read:true},
+  ];
+  return {users,recipes,comments,notifications,
+    favorites:new Set(["r3","r6","r10","r7"]),
+    session:null, homeTab:"all", connTab:"following", draft:null,
+    viewState:{}, };
+}
+let S = load() || seed();
+
+function persist(){ try{ localStorage.setItem("recipi-proto", JSON.stringify({...S, favorites:[...S.favorites]})); }catch(e){} }
+function load(){
+  try{
+    const raw = localStorage.getItem("recipi-proto"); if(!raw) return null;
+    const o = JSON.parse(raw); o.favorites = new Set(o.favorites||[]); return o;
+  }catch(e){ return null; }
+}
+
+/* ============================ helpers ============================ */
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const me = ()=>S.users.me;
+function user(id){ return S.users[id] || {id,name:"（不明なユーザー）",av:7,following:[],followers:[]}; }
+function avatar(u,cls=""){ const x=typeof u==="string"?user(u):u; return `<span class="avatar ${cls}" style="background:${AV[x.av??7]}">${esc((x.name||"?")[0])}</span>`; }
+function isFollowing(id){ return me().following.includes(id); }
+function favCount(r){ return r.fav||0; }
+function truncate(s,n){ return s.length>n ? s.slice(0,n) : s; }
+function unitText(it){
+  const P = ["大さじ","小さじ"];
+  if(it.unit && P.includes(it.unit)) return (it.qty!=null? `${it.unit} ${it.qty}` : it.unit);
+  if(it.qty!=null && it.unit) return `${it.qty} ${it.unit}`;
+  if(it.qty!=null) return `${it.qty}`;
+  if(it.unit) return it.unit;
+  return "";
+}
+function toast(msg){
+  const host = $("#toast-host"); host.innerHTML = `<div class="toast" role="status">${esc(msg)}</div>`;
+  clearTimeout(toast._t); toast._t = setTimeout(()=>host.innerHTML="", 2200);
+}
+let navStack = [];
+function go(hash){
+  if(dirtyGuard && hash!==dirtyGuard && guardedDirty()){ confirmLeave(hash); return; }
+  if(location.hash!==hash){ navStack.push(location.hash||"#/home"); location.hash = hash; }
+  route();
+}
+function back(){
+  const prev = navStack.length ? navStack[navStack.length-1] : "#/home";
+  if(dirtyGuard && prev!==dirtyGuard && guardedDirty()){ confirmLeave(prev); return; }
+  navStack.pop();
+  if(location.hash!==prev) location.hash = prev;
+  route();
+}
+
+/* ============================ overlays ============================ */
+function closeOverlay(){ $("#overlay").innerHTML=""; }
+function dialog({title,body,confirm="実行",danger=false,onConfirm}){
+  $("#overlay").innerHTML = `<div class="scrim" data-scrim>
+    <div class="dialog" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <h3>${esc(title)}</h3><p>${esc(body)}</p>
+      <div class="acts">
+        <button class="btn secondary" data-act="dlg-cancel">キャンセル</button>
+        <button class="btn ${danger?"danger":""}" data-act="dlg-ok">${esc(confirm)}</button>
+      </div>
+    </div></div>`;
+  dialog._cb = onConfirm;
+}
+function sheet(title, inner){
+  $("#overlay").innerHTML = `<div class="scrim" data-scrim style="align-items:flex-end">
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <header><h3>${esc(title)}</h3><button class="iconbtn" data-act="sheet-close">✕</button></header>
+      <div class="sbody">${inner}</div>
+    </div></div>`;
+}
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeOverlay(); document.body.classList.remove("panel-open"); }});
+
+/* ============================ routing ============================ */
+const SCREENS = [
+  ["#/splash","スプラッシュ","認証"],["#/login","ログイン","認証"],["#/signup","サインアップ","認証"],["#/reset","パスワードリセット","認証"],
+  ["#/home","ホーム（4サブタブ）","メイン"],["#/search","検索","メイン"],["#/create","レシピ作成","メイン"],["#/notifications","通知一覧","メイン"],["#/mypage","マイページ","メイン"],
+  ["#/recipe/r1","レシピ詳細","サブ"],["#/editor/r1","レシピ編集","サブ"],["#/my-recipes","自分のレシピ一覧","サブ"],
+  ["#/connections/me/following","フォロー・フォロワー","サブ"],["#/profile-edit","プロフィール編集","サブ"],["#/user/u_hana","ユーザープロフィール","サブ"],
+];
+function buildIndex(){
+  const byCat={}; SCREENS.forEach(([h,l,c])=>{ (byCat[c]=byCat[c]||[]).push([h,l]); });
+  $("#screenIdx").innerHTML = Object.entries(byCat).map(([c,items])=>
+    `<div class="k" style="margin:8px 0 2px">${c}</div>`+
+    items.map(([h,l])=>`<a href="${h}"><span>${esc(l)}</span><span class="k">${h.replace("#/","")}</span></a>`).join("")
+  ).join("");
+}
+
+const AUTH_FREE = ["/splash","/login","/signup","/reset"];
+let dirtyGuard = null; // hash of a screen whose unsaved changes must be confirmed before leaving
+function guardedDirty(){
+  if(!dirtyGuard) return false;
+  if(dirtyGuard==="#/create" || dirtyGuard.startsWith("#/editor")) return editorDirty();
+  if(dirtyGuard==="#/profile-edit") return pfDirty();
+  return false;
+}
+function confirmLeave(dest){
+  dialog({title:"編集内容を破棄しますか？",body:"保存していない変更は失われます。",confirm:"破棄する",danger:true,
+    onConfirm:()=>{ S.draft=null; S.pfDraft=null; dirtyGuard=null; closeOverlay();
+      if(location.hash!==dest) location.hash = dest; route(); }});
+}
+function route(){
+  let h = location.hash || "#/splash";
+  const seg = h.slice(1).split("/").filter(Boolean);
+  const key = "/"+(seg[0]||"");
+  if(!AUTH_FREE.includes(key) && !S.session){ location.replace("#/login"); return; }
+  render(seg);
+  dirtyGuard = ["editor","create","profile-edit"].includes(seg[0]) ? location.hash : null;
+  $("#device").querySelector(".d-scroll")?.scrollTo(0,0);
+}
+window.addEventListener("hashchange", ()=>{
+  if(dirtyGuard && location.hash!==dirtyGuard && guardedDirty()){
+    const dest = location.hash;
+    location.hash = dirtyGuard;          // bounce back to the guarded screen
+    setTimeout(()=>confirmLeave(dest), 0);
+    return;
+  }
+  route();
+});
+
+/* ============================ render ============================ */
+function render(seg){
+  const dev = $("#device");
+  if(seg[0]!=="profile-edit" && S.pfDraft && !pfDirty()) S.pfDraft = null;
+  if(!["editor","create"].includes(seg[0]) && S.draft && !editorDirty()) S.draft = null;
+  const showNav = S.session && !["splash","login","signup","reset","create","editor"].includes(seg[0]);
+  let html="";
+  switch(seg[0]){
+    case undefined:
+    case "splash": html = scrSplash(); break;
+    case "login": html = scrLogin(); break;
+    case "signup": html = scrSignup(); break;
+    case "reset": html = scrReset(); break;
+    case "home": html = scrHome(); break;
+    case "search": html = scrSearch(); break;
+    case "notifications": html = scrNotifications(); break;
+    case "create": html = scrEditor("new"); break;
+    case "editor": html = scrEditor(seg[1]); break;
+    case "mypage": html = scrMyPage(); break;
+    case "my-recipes": html = scrMyRecipes(); break;
+    case "recipe": html = scrRecipe(seg[1]); break;
+    case "connections": html = scrConnections(seg[1]||"me", seg[2]||"following"); break;
+    case "profile-edit": html = scrProfileEdit(); break;
+    case "user": html = scrUser(seg[1]); break;
+    default: html = bar("404")+`<div class="d-scroll"><div class="empty"><div class="big">🍽️</div>この画面は見つかりません<br><button class="btn ghost sm" data-act="go:#/home" style="margin-top:12px">ホームへ</button></div></div>`;
+  }
+  dev.innerHTML = html + (showNav ? nav(seg[0]) : "");
+}
+
+/* ---- shared bits ---- */
+function bar(title,{back:b=false,backAct="back",logo=false,actions=""}={}){
+  return `<div class="d-bar">
+    ${b?`<button class="iconbtn" data-act="${backAct}" aria-label="戻る">‹</button>`:""}
+    ${logo?`<span class="logo">Recipi</span>`:`<span class="title">${esc(title)}</span>`}
+    ${b||logo?"":""}<span style="flex:1"></span>${actions}</div>`;
+}
+function nav(active){
+  const items=[["home","ホーム","🏠"],["search","検索","🔍"],["create","","＋"],["notifications","通知","🔔"],["mypage","マイページ","👤"]];
+  const unread = S.notifications.filter(n=>!n.read).length;
+  return `<nav class="d-nav" aria-label="メインナビゲーション">`+items.map(([k,l,ic])=>{
+    const cur = (k==="home"&&!active)||k===active;
+    return `<button class="${k==="create"?"plus":""}" data-act="nav:${k}" ${cur?'aria-current="page"':''} aria-label="${esc(l||"作成")}">
+      <span class="ic">${ic}</span>${l?`<span>${l}</span>`:""}
+      ${k==="notifications"&&unread?`<span class="badge mono">${unread>99?"99+":unread}</span>`:""}
+    </button>`;
+  }).join("")+`</nav>`;
+}
+function vstate(key){
+  const cur = S.viewState[key]||"normal";
+  const opt = [["normal","通常"],["empty","空"],["error","エラー"]];
+  return `<div class="vstate">状態:${opt.map(([v,l])=>`<button data-act="viewstate:${key}:${v}" aria-pressed="${cur===v}">${l}</button>`).join("")}</div>`;
+}
+function note(html){ return `<div class="note">${html}</div>`; }
+function stateBlock(key,emptyMsg){
+  const s = S.viewState[key];
+  if(s==="error") return `<div class="empty"><div class="big">⚠️</div>読み込みに失敗しました<br><button class="btn ghost sm" style="margin-top:12px" data-act="viewstate:${key}:normal">再試行</button></div>`;
+  if(s==="empty") return `<div class="empty">${esc(emptyMsg)}</div>`;
+  return null;
+}
+function thumbStyle(r){ let h=0; for(const c of r.id) h=(h*31+c.charCodeAt(0))%360;
+  return `background:linear-gradient(135deg, hsl(${h} 45% 74%), hsl(${(h+40)%360} 48% 60%))`; }
+
+function recipeCard(r){
+  const a = user(r.author);
+  return `<button class="card" data-act="go:#/recipe/${r.id}">
+    <span class="thumb" style="${thumbStyle(r)}">${r.emoji||"🍚"}</span>
+    <span class="cbody">
+      <span class="ctitle">${esc(r.title)}</span>
+      <span class="cmeta">
+        ${avatar(a,"sm")}<span class="muted">${esc(a.name)}</span>
+        ${!r.isPublic?`<span class="badge-tag">非公開</span>`:""}
+        <span style="flex:1"></span>
+        <span class="heart-count mono"><span class="h">♥</span>${favCount(r)}</span>
+      </span>
+    </span></button>`;
+}
+function userRow(id){
+  const u = user(id); const self = id==="me";
+  return `<div class="urow">
+    <button class="row" style="flex:1;min-width:0;gap:10px" data-act="go:${self?"#/mypage":"#/user/"+id}">
+      ${avatar(u,"sm")}<span class="uname">${esc(u.name)}${self?"（自分）":""}</span>
+    </button>
+    ${self?"":`<button class="follow-btn ${isFollowing(id)?"on":""}" data-act="follow-toggle:${id}">${isFollowing(id)?"フォロー中":"フォロー"}</button>`}
+  </div>`;
+}
+
+/* ---- pw field ---- */
+let pwId=0;
+function pwField(label,{hint="",confirm=false,name=""}={}){
+  const id="pw"+(++pwId);
+  return `<div class="field">
+    <label for="${id}">${esc(label)}</label>
+    <div class="pw-wrap">
+      <input class="input" type="password" id="${id}" data-name="${name}" autocomplete="off">
+      <button type="button" data-act="pwtoggle:${id}" aria-label="パスワードを表示">👁</button>
+    </div>
+    ${hint?`<span class="hint">${esc(hint)}</span>`:""}
+    ${confirm?`<span class="err" data-pw-err hidden>パスワードが一致しません</span>`:""}
+  </div>`;
+}
+
+/* ============================ screens: auth ============================ */
+function scrSplash(){
+  setTimeout(()=>{ if((location.hash||"#/splash")==="#/splash") location.replace(S.session?"#/home":"#/login"); }, 850);
+  return `<div class="d-scroll"><div class="empty" style="padding-top:38vh">
+    <div class="logo" style="font-family:'Zen Maru Gothic';font-size:34px;color:var(--primary)">Recipi</div>
+    <div class="skeleton" style="width:120px;height:6px;margin:16px auto"></div>
+    ${note("<b>スプラッシュ</b>: 保存済みトークンの有無で ホーム / ログイン を分岐（<span class='mono'>splash.md</span>）。ここでは 0.85 秒後に自動遷移。")}
+  </div></div>`;
+}
+function scrLogin(){
+  S.resetStep = 1;
+  return bar("",{logo:true})+`<div class="d-scroll pad"><form class="stack" data-form="login" onsubmit="return false">
+    <h1 style="font-size:20px">おかえりなさい</h1>
+    <div class="field"><label for="lemail">メールアドレス</label><input class="input" id="lemail" type="email" value="taro@example.com"></div>
+    ${pwField("パスワード")}
+    <label class="check"><input type="checkbox" id="remember" checked>ログインを保持</label>
+    <span class="err" data-login-err hidden>メールアドレスまたはパスワードが違います</span>
+    <button class="btn" data-act="login">ログイン</button>
+    <div class="row" style="justify-content:space-between;font-size:12.5px">
+      <button class="muted" data-act="go:#/reset">パスワードをお忘れの方</button>
+      <button style="color:var(--primary);font-weight:700" data-act="go:#/signup">新規登録</button>
+    </div>
+    ${note("<b>ログイン</b>: 401 はメール/パスワードの別を示さない（<span class='mono'>login.md</span>）。「ログインを保持」OFF はリフレッシュトークンを永続化しない。ここでは任意入力で成功、空欄でエラー表示。")}
+  </form></div>`;
+}
+function scrSignup(){
+  return bar("新規登録",{back:true})+`<div class="d-scroll pad"><form class="stack" data-form="signup" onsubmit="return false">
+    <div class="field"><label for="semail">メールアドレス</label><input class="input" id="semail" type="email"><span class="err" data-email-err hidden>このメールアドレスは登録済みです</span></div>
+    ${pwField("パスワード",{hint:"8文字以上"})}
+    ${pwField("パスワード（確認）",{confirm:true})}
+    <div class="field"><label for="sname">表示名</label><input class="input" id="sname" maxlength="30"></div>
+    <div class="field"><label for="sq">秘密の質問</label><input class="input" id="sq" placeholder="例: 最初に飼ったペットの名前は？"><span class="hint">パスワードを忘れたときの本人確認に使います</span></div>
+    <div class="field"><label for="sa">秘密の質問の答え</label><input class="input" id="sa"></div>
+    <button class="btn" data-act="signup">登録する</button>
+    <button class="muted center" style="font-size:12.5px" data-act="go:#/login">ログインへ</button>
+    ${note("<b>サインアップ</b>: パスワード確認欄の不一致はクライアント側でブロックし API を呼ばない（<span class='mono'>components.md</span> / グローバル標準UI要件）。メール重複は 409。")}
+  </form></div>`;
+}
+function scrReset(){
+  const step = S.resetStep||1;
+  return bar("パスワードリセット",{back:true})+`<div class="d-scroll pad"><form class="stack" data-form="reset" onsubmit="return false">
+    <p class="muted tiny">登録済みの「秘密の質問」への回答で本人確認します。メール送信は使いません。</p>
+    <div class="field"><label for="remail">メールアドレス</label><input class="input" id="remail" type="email" ${step>1?"disabled":""} value="${step>1?"taro@example.com":""}"></div>
+    ${step===1?`<button class="btn" data-act="reset-step1">質問を表示</button>`:`
+      <div class="field"><label>登録済みの質問</label><div class="input" style="background:var(--surface-2)">最初に飼ったペットの名前は？</div></div>
+      <div class="field"><label for="ra">答え</label><input class="input" id="ra"></div>
+      ${pwField("新しいパスワード")}
+      ${pwField("新しいパスワード（確認）",{confirm:true})}
+      <button class="btn" data-act="reset-step2">パスワードを再設定</button>`}
+    ${note("<b>パスワードリセット</b>: 未登録メールでも質問文が返りうる（実在判別を避けきれない既知の制約, <span class='mono'>auth.md</span>）。400 は理由を区別しない。答え＋新パスワードは 1 回で送信。")}
+  </form></div>`;
+}
+
+/* ============================ screens: main ============================ */
+function feedRecipes(feed){
+  const pub = Object.values(S.recipes).filter(r=>r.isPublic);
+  if(feed==="all") return pub.slice().reverse();
+  if(feed==="following") return pub.filter(r=>me().following.includes(r.author));
+  if(feed==="followers") return pub.filter(r=>me().followers.includes(r.author));
+  if(feed==="favorites") return [...S.favorites].map(id=>S.recipes[id]).filter(Boolean);
+  return pub;
+}
+function scrHome(){
+  const tabs=[["all","全体"],["following","フォロー"],["followers","フォロワー"],["favorites","お気に入りレシピ"]];
+  const t = S.homeTab;
+  const list = feedRecipes(t);
+  const emptyMsg = {following:"気になる投稿者をフォローすると、ここに新着レシピが並びます",
+    followers:"フォロワーが増えると、その人のレシピがここに並びます",
+    favorites:"お気に入りに追加したレシピがここに表示されます", all:"まだレシピがありません"}[t];
+  const forced = stateBlock("home_"+t, emptyMsg);
+  const body = forced || (list.length? `<div class="stack">${list.map(recipeCard).join("")}</div>` : `<div class="empty">${esc(emptyMsg)}</div>`);
+  return bar("",{logo:true})
+    + `<div class="sub-tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${k===t}" data-act="home-tab:${k}">${l}</button>`).join("")}</div>`
+    + vstate("home_"+t)
+    + `<div class="d-scroll pad">
+        ${note("<b>ホーム</b>: 4 サブタブ（<span class='mono'>home.md</span>）。「お気に入りレシピ」は自分の非公開も含む・登録日時順。フォロー/お気に入りの増減はリアルタイム反映しない（再取得時に反映）。")}
+        ${body}</div>`;
+}
+function scrSearch(){
+  const q = (S.searchQ||"").trim();
+  const feed = S.searchFeed||"all";
+  let list;
+  if(q){
+    const terms = q.split(/[\s　]+/).filter(Boolean).map(s=>s.toLowerCase());
+    list = feedRecipes(feed).filter(r=>{
+      const hay = (r.title+" "+r.groups.flatMap(g=>g.items.map(i=>i.name)).join(" ")).toLowerCase();
+      return terms.every(t=>hay.includes(t));
+    });
+  } else list = feedRecipes(feed);
+  const chips=[["all","全体"],["following","フォロー"],["followers","フォロワー"],["favorites","お気に入り"]];
+  let body;
+  const forced = stateBlock("search", "");
+  if(forced) body=forced;
+  else if(q && !list.length) body = `<div class="empty">「${esc(q)}」に一致するレシピは見つかりませんでした</div>`;
+  else body = `<div class="stack">${list.map(recipeCard).join("")}</div>`;
+  return bar("検索")
+    + `<div class="pad" style="padding-bottom:8px">
+        <input class="input" id="searchInput" placeholder="レシピ・材料で検索" value="${esc(S.searchQ||"")}" enterkeyhint="search">
+        <div class="chips" style="margin-top:8px">${chips.map(([k,l])=>`<button class="chip" aria-pressed="${k===feed}" data-act="search-feed:${k}">${l}</button>`).join("")}</div>
+        ${q?`<div class="chips" style="margin-top:8px"><span class="chip" style="background:var(--primary-tint);border-color:var(--primary);color:var(--primary)">${esc(q)} <button data-act="search-clear" aria-label="検索語をクリア">✕</button></span></div>`:""}
+      </div>`
+    + vstate("search")
+    + `<div class="d-scroll pad" style="padding-top:4px">
+        ${note("<b>検索</b>: 語は空白（半角/全角/連続）で分割し AND（<span class='mono'>search.md</span>）。材料グループ名・参照タイトルは検索対象外。検索語が空なら選択中フィードの通常一覧。")}
+        ${body}</div>`;
+}
+function notifText(n){
+  const a = user(n.actor).name;
+  const rt = n.recipe? `「${S.recipes[n.recipe]?.title||"（削除済み）"}」`:"";
+  return {followed:`${a} さんがあなたをフォローしました`,
+    favorited:`${a} さんがあなたのレシピ${rt}をお気に入りに登録しました`,
+    commented:`${a} さんがあなたのレシピ${rt}に感想を書きました`,
+    new_recipe:`フォロー中の ${a} さんが新しいレシピ${rt}を投稿しました`}[n.type];
+}
+function scrNotifications(){
+  const forced = stateBlock("notif","通知はまだありません");
+  const body = forced || (S.notifications.length? S.notifications.map(n=>`
+    <button class="notif ${n.read?"":"unread"}" data-act="notif-open:${n.id}">
+      ${avatar(user(n.actor),"sm")}
+      <span class="ntext">${esc(notifText(n))}<br><span class="faint tiny mono">${esc(n.at)}</span></span>
+      ${n.read?"":`<span class="ndot"></span>`}
+    </button>`).join("") : `<div class="empty">通知はまだありません</div>`);
+  return bar("通知",{actions:`<button class="act" data-act="notif-read-all">すべて既読</button>`})
+    + vstate("notif")
+    + `<div class="d-scroll">
+        <div class="pad" style="padding-bottom:0">${note("<b>通知一覧</b>: 4 種（フォロー / お気に入り / 感想 / フォロー中の新着）。行タップで対象へ遷移＋既読、バッジ -1（<span class='mono'>notification.md</span>）。対象削除済みの通知はサーバーが一覧から除外。")}</div>
+        ${body}</div>`;
+}
+function scrMyPage(){
+  const u = me();
+  return bar("マイページ")+`<div class="d-scroll pad">
+    <div class="row" style="gap:14px">
+      ${avatar(u,"lg")}
+      <div><div style="font-family:'Zen Maru Gothic';font-weight:700;font-size:16px">${esc(u.name)}</div>
+      <div class="row tiny muted" style="gap:14px;margin-top:4px">
+        <button data-act="go:#/connections/me/following"><b class="mono">${u.following.length}</b> フォロー</button>
+        <button data-act="go:#/connections/me/followers"><b class="mono">${u.followers.length}</b> フォロワー</button>
+      </div></div>
+    </div>
+    <div class="divider" style="margin:16px 0"></div>
+    <div class="menu-list">
+      <button data-act="go:#/my-recipes">📖 自分のレシピ一覧<span class="chev">›</span></button>
+      <button data-act="go:#/connections/me/following">👥 フォロー・フォロワー<span class="chev">›</span></button>
+      <button data-act="go:#/profile-edit">✎ プロフィール編集<span class="chev">›</span></button>
+      <button data-act="logout">↪ ログアウト<span class="chev">›</span></button>
+    </div>
+    ${note("<b>マイページ</b>: 旧「アカウントメニュー」を画面化（<span class='mono'>my-page.md</span>）。お気に入りレシピはホームのタブ、アカウント削除はプロフィール編集内。")}
+  </div>`;
+}
+function scrMyRecipes(){
+  const list = Object.values(S.recipes).filter(r=>r.author==="me");
+  const forced = stateBlock("myrec","まだレシピを投稿していません");
+  const body = forced || (list.length? `<div class="stack">${list.map(recipeCard).join("")}</div>` : `<div class="empty">まだレシピを投稿していません</div>`);
+  return bar("自分のレシピ",{back:true})+vstate("myrec")+`<div class="d-scroll pad">
+    ${note("<b>自分のレシピ一覧</b>: 公開・非公開混在、非公開バッジ付き（<span class='mono'>my-recipes.md</span>）。カードから詳細（本人なので編集/削除可）。")}
+    ${body}</div>`;
+}
+
+/* ============================ screen: recipe detail ============================ */
+function scrRecipe(id){
+  const r = S.recipes[id];
+  if(!r || (!r.isPublic && r.author!=="me"))
+    return bar("",{back:true})+`<div class="d-scroll"><div class="empty"><div class="big">🔒</div>表示できません<br><button class="btn ghost sm" style="margin-top:12px" data-act="back">戻る</button></div></div>`;
+  const mine = r.author==="me";
+  const a = user(r.author);
+  const flat = r.groups.length===1 && !r.groups[0].name;
+  const ingHtml = r.groups.map(g=>`
+    <div class="ing-group">
+      ${g.name?`<div class="gname">${esc(g.name)}</div>`:""}
+      ${g.items.map(it=>{
+        let nameHtml = esc(it.name);
+        const alive = it.refRecipeId && S.recipes[it.refRecipeId];
+        if(alive) nameHtml = `<a class="reflink" data-act="reflink:${it.refRecipeId}">${esc(it.name)}</a>`;
+        else if(it.refRecipeId || it.refRecipeTitle) nameHtml = `<a class="refdead" data-act="reflink-dead">${esc(it.name)}</a>`;
+        return `<div class="ing-line"><span>${nameHtml}</span><span class="qu">${esc(unitText(it))}</span></div>`;
+      }).join("")}
+    </div>`).join("");
+  const comments = S.comments.filter(c=>c.recipe===id);
+  const cHtml = comments.length? comments.map(c=>{
+    const cu = user(c.author); const own = c.author==="me"; const editing = S.editComment===c.id;
+    return `<div class="comment">
+      <div class="cmeta">${avatar(cu,"sm")}<b style="color:var(--ink)">${esc(cu.name)}</b><span>${esc(c.at)}</span></div>
+      ${editing? `<textarea class="input" id="editC">${esc(c.body)}</textarea>
+        <div class="cactions"><button data-act="comment-save:${c.id}" style="color:var(--primary);font-weight:700">保存</button><button data-act="comment-canceledit">キャンセル</button></div>`
+      : `<div>${esc(c.body)}</div>${c.img?`<div class="step simg" style="max-width:200px;margin-top:8px">📷 添付画像</div>`:""}
+        ${(own||mine)?`<div class="cactions">${own?`<button data-act="comment-edit:${c.id}">編集</button>`:""}<button class="del" data-act="comment-delete:${c.id}">削除</button></div>`:""}`}
+    </div>`;
+  }).join("") : `<div class="empty tiny">まだ感想がありません。作ってみたら感想を書いてみましょう</div>`;
+
+  const faved = S.favorites.has(id);
+  return bar(r.title,{back:true, actions: mine? `<button class="act" data-act="go:#/editor/${id}">編集</button><button class="act danger" data-act="recipe-delete:${id}">削除</button>`:""})
+  + `<div class="d-scroll">
+    <div class="thumb" style="${thumbStyle(r)};height:180px;display:grid;place-items:center;font-size:64px">${r.emoji}</div>
+    <div class="pad stack">
+      <h1 style="font-size:19px">${esc(r.title)}</h1>
+      <div class="row">
+        <button class="row" style="gap:8px;flex:1" data-act="go:${mine?"#/mypage":"#/user/"+r.author}">${avatar(a,"sm")}<b class="tiny">${esc(a.name)}</b></button>
+        ${mine?"":`<button class="follow-btn ${isFollowing(r.author)?"on":""}" data-act="follow-toggle:${r.author}">${isFollowing(r.author)?"フォロー中":"フォロー"}</button>`}
+      </div>
+      <div class="row tiny muted" style="gap:12px"><span>👥 ${r.servings}人分</span><span>📅 ${esc(r.createdAt)}</span></div>
+      <button class="row" style="gap:8px" data-act="fav-toggle:${id}">
+        <span style="font-size:22px;color:${faved?"var(--heart)":"var(--ink-faint)"}">${faved?"♥":"♡"}</span>
+        <span class="mono">${favCount(r)}</span><span class="tiny muted">お気に入り</span>
+      </button>
+      ${r.desc?`<p class="muted" style="font-size:13px">${esc(r.desc)}</p>`:""}
+      <div class="divider"></div>
+      <div class="section-h">材料（${r.servings}人分）</div>
+      ${note(flat?"<b>材料</b>: グループ 1 つ・名前なし → 見出しなしのフラット表示（<span class='mono'>recipe-detail.md</span>）。":"<b>材料グループ</b>: 名前ありは見出し付き、名前なしは詰めて表示。")}
+      ${ingHtml}
+      ${note("<b>参照材料</b>: 自分の別レシピへのリンク。緑下線＝生存（タップで遷移）、取り消し線＝参照先削除済み（「このレシピは削除されました」）。<span class='mono'>recipe.md §材料行のレシピ参照</span>")}
+      <div class="divider"></div>
+      <div class="section-h">作り方</div>
+      ${r.steps.map((s,i)=>`<div class="step"><span class="snum">${i+1}</span><div style="flex:1"><div>${esc(s.text)}</div>${s.img?`<div class="simg">📷 手順の画像</div>`:""}</div></div>`).join("")}
+      <div class="divider"></div>
+      <div class="section-h">感想 (${comments.length})</div>
+      ${mine? note("<b>感想入力欄はレシピ投稿者本人には非表示</b>（<span class='mono'>recipe-detail.md</span>）。")
+        : `<div class="row" style="gap:8px;align-items:flex-start"><textarea class="input" id="newComment" placeholder="作ってみた感想を書く"></textarea></div>
+           <div class="row" style="gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="noop">📷 画像</button><button class="btn sm" data-act="comment-submit:${id}">送信</button></div>`}
+      ${cHtml}
+    </div>
+  </div>`;
+}
+
+/* ============================ screen: editor ============================ */
+function scrEditor(id){
+  if(id!=="new"){
+    const r = S.recipes[id];
+    if(!r || r.author!=="me")
+      return bar("",{back:true})+`<div class="d-scroll"><div class="empty"><div class="big">🔒</div>このレシピは編集できません<br><span class="tiny faint">編集は投稿者本人のみ（<span class="mono">recipe-editor.md</span>）</span><br><button class="btn ghost sm" style="margin-top:12px" data-act="back">戻る</button></div></div>`;
+  }
+  if(!S.draft || S.draft._for!==id){
+    if(id==="new"){
+      S.draft = {_for:"new", id:null, title:"", desc:"", servings:2, isPublic:false, emoji:null,
+        groups:[{name:"",items:[{name:"",qty:null,unit:""}]}], steps:[{text:""}]};
+    } else {
+      const r = S.recipes[id];
+      S.draft = JSON.parse(JSON.stringify({_for:id, id:r.id, title:r.title, desc:r.desc, servings:r.servings,
+        isPublic:r.isPublic, emoji:r.emoji, groups:r.groups, steps:r.steps}));
+    }
+    S.draftInit = JSON.stringify(S.draft);
+  }
+  const d = S.draft;
+  return `<div class="d-bar">
+      <button class="iconbtn" data-act="editor-close" aria-label="閉じる">✕</button>
+      <span class="title">${id==="new"?"レシピを作成":"レシピを編集"}</span>
+      <button class="act" data-act="editor-save" style="font-weight:700">保存</button>
+    </div>
+    <div class="d-scroll pad editor-body">${editorBody(d)}</div>`;
+}
+function editorBody(d){
+  return `<div class="stack">
+    ${note("<b>レシピ作成・編集</b>（<span class='mono'>recipe.md §2</span> / <span class='mono'>recipe-editor.md</span>）: タイトル 1–120、説明 0–2000、人数 1–99、材料名 1–60、グループ名 0–40、手順本文 1–1000。空の手順行・材料 0 のグループは保存時に除外。")}
+    <button class="thumb-pick" data-act="editor-thumb">${d.emoji? `<span style="font-size:44px">${d.emoji}</span>` : "＋ サムネイル画像"}</button>
+    <div class="field"><label>タイトル</label><input class="input" data-d="title" value="${esc(d.title)}" maxlength="120" placeholder="例: 基本の肉じゃが"></div>
+    <div class="field"><label>説明</label><textarea class="input" data-d="desc" maxlength="2000" placeholder="どんなレシピか、コツなど">${esc(d.desc)}</textarea></div>
+    <div class="field"><label>何人分</label>
+      <div class="stepper"><button data-act="editor-serv:-1">−</button><span class="mono">${d.servings}</span><button data-act="editor-serv:1">＋</button></div>
+    </div>
+    <div class="divider"></div>
+    <div class="section-h">材料</div>
+    ${d.groups.map((g,gi)=>`
+      <div class="ed-block">
+        <div class="ed-grouphead">
+          <input class="input" data-dg="${gi}" value="${esc(g.name)}" maxlength="40" placeholder="グループ名（任意・例: 合わせ調味料A）" style="flex:1">
+          ${d.groups.length>1?`<button class="iconbtn" data-act="editor-delgroup:${gi}" aria-label="グループを削除">🗑</button>`:""}
+        </div>
+        ${g.items.map((it,ii)=>`
+          <div class="ed-item ${it.refRecipeId||it.refRecipeTitle?"linked":""}">
+            <input class="input" data-di="${gi}:${ii}:name" value="${esc(it.name)}" maxlength="60" placeholder="材料名">
+            <input class="input" data-di="${gi}:${ii}:qty" value="${it.qty??""}" inputmode="decimal" placeholder="量">
+            <input class="input" data-di="${gi}:${ii}:unit" value="${esc(it.unit||"")}" maxlength="20" placeholder="単位" list="unitlist">
+            <button class="x" data-act="editor-delitem:${gi}:${ii}" aria-label="材料を削除">✕</button>
+            <div class="ed-row-tools" style="grid-column:1/-1">
+              ${it.refRecipeId||it.refRecipeTitle
+                ? `<span class="tiny faint">🔗 ${esc(it.refRecipeTitle||"参照")}</span><button data-act="editor-unlink:${gi}:${ii}">リンクを解除</button>`
+                : `<button data-act="editor-pick:${gi}:${ii}">レシピから選ぶ</button>`}
+            </div>
+          </div>`).join("")}
+        <button class="btn ghost sm" data-act="editor-additem:${gi}" style="margin-top:6px">＋ 材料行</button>
+      </div>`).join("")}
+    <button class="btn secondary sm" data-act="editor-addgroup">＋ グループを追加</button>
+    ${note("<b>材料行のレシピ参照</b>: 「レシピから選ぶ」で自分の別レシピ（公開/非公開問わず・編集中のレシピ自身は不可）を選ぶとリンク化。名前は 60 字に丸めて自動入力（編集可）。")}
+    <div class="divider"></div>
+    <div class="section-h">作り方</div>
+    ${d.steps.map((s,si)=>`
+      <div class="ed-block">
+        <div class="row" style="gap:8px;align-items:flex-start">
+          <span class="snum" style="margin-top:4px">${si+1}</span>
+          <textarea class="input" data-ds="${si}" maxlength="1000" placeholder="手順の説明" style="flex:1">${esc(s.text)}</textarea>
+          ${d.steps.length>1?`<button class="iconbtn" data-act="editor-delstep:${si}" aria-label="手順を削除">🗑</button>`:""}
+        </div>
+        <button class="btn ghost sm" data-act="editor-stepimg:${si}" style="margin-top:6px">${s.img?"🖼 画像を変更 / 削除":"📷 画像を追加"}</button>
+      </div>`).join("")}
+    <button class="btn secondary sm" data-act="editor-addstep">＋ 手順を追加</button>
+    <div class="divider"></div>
+    <div class="row" style="justify-content:space-between">
+      <div><b class="tiny">公開する</b><div class="faint tiny">OFF なら自分だけが見られます（既定 OFF）</div></div>
+      <button class="toggle" role="switch" aria-checked="${d.isPublic}" aria-pressed="${d.isPublic}" data-act="editor-public"></button>
+    </div>
+  </div>
+  <datalist id="unitlist">${["g","ml","個","本","枚","片","少々","適量","大さじ","小さじ","カップ"].map(u=>`<option value="${u}">`).join("")}</datalist>`;
+}
+function rerenderEditor(){ const b=$(".editor-body"); if(b) b.innerHTML = editorBody(S.draft); }
+function editorDirty(){ return !!S.draft && !!S.draftInit && JSON.stringify(S.draft)!==S.draftInit; }
+
+/* ============================ screens: connections / profile / user ============================ */
+function scrConnections(uid,tab){
+  const u = user(uid); const isMe = uid==="me";
+  const listIds = tab==="following"? u.following : u.followers;
+  const forced = stateBlock("conn_"+uid+"_"+tab, tab==="following"?"まだ誰もフォローしていません":"まだフォロワーがいません");
+  const body = forced || (listIds.length? listIds.map(userRow).join("") : `<div class="empty">${tab==="following"?"まだ誰もフォローしていません":"まだフォロワーがいません"}</div>`);
+  return bar(isMe?"フォロー・フォロワー":u.name,{back:true})
+    + `<div class="sub-tabs" role="tablist">
+        <button role="tab" aria-selected="${tab==="following"}" data-act="go:#/connections/${uid}/following">フォロー中</button>
+        <button role="tab" aria-selected="${tab==="followers"}" data-act="go:#/connections/${uid}/followers">フォロワー</button>
+      </div>`
+    + vstate("conn_"+uid+"_"+tab)
+    + `<div class="d-scroll pad">
+        ${note("<b>フォロー・フォロワー</b>: 自分・他人を同じ画面で 2 タブ表示（<span class='mono'>connections.md</span>）。行タップは他人→プロフィール / 自分→マイページ。片方向フォロー。")}
+        ${body}</div>`;
+}
+function pfDraft(){
+  if(!S.pfDraft){ const u=me();
+    S.pfDraft = {name:u.name, email:u.email||"", x:u.x||"", ig:u.ig||"", other:u.other||"", av:u.av,
+      emailPub:!!u.emailPub, xPub:!!u.xPub, igPub:!!u.igPub, otherPub:!!u.otherPub};
+    S.pfDraftInit = JSON.stringify(S.pfDraft);
+  }
+  return S.pfDraft;
+}
+function pfDirty(){ return !!S.pfDraft && !!S.pfDraftInit && JSON.stringify(S.pfDraft)!==S.pfDraftInit; }
+function badUrl(v){ return v.trim() && !/^https?:\/\//i.test(v.trim()); }
+function scrProfileEdit(){
+  const p = pfDraft();
+  const tgl=(on,act)=>`<button class="toggle" role="switch" aria-checked="${!!on}" aria-pressed="${!!on}" data-act="${act}"></button>`;
+  const urlField=(label,key)=>`<div class="field"><label>${label}</label>
+    <input class="input" data-pf="${key}" value="${esc(p[key])}" placeholder="https://...">
+    <span class="err" data-pf-err="${key}" ${badUrl(p[key])?"":"hidden"}>URL は http:// または https:// で始めてください</span>
+    <div class="row" style="justify-content:space-between;margin-top:4px"><span class="tiny muted">プロフィールに表示する</span>${tgl(p[key+"Pub"],"pf-toggle:"+key+"Pub")}</div></div>`;
+  return bar("プロフィール編集",{back:true, backAct:"pf-back", actions:`<button class="act" data-act="profile-save">保存</button>`})
+    + `<div class="d-scroll pad stack">
+      <div class="row" style="gap:14px"><span class="avatar lg" style="background:${AV[p.av]}">${esc(p.name[0]||"?")}</span>
+        <div class="row" style="gap:8px"><button class="btn ghost sm" data-act="avatar-change">変更</button><button class="btn ghost sm" data-act="avatar-remove">削除</button></div>
+      </div>
+      <div class="field"><label>表示名</label><input class="input" data-pf="name" value="${esc(p.name)}" maxlength="30"></div>
+      <div class="divider"></div>
+      <div class="field"><label>メールアドレス</label><input class="input" value="${esc(p.email)}" disabled>
+        <div class="row" style="justify-content:space-between;margin-top:4px"><span class="tiny muted">プロフィールに表示する</span>${tgl(p.emailPub,"pf-toggle:emailPub")}</div></div>
+      ${urlField("X の URL","x")}
+      ${urlField("Instagram の URL","ig")}
+      ${urlField("その他の URL","other")}
+      <div class="divider"></div>
+      <button class="btn danger" data-act="account-delete">アカウントを削除</button>
+      ${note("<b>プロフィール編集</b>: 連絡先 / SNS は項目別の公開トグル（既定 非公開）。URL 形式チェック。アカウント削除は確認ダイアログ →全関連データ CASCADE 削除→ログインへ（<span class='mono'>profile-edit.md</span>）。")}
+    </div>`;
+}
+function scrUser(id){
+  const u = S.users[id];
+  if(!u) return bar("",{back:true})+`<div class="d-scroll"><div class="empty"><div class="big">👻</div>このユーザーは見つかりません<br><button class="btn ghost sm" style="margin-top:12px" data-act="back">戻る</button></div></div>`;
+  const list = Object.values(S.recipes).filter(r=>r.author===id && r.isPublic);
+  const links = [];
+  if(u.emailPub && u.email) links.push(`✉ ${esc(u.email)}`);
+  if(u.xPub && u.x) links.push(`𝕏 <a href="#" data-act="noop">${esc(u.x)}</a>`);
+  if(u.igPub && u.ig) links.push(`📷 <a href="#" data-act="noop">${esc(u.ig)}</a>`);
+  if(u.otherPub && u.other) links.push(`🔗 <a href="#" data-act="noop">${esc(u.other)}</a>`);
+  return bar(u.name,{back:true})+`<div class="d-scroll pad stack">
+    <div class="row" style="gap:14px">${avatar(u,"lg")}
+      <div><div style="font-family:'Zen Maru Gothic';font-weight:700;font-size:16px">${esc(u.name)}</div>
+      <div class="row tiny muted" style="gap:14px;margin-top:4px">
+        <button data-act="go:#/connections/${id}/following"><b class="mono">${u.following.length}</b> フォロー</button>
+        <button data-act="go:#/connections/${id}/followers"><b class="mono">${u.followers.length}</b> フォロワー</button>
+      </div></div>
+    </div>
+    <button class="follow-btn ${isFollowing(id)?"on":""}" style="align-self:flex-start" data-act="follow-toggle:${id}">${isFollowing(id)?"フォロー中":"フォロー"}</button>
+    ${links.length?`<div class="tiny muted stack" style="gap:4px">${links.map(l=>`<div>${l}</div>`).join("")}</div>`:""}
+    ${note("<b>ユーザープロフィール（他人）</b>: 公開トグル ON の項目のみ表示（OFF はレスポンスに含まれない, <span class='mono'>non-functional.md</span>）。表示は公開レシピのみ。")}
+    <div class="divider"></div>
+    <div class="section-h">${esc(u.name)} さんの公開レシピ</div>
+    ${list.length? `<div class="stack">${list.map(recipeCard).join("")}</div>` : `<div class="empty">まだ公開レシピがありません</div>`}
+  </div>`;
+}
+
+/* ============================ actions ============================ */
+document.addEventListener("click", e=>{
+  const scrim = e.target.closest("[data-scrim]");
+  if(scrim && e.target===scrim){ closeOverlay(); return; }
+  const t = e.target.closest("[data-act]"); if(!t) return;
+  if(t.tagName==="A") e.preventDefault();
+  const [act,...rest] = t.dataset.act.split(":");
+  const arg = rest.join(":");
+  handle(act, arg, t);
+});
+document.addEventListener("input", e=>{
+  const el = e.target;
+  if(el.id==="searchInput"){ return; }
+  if(el.id==="pickQ"){
+    const q = el.value.trim().toLowerCase();
+    document.querySelectorAll("#pickList .card").forEach(c=>{ c.hidden = q && !c.textContent.toLowerCase().includes(q); });
+    return;
+  }
+  if(el.dataset.pf){ S.pfDraft[el.dataset.pf] = el.value; return; }
+  if(el.dataset.d){ S.draft[el.dataset.d] = el.value; }
+  else if(el.dataset.dg!=null){ S.draft.groups[+el.dataset.dg].name = el.value; }
+  else if(el.dataset.di){ const [gi,ii,f]=el.dataset.di.split(":");
+    let v = el.value; if(f==="qty") v = v===""? null : parseFloat(v);
+    S.draft.groups[+gi].items[+ii][f] = v; }
+  else if(el.dataset.ds!=null){ S.draft.steps[+el.dataset.ds].text = el.value; }
+});
+document.addEventListener("keydown", e=>{
+  if(e.key==="Enter" && e.target.id==="searchInput"){ S.searchQ = e.target.value; route2(); }
+});
+function route2(){ render(location.hash.slice(1).split("/").filter(Boolean)); }
+
+function handle(act, arg, el){
+  switch(act){
+    case "noop": return;
+    case "open-sidepanel": document.body.classList.add("panel-open"); return;
+    case "close-sidepanel": document.body.classList.remove("panel-open"); return;
+    case "notes-toggle": {
+      document.body.classList.toggle("notes");
+      const on = document.body.classList.contains("notes");
+      $("#notesBtn").setAttribute("aria-pressed", on); route2(); return;
+    }
+    case "theme-cycle": {
+      const order=["system","light","dark"];
+      S.theme = order[(order.indexOf(S.theme||"system")+1)%3];
+      applyTheme(); persist(); return;
+    }
+    case "reset-data": {
+      dialog({title:"プロトタイプをリセット",body:"モックデータとログイン状態を初期化します。",confirm:"リセット",danger:true,
+        onConfirm:()=>{ localStorage.removeItem("recipi-proto"); S = seed(); go("#/splash"); route2(); toast("初期化しました"); }});
+      return;
+    }
+    case "go": go(arg); return;
+    case "back": back(); return;
+    case "nav": {
+      if(arg==="create"){ go("#/create"); } else go("#/"+ (arg==="home"?"home":arg)); return;
+    }
+    case "pwtoggle": {
+      const f = document.getElementById(arg);
+      f.type = f.type==="password"?"text":"password"; return;
+    }
+    /* auth */
+    case "login": {
+      const em = $("#lemail").value.trim();
+      const pw = document.querySelector('[data-form="login"] .pw-wrap input').value;
+      if(!em || !pw){ $("[data-login-err]").hidden=false; return; }
+      S.session = {userId:"me"}; S.homeTab="all"; persist(); go("#/home"); toast("ログインしました"); return;
+    }
+    case "signup": {
+      const form = document.querySelector('[data-form="signup"]');
+      const p1 = form.querySelectorAll(".pw-wrap input")[0].value;
+      const p2 = form.querySelectorAll(".pw-wrap input")[1].value;
+      const errEl = form.querySelector("[data-pw-err]");
+      if(p1!==p2 || !p1){ errEl.hidden=false; return; }
+      errEl.hidden=true;
+      S.session={userId:"me"}; persist(); go("#/home"); toast("アカウントを作成しました"); return;
+    }
+    case "reset-step1": { S.resetStep=2; route2(); return; }
+    case "reset-step2": {
+      const form = document.querySelector('[data-form="reset"]');
+      const ins = form.querySelectorAll(".pw-wrap input");
+      if(ins[0].value!==ins[1].value || !ins[0].value){ form.querySelector("[data-pw-err]").hidden=false; return; }
+      S.resetStep=1; go("#/login"); toast("パスワードを再設定しました"); return;
+    }
+    case "logout": {
+      dialog({title:"ログアウト",body:"またのご利用をお待ちしています。",confirm:"ログアウト",
+        onConfirm:()=>{ S.session=null; persist(); closeOverlay(); go("#/login"); }});
+      return;
+    }
+    /* home / search */
+    case "home-tab": S.homeTab = arg; persist(); route2(); return;
+    case "search-feed": S.searchFeed = arg; route2(); return;
+    case "search-clear": S.searchQ=""; route2(); return;
+    case "viewstate": { const [k,v]=arg.split(":"); S.viewState[k] = v==="normal"?undefined:v; route2(); return; }
+    /* recipe detail */
+    case "fav-toggle": {
+      const r = S.recipes[arg];
+      if(S.favorites.has(arg)){ S.favorites.delete(arg); r.fav=Math.max(0,(r.fav||0)-1); }
+      else { S.favorites.add(arg); r.fav=(r.fav||0)+1; }
+      persist(); route2(); return;
+    }
+    case "follow-toggle": {
+      const meU = me();
+      if(meU.following.includes(arg)){ meU.following = meU.following.filter(x=>x!==arg); user(arg).followers = user(arg).followers.filter(x=>x!=="me"); }
+      else { meU.following.push(arg); if(!user(arg).followers.includes("me")) user(arg).followers.push("me"); }
+      persist(); route2(); return;
+    }
+    case "reflink": go("#/recipe/"+arg); return;
+    case "reflink-dead": toast("このレシピは削除されました"); return;
+    case "recipe-delete": {
+      dialog({title:"レシピを削除",body:"このレシピを削除します。元に戻せません。",confirm:"削除する",danger:true,
+        onConfirm:()=>{
+          delete S.recipes[arg];
+          Object.values(S.recipes).forEach(r=>r.groups&&r.groups.forEach(g=>g.items.forEach(it=>{ if(it.refRecipeId===arg) it.refRecipeId=null; })));
+          persist(); closeOverlay(); back(); toast("レシピを削除しました");
+        }});
+      return;
+    }
+    case "comment-submit": {
+      const ta = $("#newComment"); const v = ta.value.trim(); if(!v) return;
+      S.comments.push({id:"c"+Date.now(), recipe:arg, author:"me", at:"たった今", body:v});
+      persist(); route2(); toast("感想を投稿しました"); return;
+    }
+    case "comment-edit": S.editComment=arg; route2(); return;
+    case "comment-canceledit": S.editComment=null; route2(); return;
+    case "comment-save": {
+      const v=$("#editC").value.trim(); const c=S.comments.find(x=>x.id===arg);
+      if(c && v){ c.body=v; c.at=c.at+"（編集済み）"; } S.editComment=null; persist(); route2(); return;
+    }
+    case "comment-delete": {
+      dialog({title:"感想を削除",body:"この感想を削除します。",confirm:"削除",danger:true,
+        onConfirm:()=>{ S.comments=S.comments.filter(x=>x.id!==arg); persist(); closeOverlay(); route2(); toast("削除しました"); }});
+      return;
+    }
+    /* notifications */
+    case "notif-read-all": S.notifications.forEach(n=>n.read=true); persist(); route2(); return;
+    case "notif-open": {
+      const n = S.notifications.find(x=>x.id===arg); n.read=true; persist();
+      if(n.type==="followed") go("#/user/"+n.actor);
+      else if(S.recipes[n.recipe]) go("#/recipe/"+n.recipe);
+      else { route2(); toast("表示できません（対象が削除されました）"); }
+      return;
+    }
+    /* editor */
+    case "editor-close": back(); return;
+    case "editor-thumb": { const opts=["🍚","🥘","🍜","🥗","🍞","🍰","🍲","🥟"]; const d=S.draft;
+      d.emoji = opts[(opts.indexOf(d.emoji)+1)%opts.length]; rerenderEditor(); return; }
+    case "editor-serv": { S.draft.servings = Math.max(1,Math.min(99,S.draft.servings + (+arg))); rerenderEditor(); return; }
+    case "editor-addgroup": S.draft.groups.push({name:"",items:[{name:"",qty:null,unit:""}]}); rerenderEditor(); return;
+    case "editor-delgroup": {
+      const gi=+arg;
+      dialog({title:"グループを削除",body:"このグループと中の材料を削除します。",confirm:"削除",danger:true,
+        onConfirm:()=>{ S.draft.groups.splice(gi,1); closeOverlay(); rerenderEditor(); }});
+      return;
+    }
+    case "editor-additem": S.draft.groups[+arg].items.push({name:"",qty:null,unit:""}); rerenderEditor(); return;
+    case "editor-delitem": { const [gi,ii]=arg.split(":"); S.draft.groups[+gi].items.splice(+ii,1);
+      if(!S.draft.groups[+gi].items.length) S.draft.groups[+gi].items.push({name:"",qty:null,unit:""}); rerenderEditor(); return; }
+    case "editor-addstep": S.draft.steps.push({text:""}); rerenderEditor(); return;
+    case "editor-delstep": S.draft.steps.splice(+arg,1); rerenderEditor(); return;
+    case "editor-stepimg": { const s=S.draft.steps[+arg]; s.img=!s.img; rerenderEditor(); toast(s.img?"画像を追加しました（モック）":"画像を削除しました"); return; }
+    case "editor-public": S.draft.isPublic=!S.draft.isPublic; rerenderEditor(); return;
+    case "editor-unlink": { const [gi,ii]=arg.split(":"); const it=S.draft.groups[+gi].items[+ii];
+      it.refRecipeId=null; it.refRecipeTitle=null; rerenderEditor(); return; }
+    case "editor-pick": {
+      const mine = Object.values(S.recipes).filter(r=>r.author==="me" && r.id!==S.draft.id);
+      sheet("レシピから選ぶ", `<input class="input" id="pickQ" placeholder="自分のレシピを検索" style="margin-bottom:8px">
+        <div class="tiny faint" style="margin-bottom:6px">自分のレシピのみ（公開・非公開）。編集中のレシピ自身は選べません。</div>
+        <div id="pickList">${mine.map(r=>`<button class="card" style="margin-bottom:8px" data-act="pick-choose:${arg}:${r.id}">
+          <span class="thumb" style="${thumbStyle(r)};width:64px;font-size:22px">${r.emoji}</span>
+          <span class="cbody"><span class="ctitle">${esc(r.title)}</span><span class="cmeta">${r.isPublic?"公開":"非公開"}</span></span></button>`).join("")}</div>`);
+      return;
+    }
+    case "pick-choose": {
+      const [gi,ii,rid] = arg.split(":");
+      const r = S.recipes[rid]; const it = S.draft.groups[+gi].items[+ii];
+      it.name = truncate(r.title,60); it.refRecipeId = r.id; it.refRecipeTitle = r.title;
+      closeOverlay(); rerenderEditor(); toast("レシピをリンクしました"); return;
+    }
+    case "sheet-close": closeOverlay(); return;
+    case "editor-save": {
+      const d = S.draft;
+      if(!d.title.trim()){ toast("タイトルを入力してください"); return; }
+      const groups = d.groups.map(g=>({name:g.name.trim(), items:g.items.filter(i=>i.name.trim())}))
+        .filter(g=>g.items.length);
+      const steps = d.steps.filter(s=>s.text.trim());
+      if(!groups.length){ toast("材料を 1 つ以上入力してください"); return; }
+      if(!steps.length){ toast("手順を 1 つ以上入力してください"); return; }
+      let id = d.id;
+      if(!id){ id = "r"+Date.now(); S.recipes[id] = {id, author:"me", createdAt:"たった今", fav:0}; }
+      Object.assign(S.recipes[id], {title:d.title.trim(), desc:d.desc.trim(), servings:d.servings,
+        isPublic:d.isPublic, emoji:d.emoji||"🍚", groups, steps});
+      S.draft=null; persist(); go("#/recipe/"+id); toast("レシピを保存しました"); return;
+    }
+    /* connections handled by go: */
+    /* profile edit */
+    case "pf-toggle": { const p=pfDraft(); p[arg]=!p[arg]; el.setAttribute("aria-checked",p[arg]); el.setAttribute("aria-pressed",p[arg]); return; }
+    case "avatar-change": { pfDraft().av = (pfDraft().av+1)%AV.length; route2(); toast("アバターを変更しました（モック）"); return; }
+    case "avatar-remove": { pfDraft().av = 7; route2(); toast("アバターを削除しました（モック）"); return; }
+    case "pf-back": back(); return;
+    case "profile-save": {
+      const p = pfDraft();
+      let bad=false;
+      ["x","ig","other"].forEach(k=>{ const e=document.querySelector(`[data-pf-err="${k}"]`); if(e){ const b=badUrl(p[k]); e.hidden=!b; if(b) bad=true; }});
+      if(!p.name.trim()){ toast("表示名を入力してください"); return; }
+      if(bad){ toast("URL の形式を確認してください"); return; }
+      const u=me();
+      Object.assign(u,{name:p.name.trim(), x:p.x.trim(), ig:p.ig.trim(), other:p.other.trim(), av:p.av,
+        emailPub:p.emailPub, xPub:p.xPub, igPub:p.igPub, otherPub:p.otherPub});
+      S.pfDraft=null; persist(); go("#/mypage"); toast("保存しました"); return;
+    }
+    case "account-delete": {
+      dialog({title:"アカウントを削除",body:"投稿したレシピ・フォロー・お気に入り・感想がすべて削除され、元に戻せません。",confirm:"削除する",danger:true,
+        onConfirm:()=>{ localStorage.removeItem("recipi-proto"); S = seed(); closeOverlay(); go("#/login"); toast("アカウントを削除しました"); }});
+      return;
+    }
+    /* dialog */
+    case "dlg-ok": { const cb=dialog._cb; closeOverlay(); cb&&cb(); return; }
+    case "dlg-cancel": closeOverlay(); return;
+  }
+}
+
+/* ============================ theme ============================ */
+function applyTheme(){
+  const t = S.theme||"system";
+  if(t==="system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", t);
+  $("#themeBtn").textContent = "◐ テーマ: " + {system:"自動",light:"ライト",dark:"ダーク"}[t];
+}
+
+/* ============================ boot ============================ */
+buildIndex();
+applyTheme();
+if(!location.hash) location.hash = "#/splash";
+route();
+</script>
+</body>
+</html>
