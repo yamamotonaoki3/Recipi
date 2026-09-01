@@ -1,6 +1,6 @@
 # 技術スタック
 
-> バージョンは実装着手前に `resolve-tech-stack` スキルで確定し、このマシンでの利用可否（JDK / Android SDK / Xcode の要否含む）を検査する。以下は方針。
+> バージョンは実装着手前に `resolve-tech-stack` スキルで確定し、このマシンでの利用可否（JDK / Android SDK / Xcode の要否含む）を検査する。backend の Python 構成とフロントの主要バージョンは確定済み（環境チェック 2026-09-01。未導入ツールは [todo.md](todo.md)）。以下は方針。
 
 ## フロントエンド
 
@@ -13,19 +13,23 @@
 
 ### (A) TypeScript トラック（必須）
 
+> バージョンは `resolve-tech-stack` の環境チェック（2026-09-01）で確定。詳細・未導入ツールは [todo.md](todo.md)。
+
 | 項目 | 採用 | 備考 |
 | --- | --- | --- |
 | 言語 | TypeScript | |
-| フレームワーク | React Native + **Expo**（Expo SDK） | RN 0.85 系、New Architecture（Fabric / TurboModules）。2026 の RN 標準構成 |
+| ランタイム | **Node.js 24.x（現行 LTS）** | このマシンに 24.19.0 導入済み。Expo SDK 57 の最低要件 Node 22.13 を満たす |
+| フレームワーク | React Native + **Expo（SDK 57）** | **React Native 0.86**、New Architecture（Fabric / TurboModules）。2026 の RN 標準構成 |
 | ルーティング | **Expo Router**（ファイルベース） | React Navigation の上に乗る。web / ネイティブ共通 |
+| パッケージマネージャ | **npm**（11.x、Node 同梱） | pnpm / yarn は使わない |
 | 対象プラットフォーム | iOS / Android（Expo ネイティブ）＋ **Desktop（Windows・macOS）** | Desktop は下記のとおり RN Web ビルドを Tauri で包む |
-| Desktop シェル | **Tauri 2**（システム WebView + Rust コア） | RN Web（React Native Web）ビルドを読み込み、`.msi` / `.dmg` を生成。Electron より軽量 |
+| Desktop シェル | **Tauri 2**（core 2.11 系、システム WebView + Rust コア） | RN Web（React Native Web）ビルドを読み込み、`.msi` / `.dmg` を生成。Electron より軽量。**最低 Rust 1.77.2**、Windows は **MSVC C++ Build Tools ＋ WebView2**（WebView2 は導入済み）が前提 |
 | UI / スタイル | **NativeWind**（Tailwind for RN） | デザイントークン・ダークモード対応の詳細は → [todo.md](todo.md) |
 | HTTP / 型 | **openapi-typescript**（型生成）＋ **openapi-fetch**（軽量クライアント） | `openapi.json` から型と fetch を生成。詳細は「型共有」節 |
 | データ取得 / キャッシュ | **TanStack Query** | 一覧のカーソルページング（`useInfiniteQuery`）、楽観更新 |
 | 状態管理 | Zustand / Jotai（実装時に選定） | → [todo.md](todo.md) |
 | ネイティブ機能 | Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
-| ビルド / 配布 | EAS Build（クラウド）or ローカルビルド、Tauri の `.msi` / `.dmg` | → [todo.md](todo.md) |
+| ビルド / 配布 | EAS Build（クラウド）or ローカルビルド、Tauri の `.msi` / `.dmg` | iOS のローカルビルドは Windows では不可 → EAS Build（クラウド）。詳細 → [todo.md](todo.md) |
 
 ### (B) Kotlin Multiplatform トラック（随時）
 
