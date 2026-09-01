@@ -41,6 +41,7 @@
 
 ## 5. アクションと結果
 
+- **閲覧の記録**: `GET /recipes/{id}` の取得成功後、`POST /recipes/{id}/view` を**非同期で**呼ぶ（[閲覧履歴](history.md) / [`../features/view-history.md`](../features/view-history.md)）。失敗しても画面表示には影響しない。
 - ♡ ボタン → `POST` / `DELETE /recipes/{id}/favorite`（トグル）。楽観更新（即座に数を ±1）、失敗時ロールバック。
 - フォローボタン → `POST` / `DELETE /users/{id}/follow`。楽観更新。
 - 参照材料のリンクタップ → `refRecipe.id` があればそのレシピ詳細へ push。null なら「このレシピは削除されました」を表示（遷移しない）。
@@ -53,6 +54,7 @@
 ## 6. 使用 API
 
 - `GET /recipes/{id}`
+- `POST /recipes/{id}/view`（閲覧記録・非同期・失敗は無視）
 - `POST` / `DELETE /recipes/{id}/favorite`
 - `POST` / `DELETE /users/{id}/follow`
 - `DELETE /recipes/{id}`

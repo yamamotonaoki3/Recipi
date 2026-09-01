@@ -400,12 +400,14 @@ function seed(){
   ];
   return {users,recipes,comments,notifications,
     favorites:new Set(["r3","r6","r10","r7"]),
+    views:[{recipeId:"r6",at:Date.now()-3600e3},{recipeId:"r10",at:Date.now()-7200e3},{recipeId:"r2",at:Date.now()-86400e3}],
     session:null, homeTab:"all", connTab:"following", draft:null,
     viewState:{}, };
 }
 let S = load() || seed();
 
 function persist(){ try{ localStorage.setItem("recipi-proto", JSON.stringify({...S, favorites:[...S.favorites]})); }catch(e){} }
+function clearStore(){ try{ localStorage.removeItem("recipi-proto"); }catch(e){} }
 function load(){
   try{
     const raw = localStorage.getItem("recipi-proto"); if(!raw) return null;
@@ -474,7 +476,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeOverlay(); d
 const SCREENS = [
   ["#/splash","スプラッシュ","認証"],["#/login","ログイン","認証"],["#/signup","サインアップ","認証"],["#/reset","パスワードリセット","認証"],
   ["#/home","ホーム（検索窓 ＋ 4サブタブ）","メイン"],["#/create","レシピ作成","メイン"],["#/notifications","通知一覧","メイン"],["#/mypage","マイページ","メイン"],
-  ["#/recipe/r1","レシピ詳細","サブ"],["#/editor/r1","レシピ編集","サブ"],["#/my-recipes","自分のレシピ一覧","サブ"],
+  ["#/history","閲覧履歴","サブ"],["#/recipe/r1","レシピ詳細","サブ"],["#/editor/r1","レシピ編集","サブ"],["#/my-recipes","自分のレシピ一覧","サブ"],
   ["#/connections/me/following","フォロー・フォロワー","サブ"],["#/profile-edit","プロフィール編集","サブ"],["#/user/u_hana","ユーザープロフィール","サブ"],
 ];
 function buildIndex(){
@@ -504,6 +506,14 @@ function route(){
   const key = "/"+(seg[0]||"");
   if(!AUTH_FREE.includes(key) && !S.session){ location.replace("#/login"); return; }
   render(seg);
+  // 閲覧記録は「別のレシピ詳細へ実際に遷移したとき」に 1 回だけ。
+  // route2 の再描画や go()→hashchange の二重 route() では再記録しない（_vLast で重複排除）。
+  // 実際は GET /recipes/{id} 成功後に POST /recipes/{id}/view を非同期で 1 回呼ぶ。
+  if(seg[0]==="recipe" && seg[1]){
+    const rv=S.recipes[seg[1]];
+    if(seg[1]!==S._vLast && rv && (rv.isPublic||rv.author==="me")) recordView(seg[1]);
+    S._vLast = seg[1];
+  } else S._vLast = null;
   dirtyGuard = ["editor","create","profile-edit"].includes(seg[0]) ? location.hash : null;
   $("#device").querySelector(".d-scroll")?.scrollTo(0,0);
 }
@@ -532,6 +542,7 @@ function render(seg){
     case "reset": html = scrReset(); break;
     case "search": location.replace("#/home"); return;
     case "home": html = scrHome(); break;
+    case "history": html = scrHistory(); break;
     case "notifications": html = scrNotifications(); break;
     case "create": html = scrEditor("new"); break;
     case "editor": html = scrEditor(seg[1]); break;
@@ -702,7 +713,7 @@ function scrHome(){
   else if(q && !list.length) body = `<div class="empty">「${esc(q)}」に一致するレシピは見つかりませんでした</div>`;
   else if(!list.length) body = `<div class="empty">${esc(emptyMsg)}</div>`;
   else body = `<div class="stack">${list.map(recipeCard).join("")}</div>`;
-  return bar("",{logo:true})
+  return bar("",{logo:true, actions:`<button class="iconbtn" data-act="go:#/history" aria-label="閲覧履歴">🕒</button>`})
     + `<div class="home-search">
         <input class="input" id="searchInput" placeholder="レシピ・材料で検索" value="${esc(S.homeSearchQ||"")}" enterkeyhint="search">
         ${q?`<div class="chips" style="margin-top:8px"><span class="chip" style="background:var(--primary-tint);border-color:var(--primary);color:var(--primary)">${esc(q)} <button data-act="search-clear" aria-label="検索語をクリア">✕</button></span></div>`:""}
@@ -764,8 +775,27 @@ function scrMyRecipes(){
     ${note("<b>自分のレシピ一覧</b>: 公開・非公開混在、非公開バッジ付き（<span class='mono'>my-recipes.md</span>）。カードから詳細（本人なので編集/削除可）。")}
     ${body}</div>`;
 }
+function scrHistory(){
+  const list = (S.views||[])
+    .map(v=>S.recipes[v.recipeId]).filter(Boolean)
+    .filter(r=>r.isPublic || r.author==="me");   // 可視性フィルタ（お気に入りと同じ）
+  const forced = stateBlock("history","まだ見たレシピがありません");
+  const body = forced || (list.length? `<div class="stack">${list.map(recipeCard).join("")}</div>` : `<div class="empty">まだ見たレシピがありません</div>`);
+  return bar("閲覧履歴",{back:true, actions:`<button class="act danger" data-act="history-clear">消去</button>`})
+    + vstate("history")
+    + `<div class="d-scroll pad">
+        ${note("<b>閲覧履歴</b>（<span class='mono'>features/view-history.md</span>）: レシピ詳細を開くとサーバーに記録（<span class='mono'>recipe_views</span>、レシピごとに 1 行・最後に見た時刻で並ぶ）。端末をまたいで同期。非公開化された他人のレシピは一覧から外れる。プロトタイプはブラウザ内に保持。")}
+        ${body}</div>`;
+}
 
 /* ============================ screen: recipe detail ============================ */
+function recordView(id){
+  if(!S.session) return;
+  S.views = (S.views||[]).filter(v=>v.recipeId!==id);
+  S.views.unshift({recipeId:id, at:Date.now()});
+  if(S.views.length>50) S.views.length = 50;
+  persist();
+}
 function scrRecipe(id){
   const r = S.recipes[id];
   if(!r || (!r.isPublic && r.author!=="me"))
@@ -1041,7 +1071,7 @@ function handle(act, arg, el){
     }
     case "reset-data": {
       dialog({title:"プロトタイプをリセット",body:"モックデータとログイン状態を初期化します。",confirm:"リセット",danger:true,
-        onConfirm:()=>{ localStorage.removeItem("recipi-proto"); S = seed(); go("#/splash"); route2(); toast("初期化しました"); }});
+        onConfirm:()=>{ clearStore(); S = seed(); go("#/splash"); route2(); toast("初期化しました"); }});
       return;
     }
     case "go": go(arg); return;
@@ -1080,13 +1110,19 @@ function handle(act, arg, el){
       S.resetStep=1; go("#/login"); toast("パスワードを再設定しました"); return;
     }
     case "logout": {
+      // 閲覧履歴（S.views）はサーバー保存想定なのでログアウトでは消さない。アカウント削除でのみリセット
       dialog({title:"ログアウト",body:"またのご利用をお待ちしています。",confirm:"ログアウト",
-        onConfirm:()=>{ S.session=null; persist(); closeOverlay(); go("#/login"); }});
+        onConfirm:()=>{ S.session=null; S.homeSearchQ=""; persist(); closeOverlay(); go("#/login"); }});
       return;
     }
     /* home + 検索窓 */
     case "home-tab": S.homeTab = arg; persist(); route2(); return;
     case "search-clear": S.homeSearchQ=""; route2(); return;
+    case "history-clear": {
+      dialog({title:"閲覧履歴を消去",body:"閲覧履歴をすべて消去しますか？",confirm:"消去",danger:true,
+        onConfirm:()=>{ S.views=[]; persist(); closeOverlay(); route2(); toast("閲覧履歴を消去しました"); }});
+      return;
+    }
     case "viewstate": { const [k,v]=arg.split(":"); S.viewState[k] = v==="normal"?undefined:v; route2(); return; }
     /* recipe detail */
     case "fav-toggle": {
@@ -1206,8 +1242,13 @@ function handle(act, arg, el){
       S.pfDraft=null; persist(); go("#/mypage"); toast("保存しました"); return;
     }
     case "account-delete": {
-      dialog({title:"アカウントを削除",body:"投稿したレシピ・フォロー・お気に入り・感想がすべて削除され、元に戻せません。",confirm:"削除する",danger:true,
-        onConfirm:()=>{ localStorage.removeItem("recipi-proto"); S = seed(); closeOverlay(); go("#/login"); toast("アカウントを削除しました"); }});
+      dialog({title:"アカウントを削除",body:"投稿したレシピ・フォロー・お気に入り・感想・閲覧履歴がすべて削除され、元に戻せません。",confirm:"削除する",danger:true,
+        onConfirm:()=>{
+          clearStore(); S = seed();
+          S.views = [];                 // アカウント削除は recipe_views を CASCADE 削除
+          persist();                    // リロードしてもサンプル履歴を復活させない
+          closeOverlay(); go("#/login"); toast("アカウントを削除しました");
+        }});
       return;
     }
     /* dialog */

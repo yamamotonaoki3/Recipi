@@ -25,6 +25,9 @@ flowchart TD
 
     Home -->|検索窓に語を入力| Home
     Home --> Detail[レシピ詳細]
+    Home -->|履歴アイコン| History[閲覧履歴]
+    History --> Detail
+    Detail -.->|閲覧を記録| History
     Notif --> Detail
     Notif --> UserProfile[ユーザープロフィール 他人]
     MyPage --> MyRecipes[自分のレシピ一覧]

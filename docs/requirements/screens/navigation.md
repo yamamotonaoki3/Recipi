@@ -47,6 +47,8 @@ flowchart TD
     D5 --> S_MyPage["マイページ画面"]
 
     S_Home -. push .-> S_Detail["レシピ詳細"]
+    S_Home -. push .-> S_History["閲覧履歴"]
+    S_History -. push .-> S_Detail
     S_Notif -. push .-> S_Detail
     S_Notif -. push .-> S_UserProfile["ユーザープロフィール（他人）"]
     S_MyPage -. push .-> S_MyRecipes["自分のレシピ一覧"]

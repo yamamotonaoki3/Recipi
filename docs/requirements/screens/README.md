@@ -20,6 +20,7 @@ Recipi の画面構成・画面遷移・共通コンポーネント。要件（�
 | サインアップ | [signup.md](signup.md) | 不要 | - |
 | パスワードリセット | [password-reset.md](password-reset.md) | 不要 | - |
 | ホーム（常時固定の検索窓 ＋ 4 サブタブ） | [home.md](home.md) | 必要 | ホーム |
+| 閲覧履歴 | [history.md](history.md) | 必要 | - |
 | 通知一覧 | [notifications.md](notifications.md) | 必要 | 通知 |
 | レシピ作成 / 編集 | [recipe-editor.md](recipe-editor.md) | 必要 | ＋（作成） |
 | マイページ | [my-page.md](my-page.md) | 必要 | マイページ |

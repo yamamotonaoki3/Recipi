@@ -65,6 +65,14 @@
 
 **検索マッチ規則（`q`）**: `q` を空白（半角・全角・連続）で語に分割 → 各語を個別に正規化 → 各語について `title_normalized` 部分一致 OR `ingredients.name_normalized` 部分一致 を AND。スペース無しは 1 語扱い。**材料グループ名（`ingredient_groups.name`）と `ingredients.ref_recipe_title` は検索対象外**。詳細は [features/search.md](features/search.md)。
 
+### 閲覧履歴 — [features/view-history.md](features/view-history.md)
+
+| メソッド | パス | 認証 | 概要 |
+| --- | --- | --- | --- |
+| POST | `/recipes/{id}/view` | 必要 | 閲覧を記録（upsert `viewed_at = now()`）。繰り返し呼んでも安全だが毎回 `viewed_at` を更新するので厳密には冪等ではない。見えないレシピは 404。成功 204。クライアントはレシピ詳細取得成功後に非同期で 1 回呼ぶ |
+| GET | `/users/me/history` | 必要 | 最近見たレシピ（`viewed_at DESC, recipe_id DESC`、カーソルページング）。可視性フィルタ `is_public OR author = me`。要素はレシピカード形状 ＋ `viewedAt` |
+| DELETE | `/users/me/history` | 必要 | 閲覧履歴を全消去。成功 204 |
+
 ### 単位 — [features/unit.md](features/unit.md)
 
 | メソッド | パス | 認証 | 概要 |

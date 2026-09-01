@@ -24,6 +24,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | 単位マスター（材料の単位候補） | [features/unit.md](features/unit.md) |
 | ホームフィード（全体 / フォロー / フォロワー / お気に入りレシピ の 4 タブ） | [features/home-feed.md](features/home-feed.md) |
 | レシピ検索（タイトル + 材料名） | [features/search.md](features/search.md) |
+| 閲覧履歴（最近見たレシピ） | [features/view-history.md](features/view-history.md) |
 | フォロー / フォロワー | [features/follow.md](features/follow.md) |
 | お気に入り | [features/favorite.md](features/favorite.md) |
 | 感想（コメント） | [features/comment.md](features/comment.md) |
