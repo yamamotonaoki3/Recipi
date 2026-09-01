@@ -490,6 +490,8 @@ function buildIndex(){
 const AUTH_FREE = ["/splash","/login","/signup","/reset"];
 let dirtyGuard = null; // hash of a screen whose unsaved changes must be confirmed before leaving
 let vLast = null;      // 直前に閲覧記録したレシピ id（永続化しない。二重 route() / 再描画での重複記録を防ぐだけ）
+let aiSug = [];        // AI 誤字脱字チェックの修正案（永続化しない。編集セッション中のみ）
+let aiEpoch = 0;       // 材料 / 手順 / グループの構造変更で ++。実行中の校正結果を無効化するトークン
 function guardedDirty(){
   if(!dirtyGuard) return false;
   if(dirtyGuard==="#/create" || dirtyGuard.startsWith("#/editor")) return editorDirty();
@@ -533,6 +535,7 @@ function render(seg){
   const dev = $("#device");
   if(seg[0]!=="profile-edit" && S.pfDraft && !pfDirty()) S.pfDraft = null;
   if(!["editor","create"].includes(seg[0]) && S.draft && !editorDirty()) S.draft = null;
+  if(!["editor","create"].includes(seg[0])) aiSug = [];   // 編集画面を離れたら AI 修正案を破棄
   const showNav = S.session && !["splash","login","signup","reset","create","editor"].includes(seg[0]);
   let html="";
   switch(seg[0]){
@@ -878,6 +881,7 @@ function scrEditor(id){
         isPublic:r.isPublic, emoji:r.emoji, groups:r.groups, steps:r.steps}));
     }
     S.draftInit = JSON.stringify(S.draft);
+    aiSug = [];
   }
   const d = S.draft;
   return `<div class="d-bar">
@@ -933,6 +937,10 @@ function editorBody(d){
       </div>`).join("")}
     <button class="btn secondary sm" data-act="editor-addstep">＋ 手順を追加</button>
     <div class="divider"></div>
+    <button class="btn ghost" data-act="editor-ai-check">✨ AI で誤字脱字チェック</button>
+    <div class="vstate">AI 応答:${[["ok","正常"],["429","429 レート制限"],["503","503 障害/タイムアウト"]].map(([v,l])=>`<button data-act="ai-mode:${v}" aria-pressed="${(S.aiMode||"ok")===v}">${l}</button>`).join("")}</div>
+    ${note("<b>AI 誤字脱字チェック</b>（<span class='mono'>features/ai-proofread.md</span>・Phase 11）: 実際は backend の校正サービス（<span class='mono'>AI_PROVIDER</span> = dev: ローカル推論 / prod: クラウド LLM API / test: スタブ）を呼ぶ。プロトタイプは固定辞書のモック。修正案は<b>自動適用せず</b>項目ごとに選ぶ。保存は AI に依存しない。上の「AI 応答」で失敗時の表示（429 / 503）を確認できる。")}
+    <div class="divider"></div>
     <div class="row" style="justify-content:space-between">
       <div><b class="tiny">公開する</b><div class="faint tiny">OFF なら自分だけが見られます（既定 OFF）</div></div>
       <button class="toggle" role="switch" aria-checked="${d.isPublic}" aria-pressed="${d.isPublic}" data-act="editor-public"></button>
@@ -941,6 +949,51 @@ function editorBody(d){
   <datalist id="unitlist">${["g","ml","個","本","枚","片","少々","適量","大さじ","小さじ","カップ"].map(u=>`<option value="${u}">`).join("")}</datalist>`;
 }
 function rerenderEditor(){ const b=$(".editor-body"); if(b) b.innerHTML = editorBody(S.draft); }
+
+/* AI 誤字脱字チェック（モック）— 実際は POST /ai/proofread。固定辞書で誤字を検出する */
+const AI_FIX = [["小麦こ","小麦粉"],["大さ じ","大さじ"],["小さ じ","小さじ"],["しょうゆう","しょうゆ"],["するに。","する。"],["いれる","入れる"],["まぜる","混ぜる"],["切りにするに","切りにする"],["肉じゃか","肉じゃが"],["下ごしらへ","下ごしらえ"]];
+function aiCorrect(text){ let out=text; for(const [a,b] of AI_FIX) out=out.split(a).join(b); return out; }
+function aiProofread(d){
+  const items=[];
+  const push=(id,text)=>items.push({id, original:text, corrected:aiCorrect(text)});
+  push("title", d.title);
+  if(d.desc.trim()) push("desc", d.desc);
+  d.steps.forEach((s,i)=>{ if(s.text.trim()) push("step:"+i, s.text); });
+  d.groups.forEach((g,gi)=>g.items.forEach((it,ii)=>{ if(it.name.trim()) push("ing:"+gi+":"+ii, it.name); }));
+  return items.filter(x=>x.original!==x.corrected);
+}
+function aiFieldValue(id){
+  const p = id.split(":");
+  if(id==="title") return S.draft.title;
+  if(id==="desc") return S.draft.desc;
+  if(p[0]==="step") return S.draft.steps[+p[1]]?.text;
+  if(p[0]==="ing") return S.draft.groups[+p[1]]?.items[+p[2]]?.name;
+}
+function aiApply(id){
+  const s = (aiSug||[]).find(x=>x.id===id); if(!s) return true;
+  if(aiFieldValue(id) !== s.original){ return false; }   // 陳腐化ガード: チェック後に手で編集された
+  const p = id.split(":");
+  if(id==="title") S.draft.title = s.corrected;
+  else if(id==="desc") S.draft.desc = s.corrected;
+  else if(p[0]==="step") S.draft.steps[+p[1]].text = s.corrected;
+  else if(p[0]==="ing") S.draft.groups[+p[1]].items[+p[2]].name = s.corrected;
+  aiSug = aiSug.filter(x=>x.id!==id);
+  return true;
+}
+function aiSheet(){
+  const sug = aiSug||[];
+  const label = {title:"タイトル", desc:"説明"};
+  const kindOf = id => label[id] || (id.startsWith("step")? "手順"+(+id.split(":")[1]+1) : "材料");
+  sheet("AI 誤字脱字チェック（モック）", sug.length? `
+    <div class="tiny faint" style="margin-bottom:8px">修正案です。項目ごとに「適用 / 無視」を選んでください（自動適用はしません）。</div>
+    ${sug.map(s=>`<div class="ed-block" style="margin-bottom:8px">
+      <div class="tiny faint">${esc(kindOf(s.id))}</div>
+      <div style="margin:4px 0"><span class="refdead">${esc(s.original)}</span> → <b style="color:var(--primary)">${esc(s.corrected)}</b></div>
+      <div class="row" style="gap:8px"><button class="btn sm" data-act="ai-apply:${s.id}">適用</button><button class="btn ghost sm" data-act="ai-ignore:${s.id}">無視</button></div>
+    </div>`).join("")}
+    <div class="row" style="gap:8px;margin-top:4px"><button class="btn" data-act="ai-apply-all" style="flex:1">すべて適用</button><button class="btn secondary" data-act="ai-ignore-all" style="flex:1">すべて無視</button></div>
+  ` : `<div class="empty tiny">誤字は見つかりませんでした</div>`);
+}
 function editorDirty(){ return !!S.draft && !!S.draftInit && JSON.stringify(S.draft)!==S.draftInit; }
 
 /* ============================ screens: connections / profile / user ============================ */
@@ -1182,22 +1235,57 @@ function handle(act, arg, el){
     case "editor-thumb": { const opts=["🍚","🥘","🍜","🥗","🍞","🍰","🍲","🥟"]; const d=S.draft;
       d.emoji = opts[(opts.indexOf(d.emoji)+1)%opts.length]; rerenderEditor(); return; }
     case "editor-serv": { S.draft.servings = Math.max(1,Math.min(99,S.draft.servings + (+arg))); rerenderEditor(); return; }
-    case "editor-addgroup": S.draft.groups.push({name:"",items:[{name:"",qty:null,unit:""}]}); rerenderEditor(); return;
+    case "editor-addgroup": S.draft.groups.push({name:"",items:[{name:"",qty:null,unit:""}]}); aiSug=[]; aiEpoch++; rerenderEditor(); return;
     case "editor-delgroup": {
       const gi=+arg;
       dialog({title:"グループを削除",body:"このグループと中の材料を削除します。",confirm:"削除",danger:true,
-        onConfirm:()=>{ S.draft.groups.splice(gi,1); closeOverlay(); rerenderEditor(); }});
+        onConfirm:()=>{ S.draft.groups.splice(gi,1); aiSug=[]; aiEpoch++; closeOverlay(); rerenderEditor(); }});
       return;
     }
-    case "editor-additem": S.draft.groups[+arg].items.push({name:"",qty:null,unit:""}); rerenderEditor(); return;
+    case "editor-additem": S.draft.groups[+arg].items.push({name:"",qty:null,unit:""}); aiSug=[]; aiEpoch++; rerenderEditor(); return;
     case "editor-delitem": { const [gi,ii]=arg.split(":"); S.draft.groups[+gi].items.splice(+ii,1);
-      if(!S.draft.groups[+gi].items.length) S.draft.groups[+gi].items.push({name:"",qty:null,unit:""}); rerenderEditor(); return; }
-    case "editor-addstep": S.draft.steps.push({text:""}); rerenderEditor(); return;
-    case "editor-delstep": S.draft.steps.splice(+arg,1); rerenderEditor(); return;
+      if(!S.draft.groups[+gi].items.length) S.draft.groups[+gi].items.push({name:"",qty:null,unit:""}); aiSug=[]; aiEpoch++; rerenderEditor(); return; }
+    case "editor-addstep": S.draft.steps.push({text:""}); aiSug=[]; aiEpoch++; rerenderEditor(); return;
+    case "editor-delstep": S.draft.steps.splice(+arg,1); aiSug=[]; aiEpoch++; rerenderEditor(); return;
     case "editor-stepimg": { const s=S.draft.steps[+arg]; s.img=!s.img; rerenderEditor(); toast(s.img?"画像を追加しました（モック）":"画像を削除しました"); return; }
     case "editor-public": S.draft.isPublic=!S.draft.isPublic; rerenderEditor(); return;
+    case "ai-mode": S.aiMode = arg; rerenderEditor(); return;   // 設計メモ用の一時トグル（永続化しない）
+    case "editor-ai-check": {
+      if(el) el.textContent = "✨ チェック中…";
+      const draftRef = S.draft;
+      const snap = JSON.parse(JSON.stringify(S.draft));   // 送信時点の内容を固定
+      const epochAtSend = aiEpoch;
+      const mode = S.aiMode || "ok";
+      setTimeout(()=>{   // 実際は POST /ai/proofread（非同期）
+        if(S.draft!==draftRef || aiEpoch!==epochAtSend) return;   // 構造が変わった → 結果を捨てる
+        if(!/^#\/(editor|create)\b/.test(location.hash)) return;  // 編集画面を離れた（破棄確認中も含む）→ 結果を捨てる
+        rerenderEditor();   // ボタン表示を戻す
+        if(mode==="429"){ toast("しばらくしてからお試しください"); return; }        // 429 レート制限
+        if(mode==="503"){ toast("チェックできませんでした"); return; }              // 503 障害 / タイムアウト
+        aiSug = aiProofread(snap);       // original は「送信時点の値」。以後の手編集は陳腐化ガードで弾く
+        if(aiSug.length) aiSheet(); else toast("誤字は見つかりませんでした");
+      }, 300);
+      return;
+    }
+    case "ai-apply": {
+      const okA = aiApply(arg);
+      rerenderEditor();
+      if(!okA){ toast("内容が変わりました。もう一度チェックしてください"); if(aiSug.length) aiSheet(); else closeOverlay(); return; }
+      if(aiSug.length) aiSheet(); else { closeOverlay(); toast("修正案を適用しました"); }
+      return;
+    }
+    case "ai-ignore": { aiSug = (aiSug||[]).filter(x=>x.id!==arg); if(aiSug.length) aiSheet(); else { closeOverlay(); toast("残りの修正案はありません"); } return; }
+    case "ai-apply-all": {
+      let skipped = 0;
+      (aiSug||[]).slice().forEach(x=>{ if(!aiApply(x.id)) skipped++; });
+      aiSug = [];
+      rerenderEditor(); closeOverlay();
+      toast(skipped ? `適用しました（内容が変わった ${skipped} 件は除外）` : "すべての修正案を適用しました");
+      return;
+    }
+    case "ai-ignore-all": { aiSug=[]; closeOverlay(); toast("修正案をすべて無視しました"); return; }
     case "editor-unlink": { const [gi,ii]=arg.split(":"); const it=S.draft.groups[+gi].items[+ii];
-      it.refRecipeId=null; it.refRecipeTitle=null; rerenderEditor(); return; }
+      it.refRecipeId=null; it.refRecipeTitle=null; aiSug=[]; aiEpoch++; rerenderEditor(); return; }
     case "editor-pick": {
       const mine = Object.values(S.recipes).filter(r=>r.author==="me" && r.id!==S.draft.id);
       sheet("レシピから選ぶ", `<input class="input" id="pickQ" placeholder="自分のレシピを検索" style="margin-bottom:8px">
@@ -1211,7 +1299,7 @@ function handle(act, arg, el){
       const [gi,ii,rid] = arg.split(":");
       const r = S.recipes[rid]; const it = S.draft.groups[+gi].items[+ii];
       it.name = truncate(r.title,60); it.refRecipeId = r.id; it.refRecipeTitle = r.title;
-      closeOverlay(); rerenderEditor(); toast("レシピをリンクしました"); return;
+      aiSug=[]; aiEpoch++; closeOverlay(); rerenderEditor(); toast("レシピをリンクしました"); return;
     }
     case "sheet-close": closeOverlay(); return;
     case "editor-save": {

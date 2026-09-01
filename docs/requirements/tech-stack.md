@@ -48,7 +48,7 @@
 
 ## バックエンド
 
-> 将来アプリ内に AI 認識機能（画像からの自動認識など）を取り入れる学習目的で、バックエンドは Python 構成とする（`resolve-tech-stack` スキルで確定）。
+> 将来アプリ内に AI 機能（レシピの誤字脱字チェック、画像からの自動認識など）を取り入れる学習目的で、バックエンドは Python 構成とする（`resolve-tech-stack` スキルで確定）。AI 連携の詳細は下記「AI 連携」節。
 
 | 項目 | 採用 | 備考 |
 | --- | --- | --- |
@@ -62,6 +62,20 @@
 | 認証 | FastAPI の Bearer 認証依存性 + JWT ライブラリ（未確定） | `Authorization: Bearer` を検証する独自の依存性で `token_version` を照合（[non-functional.md](non-functional.md)）。ログイン / リフレッシュのリクエストは [features/auth.md](features/auth.md) のとおり JSON（`{ email, password, rememberMe }` 等）で、標準 OAuth2 のフォーム形式は使わない。JWT ライブラリは PyJWT / Authlib から選定（python-jose はメンテ停滞のため回避）→ [todo.md](todo.md) |
 | パスワードハッシュ | Argon2id（`argon2-cffi`） | パスワード・秘密の質問の答えに使用 |
 | パッケージ管理 | venv + pip + requirements.txt | 従来方式で学習する。2026 年の主流は `uv` だが、まず仕組みを理解してから `uv` を試して比較する（→ [todo.md](todo.md)） |
+
+### AI 連携（レシピの誤字脱字チェック — Phase 11）
+
+**プラグ可能なプロバイダ**。`backend/app/ai/` に校正サービスの抽象（Protocol）を置き、`AI_PROVIDER` 環境変数で実装を切り替える。API 契約（`POST /api/v1/ai/proofread`、[features/ai-proofread.md](features/ai-proofread.md)）はプロバイダに依存しない。
+
+| 環境 | `AI_PROVIDER` | 実装 | 内容 |
+| --- | --- | --- | --- |
+| development | `local` | `LocalProofreadProvider` | ローカル推論。Docker Compose の Ollama コンテナ（量子化した小型モデル・CPU 可）または in-process の小型 GEC モデル。API 課金ゼロ・オフライン可。「Python でローカル推論を動かす」学習を兼ねる |
+| production | `anthropic` | `AnthropicProofreadProvider` | クラウド LLM API。第一候補 **Anthropic API（Claude Haiku）** ／ `anthropic` Python SDK。`ANTHROPIC_API_KEY` は本番のシークレット管理で注入。OpenAI（`openai` SDK）は差し替え可能な代替 |
+| test | `stub` | `StubProofreadProvider` | 決定的なダミー。モデル・API キー不要（CI に GPU も鍵も要らない） |
+
+- 具体モデル・dev の実行方式（compose サービス vs in-process）・モデルバージョンの最終ロックは Phase 11 着手前の spike（→ [todo.md](todo.md) #45）。
+- ローカルの小型モデルはクラウドより精度が落ちるため、同じ入力でも development と production で校正結果が変わりうる（「提案」機能なので許容。[non-functional.md](non-functional.md)）。
+- 秘密情報（`ANTHROPIC_API_KEY` 等）はグローバル CLAUDE.md「秘密情報の標準取り扱い要件」に従う（`.env` のみ、`.env.*.example` はプレースホルダ）。
 
 ## データベース
 
@@ -105,6 +119,7 @@
 
 - **TypeScript / React / Expo はカリキュラム指定の必須トラック**。期限に沿って進める。開発者は React も未経験。
 - **Kotlin Multiplatform / Compose は開発者が自分で試したい随時トラック**。必須トラックの進捗をブロックしない範囲で、自分のペースで実装する。
-- FastAPI / SQLModel / Python も未経験。Python を選んだ主目的は、**今後アプリ内に AI 認識機能を取り入れる**こと（Python の AI エコシステムを活かす学習）。
+- FastAPI / SQLModel / Python も未経験。Python を選んだ主目的は、**今後アプリ内に AI 機能を取り入れる**こと（Python の AI エコシステムを活かす学習）。
+- **AI 校正のローカル推論は Recipi の development 環境で動かして学習する**（transformers / Ollama / 量子化）。本番はクラウド API に切り替える（上記「AI 連携」）。`learning-handover` で事前学習資料を作るかは Phase 11 前に判断（非ブロッキング）。
 - パッケージ管理（backend）は学習のためまず従来方式（venv + pip + requirements.txt）で進め、後で `uv` に置き換えて比較する（→ [todo.md](todo.md)）。
 - `learning-handover` スキルで学習用引き渡し資料（React Native / Expo / FastAPI / SQLModel、随時トラック用に Compose Multiplatform）を作成するが、**学習完了を待たずに本実装を進める**（資料は後日学習用、非ブロッキング）。作成は実装着手前に別タスクで行う。

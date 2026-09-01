@@ -22,6 +22,7 @@
 | Phase 8 | 通知（`notifications`、通知タブのバッジ、通知一覧、4 種のイベント生成・fan-out） | [features/notification.md](features/notification.md) |
 | Phase 9 | アカウント削除（`DELETE /users/me`、CASCADE、確認 UI） | [features/profile.md](features/profile.md) |
 | Phase 10 | 仕上げ（バリデーション強化、エラー UX、空状態、カウント補正ジョブ、E2E 動作確認、デスクトップ配布パッケージ） | 全体 |
+| Phase 11（MVP 対象外） | **AI 誤字脱字チェック**。backend: `app/ai/` の校正サービス抽象 ＋ `local` / `anthropic` / `stub` 実装、`POST /ai/proofread`、レート制限・タイムアウト、`AI_PROVIDER` / `ANTHROPIC_API_KEY`、（dev の実行方式は spike）／ frontend-ts: レシピ編集画面の「AI で誤字脱字チェック」ボタン ＋ 修正案 UI ／ frontend-kotlin 随時。Phase 2（レシピ CRUD）に依存 | [features/ai-proofread.md](features/ai-proofread.md), [tech-stack.md](tech-stack.md), [screens/recipe-editor.md](screens/recipe-editor.md) |
 
 各フェーズのフロント Issue では、そのトラックの対象プラットフォームで動作確認する。**frontend-ts**: iOS / Android / Tauri デスクトップ（Windows・macOS）。**frontend-kotlin**（随時）: Android / iOS / Compose デスクトップ。
 
@@ -32,6 +33,8 @@
 - **候補 A: Phase 3 まで** — 登録・共有・画像。ソーシャル要素なし。最小
 - **候補 B: Phase 4 まで** — ＋ ホーム「全体」＋ 検索
 - **候補 C: Phase 7 まで** — ＋ フォロー / お気に入り / 感想（4 タブ + ソーシャル）
-- **候補 D: Phase 10 まで（全部）** — 通知・アカウント削除まで含む
+- **候補 D: Phase 10 まで** — 通知・アカウント削除まで含む
+
+- **Phase 11（AI 誤字脱字チェック）はどの候補でも MVP 対象外**。MVP リリース後の追加機能。
 
 → この決定は [todo.md](todo.md) の最上位項目。

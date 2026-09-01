@@ -30,6 +30,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | 感想（コメント） | [features/comment.md](features/comment.md) |
 | 通知（フォロー / お気に入り / 感想 / 新着） | [features/notification.md](features/notification.md) |
 | 画像アップロード（サムネイル / 手順画像 / アバター） | [features/image.md](features/image.md) |
+| AI 誤字脱字チェック（レシピ校正・Phase 11） | [features/ai-proofread.md](features/ai-proofread.md) |
 
 ### 横断ドキュメント
 

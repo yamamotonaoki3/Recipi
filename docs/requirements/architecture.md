@@ -9,6 +9,7 @@ Recipi/
 ├── settings.gradle.kts / build.gradle.kts   Kotlin フロントの Gradle モジュールを登録（backend / expoApp は含めない）
 ├── backend/        Python プロジェクト（FastAPI / Uvicorn）。Gradle 非登録
 │   ├── app/            ルーティング、SQLModel テーブル定義、Pydantic モデル、認証依存性
+│   │   └── ai/         AI 連携（校正サービスの抽象 ＋ local / anthropic / stub 実装。Phase 11）
 │   ├── alembic/        マイグレーション（シード含む）
 │   ├── requirements.txt / requirements-dev.txt
 │   ├── pyproject.toml  ツール設定（ruff 等）、requires-python = ">=3.14,<3.15"
@@ -65,6 +66,7 @@ Recipi/
 - `app/` に FastAPI アプリ。DB アクセスは SQLModel（SQLAlchemy 2.0）、ドライバは psycopg 3、接続は `postgresql+psycopg://`。
 - スキーマ変更は Alembic マイグレーションで管理し、`units` などのシードデータも Alembic で投入する。SQLModel のモデル定義で表現できない DB 制約（複合外部キー・部分インデックス・`CHECK`・トリガー）は手書きマイグレーションで補う（[data-model.md](data-model.md)）。
 - ローカル実行は Docker Compose の `api` サービス（Uvicorn `--reload`）。本番の ASGI 実行構成は未定（→ [todo.md](todo.md)）。
+- **AI 連携（`app/ai/`、Phase 11）**: 校正サービスの抽象（Protocol）＋ 実装（`local` / `anthropic` / `stub`）。`AI_PROVIDER` 環境変数で選択（[tech-stack.md](tech-stack.md) / [features/ai-proofread.md](features/ai-proofread.md)）。`api` サービスには `AI_PROVIDER` と（production のみ）`ANTHROPIC_API_KEY` を環境変数で渡す（`docker-compose.yml` は `${...}` 参照、実値は `.env`）。dev のローカル推論用サービス（例: `ollama`）を compose に追加するかは Phase 11 の spike（→ [todo.md](todo.md)）。将来の他の AI 機能も同じ `app/ai/` と `/api/v1/ai/` 名前空間に置く。
 
 ## ローカル実行環境（Docker Compose）
 
@@ -72,15 +74,16 @@ Recipi/
 
 | サービス | 役割 |
 | --- | --- |
-| `api` | FastAPI（Uvicorn）。backend |
+| `api` | FastAPI（Uvicorn）。backend。`AI_PROVIDER` 等の環境変数を受け取る |
 | `postgres` | PostgreSQL |
 | `minio` | S3 互換オブジェクトストレージ（画像保存。詳細は [features/image.md](features/image.md)） |
+| `ollama`（Phase 11・要検討） | dev の AI 校正のローカル推論。追加するかは spike（→ [todo.md](todo.md)） |
 
 ## 秘密情報の扱い（グローバル CLAUDE.md「秘密情報の標準取り扱い要件」準拠）
 
-- DB 認証情報・JWT 署名鍵・ストレージ認証情報などの**実値は `.gitignore` 対象の `.env` にのみ置く**。
-- `docker-compose.yml` などコミット対象ファイルは環境変数展開（`${DB_PASSWORD}` など）で参照し、実値を埋め込まない。
-- 環境別の `.env.development.example` / `.env.test.example` / `.env.production.example` にプレースホルダのみを記載してコミットする（root CLAUDE.md「環境変数は開発 / テスト / 本番で分離」）。
+- DB 認証情報・JWT 署名鍵・ストレージ認証情報・**AI プロバイダの API キー（`ANTHROPIC_API_KEY` 等）**などの**実値は `.gitignore` 対象の `.env` にのみ置く**。
+- `docker-compose.yml` などコミット対象ファイルは環境変数展開（`${DB_PASSWORD}`・`${ANTHROPIC_API_KEY}` など）で参照し、実値を埋め込まない。
+- 環境別の `.env.development.example` / `.env.test.example` / `.env.production.example` にプレースホルダのみを記載してコミットする（root CLAUDE.md「環境変数は開発 / テスト / 本番で分離」）。AI 関連は `.env.development.example` に `AI_PROVIDER=local`、`.env.test.example` に `AI_PROVIDER=stub`、`.env.production.example` に `AI_PROVIDER=anthropic` / `ANTHROPIC_API_KEY=`（プレースホルダ）。
 - `root` / `password` / `admin` のような推測可能な値を使わない。
 - 詳細な運用は [non-functional.md](non-functional.md) のセキュリティ節も参照。
 
