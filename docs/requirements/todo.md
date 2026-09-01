@@ -4,9 +4,10 @@
 | --- | --- | --- | --- |
 | 1 | **MVP の線引き**（[roadmap.md](roadmap.md) の候補ラインから決定） | 最優先・本書レビュー後 | [roadmap.md](roadmap.md) |
 | 2 | 本番デプロイ先（Fly.io / Render / AWS 等）の選定 | Phase 10 前後 | [architecture.md](architecture.md) |
-| 3 | iOS ビルドに必要な macOS / Xcode 環境の有無・調達 | Phase 0 | [tech-stack.md](tech-stack.md) |
+| 3 | iOS ビルド環境。**TS トラック**: Windows ではローカルビルド不可 → EAS Build（クラウド）で iOS を扱う（Apple Developer Program $99/年が必要になる時期を検討）。**Kotlin トラック**（随時）: `iosApp` のビルド・実行に Mac + Xcode が必須 | Phase 0 / iOS 着手時 | [tech-stack.md](tech-stack.md) |
 | 4 | 画像ピッカー / カメラ / トリミングの具体選定。**TS トラック**: `expo-image-picker` / `expo-camera` / `expo-image-manipulator`、デスクトップ（Tauri）は getUserMedia / ファイル選択。**Kotlin トラック**: KMP 対応ライブラリ | Phase 3 / Phase 5 | [features/image.md](features/image.md) |
-| 5 | PostgreSQL メジャーバージョン・フロント / バックの各ライブラリのバージョン確定（`resolve-tech-stack`）、このマシンでの利用可否検査。Python は 3.14.7 で固定（`.python-version` = 3.14.7 / `requires-python = ">=3.14,<3.15"` / `python:3.14.7-slim`）、backend の C 拡張ライブラリの Windows wheel は 3.14.7 で確認済み。**TS トラック**: Node / Expo SDK / React Native / Tauri のバージョン確定とこのマシンでの利用可否（Node・Rust ツールチェーン） | 実装着手前 | [tech-stack.md](tech-stack.md) |
+| 5 | 各ツールのバージョン確定（`resolve-tech-stack`）。**確定済み（環境チェック 2026-09-01）**: Python 3.14.7（`.python-version` / `requires-python = ">=3.14,<3.15"` / `python:3.14.7-slim`、wheel 確認済み）／ Node.js 24.x ／ Expo SDK 57・React Native 0.86 ／ npm ／ Tauri 2（最低 Rust 1.77.2）／ Docker 29 + Compose v5（稼働中）／ Gradle 9.5。**未定**: PostgreSQL メジャーバージョン、frontend-kotlin の Android ビルド用 JDK（まず 25 のまま試し AGP 対応を着手時に確認） | 実装着手前 | [tech-stack.md](tech-stack.md) |
+| 49 | **このマシンに未導入で Phase 0 前にユーザーがインストールするもの**: (1) Rust ツールチェーン（rustup/cargo、Tauri 必須）(2) Microsoft C++ Build Tools（Tauri の Windows ビルド必須）(3) Android SDK / Android Studio（両トラックの Android ビルド必須、`ANDROID_HOME` 設定）。iOS は #3 参照。導入後に `resolve-tech-stack` の利用可否検査を再実行 | Phase 0 前 | [tech-stack.md](tech-stack.md) |
 | 6 | Android minSdk / iOS 対応下限の確定 | Phase 0 | [non-functional.md](non-functional.md) |
 | 7 | フロントの状態管理 / DI / ナビゲーションライブラリの選定。**TS**: クライアント状態ライブラリの選定（Zustand / Jotai）、TanStack Query（採用済み）のキャッシュ / 無効化方針、Expo Router の運用。**Kotlin**: ViewModel / Koin / Compose Navigation 等 | Phase 0 | [tech-stack.md](tech-stack.md) |
 | 8 | S3 互換ストレージの本番サービス選定（R2 / S3 等）、署名付き URL か公開バケットか | Phase 3〜10 | [features/image.md](features/image.md) |
@@ -56,6 +57,6 @@
 - 画像カルーセル — 廃止（サムネイル + 手順画像に統合）
 - プッシュ通知・メール通知 — 対象外（アプリ内通知のみ）
 - ブラウザ（Web）単体配信 — 当面対象外（デスクトップアプリで対応）
-- 技術スタック — フロント: **2 トラック**。(A) TypeScript + React Native + Expo（必須。Desktop は Tauri 2）、(B) Kotlin Multiplatform + Compose（随時・非ブロッキング）。バックエンド: Python + FastAPI + SQLModel + Alembic（AI 認識機能の学習目的）。いずれも 1 本の FastAPI を OpenAPI 契約で叩く。型共有は OpenAPI 3.1 →（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）。`resolve-tech-stack` で確認済み
+- 技術スタック — フロント: **2 トラック**。(A) TypeScript + React Native + **Expo SDK 57 / RN 0.86** + Node 24（必須。Desktop は Tauri 2）、(B) Kotlin Multiplatform + Compose（随時・非ブロッキング）。バックエンド: Python 3.14.7 + FastAPI + SQLModel + Alembic（AI 認識機能の学習目的）。いずれも 1 本の FastAPI を OpenAPI 契約で叩く。型共有は OpenAPI 3.1 →（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）。`resolve-tech-stack` で確認済み（環境チェック 2026-09-01）
 
 > このリストはレビューで随時追加する。
