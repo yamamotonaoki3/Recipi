@@ -26,6 +26,22 @@
 
 各フェーズのフロント Issue では、そのトラックの対象プラットフォームで動作確認する。**frontend-ts**: iOS / Android / Tauri デスクトップ（Windows・macOS）。**frontend-kotlin**（随時）: Android / iOS / Compose デスクトップ。
 
+## 各 Phase の非同期処理・定期バッチ
+
+処理方式の全体像は [processing-model.md](processing-model.md)。Phase ごとに追加する非同期後処理（`BackgroundTasks`）・定期バッチ（cron 起動の管理 CLI コマンド）:
+
+| Phase | 追加する処理 |
+| --- | --- |
+| Phase 0（backend） | 管理 CLI コマンドの土台（`backend/` にジョブのエントリポイント）、cron / コンテナスケジューラでの起動方法を scaffold に含める |
+| Phase 3（画像） | ストレージ削除キュー（`pending_storage_deletions` 等）＋ ストレージ削除ジョブ、一時アップロード GC の初版 |
+| Phase 5（フォロー） | `follows` 分のカウント列補正ジョブ |
+| Phase 6（お気に入り） | `favorites` 分のカウント列補正ジョブ |
+| Phase 7（感想） | `recipe_comments` 分のカウント列補正ジョブ、感想画像の削除キュー登録（同一トランザクション） |
+| Phase 8（通知） | `notifications` ＋ `notification_outbox` テーブル導入。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）を発火元（フォロー / お気に入り / 感想の書き込み）と**同一トランザクション**に組み込む。`followee_new_recipe` は outbox 経由で **`BackgroundTasks`** が fan-out ＋ **未処理 outbox の定期スイープ**（取りこぼし回収）。古い通知・処理済み outbox の掃除ジョブ。※ Phase 5〜7 では通知行を作らない（[processing-model.md](processing-model.md) §6 の通知列は Phase 8 で有効化） |
+| Phase 9（アカウント削除） | 削除トランザクション内でのカウント補正 ＋ 画像の削除エンキュー |
+| Phase 10（仕上げ） | ジョブ実行基盤の仕上げ（cron 設定・多重起動防止・監視）、期限切れリフレッシュトークン掃除、専用ジョブキュー（arq 等）の要否を再検討 |
+| Phase 11（AI・MVP 対象外） | `ai_usage` の日次リセット / 集計 |
+
 ## MVP 候補ライン（未確定）
 
 初回リリースをどこで切るかの候補。ユーザーと決定する。

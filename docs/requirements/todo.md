@@ -15,7 +15,7 @@
 | 9b | ホームの検索窓: スクロール時の挙動（完全固定 / 縮小）、確定タイミング（Enter のみ / 入力停止でインクリメンタル）、検索履歴・サジェスト（将来） | Phase 4 | [screens/home.md](screens/home.md), [features/search.md](features/search.md) |
 | 9c | ボトムナビ / レールのレイアウトの見た目（5 destination = ホーム / 履歴 / ＋ / 通知 / マイページ。「＋」は中央 3 番目・目立つスタイル） | Phase 4 | [screens/navigation.md](screens/navigation.md), [screens/components.md](screens/components.md) |
 | 9d | 閲覧履歴: ユーザーあたりの保持件数の上限と超過分の削除方式（挿入時トリミング / 定期ジョブ）、履歴からの個別削除（スワイプ削除等）を入れるか、記録トリガーは「詳細を開いたときのみ」で確定 | Phase 4 | [features/view-history.md](features/view-history.md) |
-| 10 | カウント列キャッシュ: 補正ジョブの実行頻度、サーバー側リトライの上限回数。アカウント削除時は削除トランザクション内で生き残る他ユーザー・他レシピのカウントを減算する（確定）。実装方法の詳細は Phase で詰める | Phase 5〜 | [non-functional.md](non-functional.md), [features/profile.md](features/profile.md), [features/follow.md](features/follow.md) |
+| 10 | カウント列キャッシュ: 補正ジョブの実行頻度、サーバー側リトライの上限回数。補正ジョブは cron 起動の管理 CLI コマンド（MVP。[processing-model.md](processing-model.md) §8）。アカウント削除時は削除トランザクション内で生き残る他ユーザー・他レシピのカウントを減算する（確定）。実装方法の詳細は Phase で詰める | Phase 5〜 | [non-functional.md](non-functional.md), [processing-model.md](processing-model.md), [features/profile.md](features/profile.md), [features/follow.md](features/follow.md) |
 | 11 | 自分の非公開レシピを自分でお気に入り → **可（確定）**。実装で漏れないよう受け入れ基準化 | Phase 6 | [features/favorite.md](features/favorite.md) |
 | 12 | 感想: 退会ユーザーの感想の扱い（現状 CASCADE 削除。「退会したユーザー」表示で残す案の是非） | Phase 7 | [features/comment.md](features/comment.md) |
 | 13 | 感想: レシピ投稿者による削除時に投稿者へ通知するか、非表示 / 完全削除どちらか | Phase 7 | [features/comment.md](features/comment.md) |
@@ -23,7 +23,7 @@
 | 15 | アバターのデフォルト画像・トリミング UI の仕様、一時アップロード画像の GC 猶予時間 | Phase 3 / Phase 5 | [features/profile.md](features/profile.md), [features/image.md](features/image.md) |
 | 16 | 認証: パスワード強度ルール、秘密の答えの正規化仕様、リセットの試行回数ロック閾値 / ロック時間、秘密の質問方式で未登録メールに決定的なダミー質問文を返すデコイ方式（メールのハッシュから固定候補集合を選ぶ）の採否（完全な存在秘匿は将来のメールベース方式で対応）、リフレッシュトークン有効期限（保持 ON / OFF での差）、応答取りこぼし時の再ログインが問題になる場合のリクエストバインド冪等キー（クライアント生成の nonce）方式の採否 | Phase 1 | [features/auth.md](features/auth.md), [data-model.md](data-model.md), [non-functional.md](non-functional.md) |
 | 17 | 秘密の質問・答えの後からの変更手段（プロフィール編集に入れるか） | MVP 完了後 | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md) |
-| 18 | 通知: fan-out の実装方式（同期 INSERT / 非同期ジョブ / キュー）、大量フォロワー時の性能、通知の保持期間・自動削除、まとめ表示、非公開化での通知取り消し | Phase 8 | [features/notification.md](features/notification.md) |
+| 18 | 通知: fan-out（`followee_new_recipe`）は**公開レシピ作成トランザクション内で `notification_outbox` に 1 行 → コミット後に `BackgroundTasks` が配布 → 落ちた分は定期スイープが回収**に確定（[processing-model.md](processing-model.md) §3・§7・§9）。単一行の通知は発火元と同一トランザクション。**残**: `notifications` / `notification_outbox` の物理スキーマと重複防止の一意制約の形（Phase 8）、outbox スイープの間隔、通知・処理済み outbox の保持期間、大量フォロワー時の性能測定と専用ジョブキュー（arq / Celery + Redis）導入の判断（Phase 10 以降）、まとめ表示、非公開化での通知取り消し | Phase 8 / Phase 10 | [features/notification.md](features/notification.md), [processing-model.md](processing-model.md) |
 | 19 | `PUT /recipes` 時の画像キー省略 / `null` の意味は定義済み。サムネイルは省略 = 変更なし、`null` = 削除。全入れ替えの手順は既存キー再送 = 維持、省略 / `null` = 画像なし | 定義済み（Phase 3 で実装） | [features/recipe.md](features/recipe.md), [features/image.md](features/image.md) |
 | 21 | 材料・手順の並べ替え UI（ドラッグ / 上下ボタン）の確定 | Phase 2 | [features/recipe.md](features/recipe.md) |
 | 22 | メールアドレス変更フロー（再確認メール） | MVP 完了後 | [features/auth.md](features/auth.md) |
@@ -36,7 +36,7 @@
 | 29 | `prefix` 単位をユーザーが増やせるようにするか、`カップ` の配置（`1 カップ` / `カップ 1`）、単位と数量の間のスペース有無 | Phase 2 | [features/unit.md](features/unit.md) |
 | 30 | 画像のみ（本文なし）の感想を許すか。`PATCH /comments` の `imageKey` 省略 / `null` の意味は定義済み | Phase 7 | [features/comment.md](features/comment.md), [features/image.md](features/image.md) |
 | 31 | デスクトップアプリの配布方法・コード署名（署名なしは OS 警告が出る。証明書は有料）。課題提出時は署名不要 | Phase 10 | [tech-stack.md](tech-stack.md) |
-| 32 | 一時アップロード画像は所有者と参照先を保持し、本人所有かつ「未使用または更新対象自身に紐付け済み」を許可する要件まで定義済み。`uploads` テーブル等の具体的な物理スキーマを Phase 3 で確定 | 定義済み（物理スキーマは Phase 3） | [data-model.md](data-model.md), [features/image.md](features/image.md) |
+| 32 | 一時アップロード画像は所有者と参照先を保持し、本人所有かつ「未使用または更新対象自身に紐付け済み」を許可する要件まで定義済み。`uploads` テーブルと**ストレージ削除キュー**（`pending_storage_deletions` 等。[processing-model.md](processing-model.md) §9）の具体的な物理スキーマを Phase 3 で確定 | 定義済み（物理スキーマは Phase 3） | [data-model.md](data-model.md), [processing-model.md](processing-model.md), [features/image.md](features/image.md) |
 | 33 | 外部ディープリンク（URL スキーム / ユニバーサルリンク）の採否 | MVP 完了後 | [screens/navigation.md](screens/navigation.md) |
 | 34 | 通知バッジの更新方式（他 destination 滞在中に `unread-count` をポーリングするか、間隔） | Phase 8 | [screens/notifications.md](screens/notifications.md) |
 | 35 | レシピ作成画面をデスクトップでフルスクリーンダイアログにするか、大きめダイアログにするか | Phase 2 | [screens/recipe-editor.md](screens/recipe-editor.md) |
@@ -54,6 +54,7 @@
 | 44 | 構造化ログの実現手段（標準 `logging` の JSON フォーマッタ / `structlog`）、リクエスト ID の付与方式（ミドルウェア） | Phase 0 / Phase 10 | [non-functional.md](non-functional.md) |
 | 45 | **AI 誤字脱字チェック（Phase 11）の spike**: プロバイダ構成は確定（`AI_PROVIDER` = local(dev) / anthropic(prod・Claude Haiku 第一候補) / stub(test)、`/api/v1/ai/` 名前空間）。**未確定**: dev のローカルモデル選定（Ollama モデル / HuggingFace 日本語 GEC / llama-cpp）と実行方式（compose の `ollama` サービス vs in-process）とリソース要件、production のモデル・モデルバージョン、校正プロンプト設計・`note` の要否、レート制限の閾値・`ai_usage` テーブルの要否・コスト予算、対象フィールドの追加検討（タイトル・説明・手順本文・材料名は確定。材料グループ名を含めるかは未確定）、ストリーミング応答・キャッシュの要否、dev / prod で校正結果が変わることの許容範囲 | Phase 11 着手前 | [features/ai-proofread.md](features/ai-proofread.md), [tech-stack.md](tech-stack.md) |
 | 45b | 他の AI 機能（レシピ画像からの材料・料理名認識など）。同じ `/api/v1/ai/` 名前空間・`app/ai/` に載せる。推論方式・コスト・レイテンシ | MVP 完了後 | [tech-stack.md](tech-stack.md), [overview.md](overview.md) |
+| 50 | **処理方式の実行基盤**（[processing-model.md](processing-model.md)）: 即時後処理は FastAPI `BackgroundTasks`・定期処理は cron 起動の管理 CLI コマンドで確定。**未定**: 本番のスケジューラの具体（OS cron / コンテナオーケストレータの CronJob 等）と多重起動防止、各定期バッチ（カウント補正 / 一時アップロード GC / ストレージ削除 / 期限切れリフレッシュトークン掃除 / 古い通知掃除 / 閲覧履歴トリミング）の実行頻度、期限切れリフレッシュトークン・通知の保持期間、専用ジョブキュー（arq / Celery + Redis）へ移行する判断基準（大量フォロワー時の fan-out 性能測定） | Phase 0（土台）/ Phase 3・8（各ジョブ）/ Phase 10（仕上げ・キュー再検討） | [processing-model.md](processing-model.md), [architecture.md](architecture.md), [non-functional.md](non-functional.md) |
 
 ## 決定済み（対象外で確定）
 

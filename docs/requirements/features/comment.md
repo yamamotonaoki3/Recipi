@@ -45,7 +45,7 @@
 
 - index(`recipe_id`, `created_at` DESC)
 - **感想数はカウント列キャッシュ**（`recipes.comment_count`。NOT NULL DEFAULT 0, CHECK >= 0。[../data-model.md](../data-model.md)）。`GET /recipes/{id}` のレスポンスの `commentCount` はこの列を返す。
-- 感想の投稿 / 削除は 1 トランザクションで `recipe_comments` の INSERT / DELETE ＋ `recipes.comment_count` の原子的増減を行う（共通ルールは [../non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」）。編集ではカウントは変わらない。
+- 感想の投稿 / 削除は 1 トランザクションで `recipe_comments` の INSERT / DELETE ＋ `recipes.comment_count` の原子的増減を行う（共通ルールは [../non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」、処理方式全体は [../processing-model.md](../processing-model.md)）。新規投稿時の `recipe_commented` 通知は同一 Tx で作る。編集ではカウントは変わらない。感想画像の実削除は削除キュー経由の定期バッチ。
 
 ## 5. API
 

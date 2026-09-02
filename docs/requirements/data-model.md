@@ -152,10 +152,17 @@ erDiagram
 | `refresh_tokens` | `id` PK / `user_id` FK → `users.id`（ON DELETE CASCADE）/ `token_hash` UNIQUE NOT NULL / `chain_id` NOT NULL / `expires_at` NOT NULL / `revoked_at` NULL 可 / index(`user_id`), index(`chain_id`) | [features/auth.md](features/auth.md) |
 | `notifications` | `id` PK / `user_id` FK → `users.id`（ON DELETE CASCADE、受信者）/ `actor_id` FK → `users.id`（ON DELETE CASCADE、行為者）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）NULL 可 / `comment_id` FK → `recipe_comments.id`（ON DELETE CASCADE）NULL 可 / `read_at` NULL 可 / index(`user_id`, `created_at` DESC) / 部分 index(`user_id`) WHERE `read_at IS NULL` | [features/notification.md](features/notification.md) |
 | `recipe_views` | PK(`user_id`, `recipe_id`)（レシピごとに 1 行）/ `user_id` FK → `users.id`（ON DELETE CASCADE）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `viewed_at` timestamptz NOT NULL / index(`user_id`, `viewed_at` DESC) / 再閲覧は `INSERT ... ON CONFLICT (user_id, recipe_id) DO UPDATE SET viewed_at = now()`（upsert）/ カウント列キャッシュには関与しない | [features/view-history.md](features/view-history.md) |
+| `notification_outbox`（Phase 8） | `id` PK / `event`（`followee_new_recipe`）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `author_id` FK → `users.id`（ON DELETE CASCADE）/ `created_at` / `processed_at` NULL 可（NULL = 未処理）/ index(`processed_at`) / 公開レシピ作成トランザクション内で 1 行 INSERT、`BackgroundTasks` ＋ 定期スイープが処理（[processing-model.md](processing-model.md) §7・§9） | [features/notification.md](features/notification.md) |
 
 > `recipe_images` テーブルは廃止（画像は `recipes.thumbnail_*` と `steps.image_*` に統合）。
 
-> 一時アップロードは所有者と使用状態を保持する（例: `uploads` テーブル、またはキーに対応する `user_id` と `consumed` フラグ）。具体スキーマは実装時に確定する（→ [todo.md](todo.md)）。
+> 一時アップロードは所有者と使用状態を保持する（例: `uploads` テーブル。状態 `pending` → `stored` → 消費、`user_id`）。キーはアップロード前に行 INSERT で確定し、オブジェクトだけが存在して行が無い状態を作らない（[processing-model.md](processing-model.md) §9）。具体スキーマは Phase 3 で確定（→ [todo.md](todo.md) #32）。
+
+> **ストレージ削除キュー**: 参照から外れたオブジェクトキー（差し替え / 削除された画像）をためて定期バッチで実削除するためのキュー（`pending_storage_deletions` 仮、または `uploads` に状態列を追加）。**キューへの登録は参照を外す書き込みと同一トランザクション**、S3 / MinIO への実 DELETE だけが定期バッチ（[processing-model.md](processing-model.md) §5・§9 / [todo.md](todo.md) #32）。
+
+> **通知 fan-out の outbox**: `followee_new_recipe` の配布は、公開レシピ作成トランザクション内で `notification_outbox` に 1 行書き（発火とアトミック）、コミット後に `BackgroundTasks` が配布、落ちた分を定期スイープが回収する（Phase 8。[processing-model.md](processing-model.md) §7・§9、[features/notification.md](features/notification.md)）。
+
+> **定期バッチが掃除するもの**: 期限切れの `refresh_tokens`、保持期間を超えた既読 `notifications` と処理済み `notification_outbox`、上限超過の `recipe_views`。方針は [processing-model.md](processing-model.md) §8、頻度・保持期間は [todo.md](todo.md)。
 
 ## 共通方針
 
@@ -173,8 +180,8 @@ erDiagram
 ## カウント列キャッシュ（非正規化カウント）
 
 - 対象列: `users.follower_count` / `users.following_count` / `recipes.favorite_count` / `recipes.comment_count`。
-- これらは集計クエリの代わりに保持する非正規化カラム。増減の**運用ルール（トランザクション方針）は [non-functional.md](non-functional.md) を正とする**（このファイルは列の定義のみ）。
-- 実数との整合性を担保する補正ジョブを定期実行する。
+- これらは集計クエリの代わりに保持する非正規化カラム。増減の**運用ルール（トランザクション方針）は [non-functional.md](non-functional.md) を正とする**（このファイルは列の定義のみ）。処理方式全体は [processing-model.md](processing-model.md)。
+- 実数との整合性を担保する補正ジョブを定期実行する（cron 起動の管理 CLI コマンド。[processing-model.md](processing-model.md) §8）。
 
 ## アカウント削除時の CASCADE（`DELETE FROM users WHERE id = :me`）
 
@@ -187,7 +194,7 @@ erDiagram
 - `refresh_tokens`（`user_id` = me）
 - `notifications`（`user_id` = me と `actor_id` = me）
 - `recipe_views`（`user_id` = me。加えて、自分のレシピが消えることで `recipe_id` 側の CASCADE でも他ユーザーの `recipe_views` 行が消える）
-- ストレージ上の画像（サムネ・手順画像・感想画像・アバター）はアプリ側で削除ジョブ対象にする。
+- ストレージ上の画像（サムネ・手順画像・感想画像・アバター）は、**CASCADE 削除の前に**そのキーを集めて削除キューに INSERT する（行が消えた後ではキーを取り出せない。[processing-model.md](processing-model.md) §6・§9）。実削除は定期バッチ。
 - アカウント削除は**単一のアプリケーショントランザクション**で行う。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（実装方法の詳細は [todo.md](todo.md) #10）。
 - 削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。
 - 詳細は [features/profile.md](features/profile.md)。

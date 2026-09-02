@@ -61,4 +61,14 @@
 | `shared` モジュール | **Kotlin トラック専用**の KMP 共有モジュール（`commonMain`）。フロント内部の共通ロジック（単位の表示整形 等）と、OpenAPI から生成した Kotlin API クライアント / DTO を置く。TypeScript トラックは参照せず、`expoApp` 内に同等物を持つ。[architecture.md](architecture.md) 参照 |
 | AI 誤字脱字チェック | レシピ作成 / 編集画面でタイトル・説明・手順・材料名の誤字脱字を AI がチェックし修正案を出す機能（Phase 11・MVP 対象外）。自動適用しない。バックエンドの校正サービスは `AI_PROVIDER` で切替（dev = ローカル推論 / prod = クラウド LLM API / test = スタブ）。[features/ai-proofread.md](features/ai-proofread.md) 参照 |
 | `AI_PROVIDER` | バックエンドの AI 校正サービスの実装を切り替える環境変数。`local`（development・ローカル推論）/ `anthropic`（production・クラウド LLM API）/ `stub`（test・ダミー）。API 契約はプロバイダに依存しない |
+| 処理方式 | どの処理を 1 トランザクションにまとめ、どれを同期 / 非同期後処理 / 定期バッチにするかの設計。機能横断の正は [processing-model.md](processing-model.md) |
+| トランザクション | 複数の DB 書き込みを「全部成功」か「全部ロールバック」にまとめる仕組み。カウント列と関連行の食い違いを防ぐ。[processing-model.md](processing-model.md) §2 |
+| 行ロック（`SELECT ... FOR UPDATE`） | 更新前に対象行を予約し、同時操作を順番待ちさせる操作。カウントの更新取りこぼしとデッドロックを防ぐ（id 昇順でロック）。[processing-model.md](processing-model.md) §2 |
+| 冪等（idempotent） | 同じ操作を 2 回以上実行しても結果が変わらない性質。通信リトライで壊れないようにする。フォロー / お気に入り / 閲覧記録が該当 |
+| 非同期後処理 / `BackgroundTasks` | HTTP レスポンスを返した後に同じサーバープロセスで実行する副作用（FastAPI の機能）。失われても整合性を壊さないものだけに使う。[processing-model.md](processing-model.md) §2・§7 |
+| fan-out（ファンアウト） | 1 つの出来事を関係する大勢に配ること。公開レシピ 1 件の投稿でフォロワー全員に通知行を作る処理。重いので非同期後処理で実行 |
+| 定期バッチ / cron | 決めた間隔でコマンドを自動実行する仕組み。カウント列の数え直し・一時アップロード GC・ストレージ削除・古いデータの掃除に使う。[processing-model.md](processing-model.md) §8 |
+| 多層防御 | 1 つの対策が漏れても次で拾えるよう守りを重ねること。カウントはトランザクションで増減し（第 1 層）、ズレたら補正バッチで直す（第 2 層） |
+| 削除キュー（`pending_storage_deletions`） | あとで消す画像オブジェクトキーの ToDo リスト。ストレージ障害を削除 API に波及させないため、いったんキューに積んで定期バッチでまとめて消す。[processing-model.md](processing-model.md) §9 |
+| ジョブキュー（arq / Celery + Redis） | やることをキューに積み専用ワーカーが実行する仕組み。再試行・可視化に強いが Redis と運用コストが増える。Recipi は MVP では使わず Phase 10 以降に再検討 |
 | MVP | 初回リリースに含める機能範囲。未確定。[roadmap.md](roadmap.md) 参照 |

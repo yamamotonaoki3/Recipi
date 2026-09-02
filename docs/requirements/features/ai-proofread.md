@@ -78,7 +78,7 @@
 - **503**（`AI_UNAVAILABLE`）: プロバイダ障害・タイムアウト。統一エラー形式（[api.md](../api.md)）。
 - タイムアウト: サーバー側 15 秒 / クライアント側 20 秒（目安。実装時に調整）。
 
-## 5. 非機能（[non-functional.md](../non-functional.md) の「AI エンドポイント」節を正とする）
+## 5. 非機能（[non-functional.md](../non-functional.md) の「AI エンドポイント」節を正とする。処理方式は [processing-model.md](../processing-model.md) §6・§7）
 
 - 認証必須。
 - レート制限（コスト・濫用対策）。
