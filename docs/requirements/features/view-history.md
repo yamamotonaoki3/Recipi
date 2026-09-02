@@ -16,7 +16,7 @@
 
 ## 3. 振る舞い・ルール
 
-- **記録のトリガー**: [レシピ詳細](../screens/recipe-detail.md)を開いて `GET /recipes/{id}` の取得に成功したあと、クライアントが `POST /recipes/{id}/view` を**非同期で**呼ぶ。失敗しても画面には影響しない（履歴に載らないだけ）。一覧カードのタップ自体では記録しない（詳細を実際に開いたときだけ）。
+- **記録のトリガー**: [レシピ詳細](../screens/recipe-detail.md)を開いて `GET /recipes/{id}` の取得に成功したあと、クライアントが `POST /recipes/{id}/view` を**非同期で**呼ぶ（`GET /recipes/{id}` 自体に副作用を持たせない。[../processing-model.md](../processing-model.md) §6・§10）。失敗しても画面には影響しない（履歴に載らないだけ）。一覧カードのタップ自体では記録しない（詳細を実際に開いたときだけ）。
 - **重複の集約**: 同じレシピを何度見ても `recipe_views` は 1 行。`viewed_at` が最後に見た時刻に更新される（upsert）。一覧では常に「最後に見た時刻」の降順。
 - **可視性フィルタ**: `GET /users/me/history` は `is_public = true OR author = me` のレシピだけを返す（他人のレシピが後から非公開化された場合は履歴一覧から外れる。[../non-functional.md](../non-functional.md) の可視性ルール。お気に入りタブと同じ考え方）。`recipe_views` の行自体は残す。
 - **削除**: レシピが削除されると `recipe_views` 行は `ON DELETE CASCADE` で消える。アカウント削除でも `user_id` 側の CASCADE で消える（[../data-model.md](../data-model.md)）。

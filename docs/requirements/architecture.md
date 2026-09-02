@@ -68,6 +68,15 @@ Recipi/
 - ローカル実行は Docker Compose の `api` サービス（Uvicorn `--reload`）。本番の ASGI 実行構成は未定（→ [todo.md](todo.md)）。
 - **AI 連携（`app/ai/`、Phase 11）**: 校正サービスの抽象（Protocol）＋ 実装（`local` / `anthropic` / `stub`）。`AI_PROVIDER` 環境変数で選択（[tech-stack.md](tech-stack.md) / [features/ai-proofread.md](features/ai-proofread.md)）。`api` サービスには `AI_PROVIDER` と（production のみ）`ANTHROPIC_API_KEY` を環境変数で渡す（`docker-compose.yml` は `${...}` 参照、実値は `.env`）。dev のローカル推論用サービス（例: `ollama`）を compose に追加するかは Phase 11 の spike（→ [todo.md](todo.md)）。将来の他の AI 機能も同じ `app/ai/` と `/api/v1/ai/` 名前空間に置く。
 
+### 処理方式（トランザクション / 同期 / 非同期 / バッチ）
+
+詳細は [non-functional.md](non-functional.md) と、機能横断の正である [processing-model.md](processing-model.md)。方針:
+
+- **1 リクエスト = 1 DB トランザクション**を原則とし、外部 I/O（ストレージ・AI プロバイダ）はトランザクション外に置く。
+- レスポンス後の即時の後処理（通知 fan-out）は **FastAPI `BackgroundTasks`**（プロセス内・ブローカー無し）。失われても整合性を壊さないものだけを載せる。削除キューへの行 INSERT や単一行の通知は発火元と同一トランザクション（DB だけで完結し取りこぼしを避けたいため）。
+- 定期処理（カウント列補正・一時アップロード GC・ストレージ削除ジョブ・期限切れトークン / 古い通知の掃除）は **`backend/` の管理用 CLI コマンドを cron / コンテナスケジューラで起動**する。`api` サービスに常駐スレッドは持たせない。Docker Compose への新サービス追加は無し（スケジューラはホスト / オーケストレータ側）。
+- 専用ジョブキュー（arq / Celery + Redis）は Phase 10 以降に必要性を測って再検討（[processing-model.md](processing-model.md) §3）。
+
 ## ローカル実行環境（Docker Compose）
 
 `infra/docker-compose.yml` に以下のサービスを定義する。

@@ -24,7 +24,7 @@
 
 ### お気に入り数の更新（トランザクション）
 
-共通ルールは [../non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」。
+共通ルールは [../non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」。処理方式全体は [../processing-model.md](../processing-model.md)。`recipe_favorited` 通知（他人のレシピのとき）はこのトランザクションと同一 Tx で作る。
 
 ```sql
 -- 登録

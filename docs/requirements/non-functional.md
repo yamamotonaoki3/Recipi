@@ -49,10 +49,12 @@
 
 ## パフォーマンス
 
+> 処理方式（トランザクション境界・同期 / 非同期後処理 / 定期バッチ）の全体像は [processing-model.md](processing-model.md) を正とする。
+
 - レシピ一覧 / フィード API のレスポンスは通常時 300ms 以内（ローカル環境目安）。
 - 一覧取得時、`isFollowing` / `isFavorited` は**まとめて取得**し N+1 クエリを避ける。各種カウント（`favoriteCount` / `commentCount` / フォロー数 / フォロワー数）は**カウント列キャッシュ**（下記）から読むだけで済む。
 - 画像: サムネイル 1 枚・手順画像は手順 1 行につき 1 枚・感想画像は感想 1 件につき 1 枚・アバター 1 枚。いずれも 1 枚あたり最大 5MB（初期値、実装時に調整可。[features/image.md](features/image.md)）。
-- 通知一覧の取得時、未読件数も同時に返して往復を減らす。`followee_new_recipe` の fan-out（フォロワー全員への配布）の実装方式は → [todo.md](todo.md)。
+- 通知一覧の取得時、未読件数も同時に返して往復を減らす。`followee_new_recipe` の fan-out（フォロワー全員への配布）は**公開レシピ作成トランザクション内で `notification_outbox` に 1 行 → コミット後に `BackgroundTasks` が配布 → 落ちた分は定期スイープが回収**する（[processing-model.md](processing-model.md) §7・§9）。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）は発火元と同一トランザクションで作る。大量フォロワー時の性能測定と専用ジョブキューの要否は → [todo.md](todo.md) #18。
 
 ### ページング（横断・重要）
 
@@ -65,6 +67,8 @@
 - 対象: 全体 / フォロー / フォロワー / お気に入りレシピ フィード、検索結果、閲覧履歴、自分のレシピ一覧、ユーザーの公開レシピ一覧、フォロー中 / フォロワー一覧、通知一覧、感想一覧。
 
 ## カウント列キャッシュのトランザクション方針（横断・重要）
+
+> トランザクション境界・同期 / 非同期 / バッチの全体像は [processing-model.md](processing-model.md) を正とする。この節はカウント列に固有の方針を定める。
 
 対象: `users.follower_count` / `users.following_count` / `recipes.favorite_count` / `recipes.comment_count`（[data-model.md](data-model.md) に列定義）。
 

@@ -46,9 +46,9 @@
 - 「秘密の質問・答え」はサインアップ時に登録する（[auth.md](auth.md)）。プロフィール編集からの変更手段は未確定（→ [../todo.md](../todo.md)）。
 - **アカウント削除**（`DELETE /users/me`）:
   - 本人のみ。確認 UI 必須。
-  - 削除は**単一のアプリケーショントランザクション**で行う。削除前に `users.token_version` を原子的に `+1` する。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（共通方針は [non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」）。
-  - 削除で本人の `recipes`（→ `ingredients` / `steps` / その `recipe` への `favorites` / `recipe_comments`）、`follows`（`follower_id` = me と `followee_id` = me の両方向）、`favorites`（`user_id` = me）、`recipe_comments`（`user_id` = me）、`refresh_tokens`（`user_id` = me）、`notifications`（`user_id` = me と `actor_id` = me）を CASCADE 削除。サムネ・手順画像・**感想画像**・アバターはストレージ削除ジョブ対象。
-  - ストレージ上の画像（レシピ画像・アバター）はアプリ側で削除ジョブ対象にする。
+  - 削除は**単一のアプリケーショントランザクション**で行う。削除前に `users.token_version` を原子的に `+1` する。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（共通方針は [non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」、処理方式全体は [processing-model.md](../processing-model.md) §6）。
+  - 削除で本人の `recipes`（→ `ingredients` / `steps` / その `recipe` への `favorites` / `recipe_comments`）、`follows`（`follower_id` = me と `followee_id` = me の両方向）、`favorites`（`user_id` = me）、`recipe_comments`（`user_id` = me）、`refresh_tokens`（`user_id` = me）、`notifications`（`user_id` = me と `actor_id` = me）を CASCADE 削除。
+  - **CASCADE 削除の前に**、消えるサムネ・手順画像・**感想画像**・アバター、および本人所有で未消費の一時アップロード（`uploads` の `pending` / `stored`）のキーを集めて削除キューに INSERT する（同一トランザクション内。行が消えた後ではキーを取り出せない。[../processing-model.md](../processing-model.md) §6・§9）。ストレージからの実削除は定期バッチ。
   - 削除は成功時 204。既発行のアクセストークンは、認証依存性のユーザー存在チェック（および削除前の `token_version` 加算）により以降 401 になる。リフレッシュトークンは CASCADE 削除される。専用の冪等機構は設けない（トークン検証の共通方針は [auth.md](auth.md)）。
 
 ## 4. データモデル

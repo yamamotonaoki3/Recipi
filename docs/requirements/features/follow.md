@@ -35,7 +35,7 @@
 
 ### フォロー数 / フォロワー数の更新（トランザクション）
 
-共通ルールは [../non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」。
+共通ルールは [../non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」。処理方式全体（同期 / 非同期 / バッチ）は [../processing-model.md](../processing-model.md)。`followed` 通知はこのトランザクションと同一 Tx で作る。
 
 ```sql
 -- フォロー（A → B）

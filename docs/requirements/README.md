@@ -12,7 +12,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 1. [overview.md](overview.md) — 全体像・想定ユーザー・ユースケース・対象外・リリース段階
 2. [glossary.md](glossary.md) — 用語の定義（先に目を通すと機能ドキュメントが読みやすい）
 3. `features/` の各機能ドキュメント（下表）
-4. 横断ドキュメント（[screens/](screens/) / [data-model.md](data-model.md) / [api.md](api.md) / [non-functional.md](non-functional.md)）
+4. 横断ドキュメント（[screens/](screens/) / [data-model.md](data-model.md) / [api.md](api.md) / [non-functional.md](non-functional.md) / [processing-model.md](processing-model.md)）
 
 ### 機能ドキュメント
 
@@ -42,6 +42,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | データモデル（全体 ER 図・全テーブル定義） | [data-model.md](data-model.md) |
 | API 一覧・共通仕様 | [api.md](api.md) |
 | 非機能要件 | [non-functional.md](non-functional.md) |
+| 処理方式（トランザクション / 同期 / 非同期 / バッチ） | [processing-model.md](processing-model.md) |
 | 開発ロードマップ / MVP 候補ライン | [roadmap.md](roadmap.md) |
 | 未確定事項・要調査（TODO） | [todo.md](todo.md) |
 | 学び・手直しの記録 | [../lessons-learned.md](../lessons-learned.md) |
@@ -63,4 +64,4 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 7. 受け入れ基準
 8. 未確定・メモ
 
-最終更新: 2026-09-02（ボトムナビは 5 destination = ホーム / 履歴 / ＋ / 通知 / マイページ。検索は独立 destination をやめ、ホーム画面上部の常時固定検索窓に。閲覧履歴を追加。アカウント関連は「マイページ」に集約）
+最終更新: 2026-09-02（処理方式ドキュメント [processing-model.md](processing-model.md) を追加 — トランザクション境界 / 同期 / 非同期後処理（`BackgroundTasks`）/ 定期バッチ（cron）を機能横断で定義。通知 fan-out は非同期後処理に確定。以前: ボトムナビ 5 destination 化、検索をホーム上部の固定検索窓に、閲覧履歴を追加、アカウント関連を「マイページ」に集約）

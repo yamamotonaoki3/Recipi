@@ -83,7 +83,8 @@
 - 新しい画像は**先に `POST /images`（[image.md](image.md)）でアップロードして `key` を得て**、レシピの `POST` / `PUT` の body で `thumbnailKey` と各 `steps[].imageKey` に指定して紐付ける。更新時は、更新対象のレシピ自身に既に紐付いているキーも再送できる。
 - サーバーは `title` から `title_normalized`、各材料 `name` から `name_normalized` を生成する（[search.md](search.md)）。
 - サーバーは材料の `unit` のうち `units` 未登録のものを自動追加する（[unit.md](unit.md)）。
-- 公開レシピの新規投稿時、投稿者のフォロワー全員に通知（[notification.md](notification.md) `followee_new_recipe`）。
+- 公開レシピの新規投稿時、投稿者のフォロワー全員に通知（[notification.md](notification.md) `followee_new_recipe`）。この fan-out は**作成トランザクション内で `notification_outbox` に 1 行だけ書き、コミット後に `BackgroundTasks` が配布**する（取りこぼしは定期スイープが回収。[../processing-model.md](../processing-model.md) §3・§7・§9）。実装は Phase 8。
+- レシピの作成 / 更新は、`recipes` ＋ 材料グループ ＋ 材料 ＋ 手順 ＋ 未登録単位の追加 ＋ `title_normalized` / `name_normalized` 生成を**単一トランザクション**で行う。参照から外れた画像キーは削除キューへ（[../processing-model.md](../processing-model.md) §6）。
 
 ## 4. データモデル
 

@@ -58,6 +58,20 @@
 
 - index(`user_id`, `created_at` DESC)
 - 未読件数用に部分インデックス: index(`user_id`) WHERE `read_at IS NULL`
+- `followee_new_recipe` の重複作成防止に、`(user_id, type, recipe_id)` の一意制約（`type = 'followee_new_recipe'` の部分一意インデックス等。形は Phase 8 で確定）
+
+`notification_outbox` テーブル（fan-out 配布指示・Phase 8。[../processing-model.md](../processing-model.md) §9）:
+
+| カラム | 型 | 制約 |
+| --- | --- | --- |
+| `id` | uuid | PK |
+| `event` | string | `followee_new_recipe` |
+| `recipe_id` | uuid | FK → `recipes.id`（ON DELETE CASCADE） |
+| `author_id` | uuid | FK → `users.id`（ON DELETE CASCADE） |
+| `created_at` | timestamptz | |
+| `processed_at` | timestamptz | NULL 可（NULL = 未処理） |
+
+- index(`processed_at`)（未処理スイープ用）
 
 ## 5. API
 
@@ -104,7 +118,7 @@
 - [ ] 自分のレシピが他人にお気に入りされると `recipe_favorited` が作られる
 - [ ] お気に入りを解除しても、それ以前に作られた `recipe_favorited` 通知は残る
 - [ ] 自分のレシピに他人が感想を書くと `recipe_commented` が作られる
-- [ ] フォロー中ユーザーが公開レシピを投稿すると、フォロワー全員に `followee_new_recipe` が作られる
+- [ ] フォロー中ユーザーが公開レシピを投稿すると、（通常運用時）その時点のフォロワー全員に `followee_new_recipe` が作られる。障害回収が遅れた場合は配布処理の実行時点のフォロワーが対象になる（[../processing-model.md](../processing-model.md) §7・§9）
 - [ ] 自分の操作で自分あての通知は作られない
 - [ ] 未読バッジの数が `unread-count` と一致する
 - [ ] 通知をタップ / 「すべて既読」で `read_at` が入り、バッジが減る
@@ -112,8 +126,9 @@
 
 ## 8. 未確定・メモ
 
-- fan-out の実装方式（同期 INSERT / 非同期ジョブ / キュー）と大量フォロワー時の性能 → [../todo.md](../todo.md)
-- 通知の保持期間・自動削除（古い通知の掃除）→ [../todo.md](../todo.md)
+- fan-out（`followee_new_recipe`）は**公開レシピ作成トランザクション内で `notification_outbox` に 1 行だけ書き、コミット後に `BackgroundTasks` が配布、落ちた分は定期スイープが回収**する（[../processing-model.md](../processing-model.md) §3・§7・§9）。フォロワー集合は配布時点の `follows` で解決する。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）は発火元と同一トランザクションで作る（実装は Phase 8）。大量フォロワー時の性能測定・専用ジョブキューの要否は → [../todo.md](../todo.md) #18
+- 通知の保持期間・自動削除（古い通知・処理済み `notification_outbox` の掃除）→ [../todo.md](../todo.md)
+- fan-out の受信者は配布処理の実行時点の `follows` で決まる（障害回収が遅れると投稿時点のフォロワーと差が出うる）。厳密な投稿時点スナップショットが要るかは実装時に判断（現状は許容。[../processing-model.md](../processing-model.md) §9）
 - まとめ表示（「〇〇さん他 3 人がフォローしました」）→ 将来
 - 非公開化に伴う通知の取り消し → 実装時に確定
 - プッシュ通知・メール通知は対象外（将来）
