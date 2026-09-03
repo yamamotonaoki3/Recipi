@@ -26,7 +26,7 @@
 | 変数 | 用途 | 値の性質 | 例プレースホルダ | 備考 |
 | --- | --- | --- | --- | --- |
 | `APP_ENV` | 実行環境の選択 | per-env | `development` | `development` / `test` / `production` |
-| `DATABASE_URL` | DB 接続文字列 | per-env / secret | `postgresql+psycopg://recipi:changeme@localhost:5432/recipi` | SQLAlchemy 形式（`postgresql+psycopg://`）。[tech-stack.md](tech-stack.md) |
+| `DATABASE_URL` | DB 接続文字列 | per-env / secret | `postgresql+psycopg://<user>:<password>@<host>:<port>/<db>` | SQLAlchemy 形式。**組み立てた実際の URL（本物のパスワード・ホストを含む）は `.env.<APP_ENV>`（`.gitignore` 対象）にのみ置く。** `.env.*.example` にはこのテンプレートのまま書く。[tech-stack.md](tech-stack.md) |
 | `POSTGRES_DB` | compose の postgres の DB 名 | per-env | `recipi` | compose とアプリで一致させる |
 | `POSTGRES_USER` | compose の postgres のユーザー | per-env | `recipi` | `root` / `postgres` のような推測可能値は避ける |
 | `POSTGRES_PASSWORD` | compose の postgres のパスワード | secret | `changeme` | 生成した文字列。`password` 等は使わない |
@@ -61,6 +61,9 @@
 - **`.env.production.example`**: `APP_ENV=production` / `AI_PROVIDER=anthropic` / `ANTHROPIC_API_KEY=`（空）。`MINIO_ROOT_*` は書かない（本番は S3 互換のマネージドを想定）。
 
 すべて**プレースホルダのみ**（`changeme` 等）。`root` / `password` / `admin` のような推測可能値は使わない。辞書に載る単語を避け、必要な箇所は生成した文字列を使う。
+
+- **接続文字列（`DATABASE_URL` 等）は「本物の値を埋め込んだ形」で `.example` に書かない**。`postgresql+psycopg://<user>:<password>@<host>:<port>/<db>` のようなテンプレート、または各要素を別の環境変数（`POSTGRES_USER` 等）に分けて書き、実行時に組み立てる。組み立て済みの実 URL は `.env.<APP_ENV>`（`.gitignore` 対象）にのみ存在する。
+- この `environment.md` を含め、**コミットされるファイルに実際の認証情報を含む URL を載せない**（グローバル `~/.claude/CLAUDE.md`「秘密情報の標準取り扱い要件」）。
 
 ## 4. `docker-compose.yml` での参照
 
