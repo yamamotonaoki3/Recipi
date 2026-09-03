@@ -2,7 +2,6 @@
 
 | # | 項目 | 対応時期 | 関連 |
 | --- | --- | --- | --- |
-| 1 | **MVP の線引き**（[roadmap.md](roadmap.md) の候補ラインから決定） | 最優先・本書レビュー後 | [roadmap.md](roadmap.md) |
 | 2 | 本番デプロイ先（Fly.io / Render / AWS 等）の選定 | Phase 10 前後 | [architecture.md](architecture.md) |
 | 3 | iOS ビルド環境。**TS トラック**: Windows ではローカルビルド不可 → EAS Build（クラウド）で iOS を扱う（Apple Developer Program $99/年が必要になる時期を検討）。**Kotlin トラック**（随時）: `iosApp` のビルド・実行に Mac + Xcode が必須 | Phase 0 / iOS 着手時 | [tech-stack.md](tech-stack.md) |
 | 4 | 画像ピッカー / カメラ / トリミングの具体選定。**TS トラック**: `expo-image-picker` / `expo-camera` / `expo-image-manipulator`、デスクトップ（Tauri）は getUserMedia / ファイル選択。**Kotlin トラック**: KMP 対応ライブラリ | Phase 3 / Phase 5 | [features/image.md](features/image.md) |
@@ -58,6 +57,7 @@
 
 ## 決定済み（対象外で確定）
 
+- **MVP の線引き — 候補 B / Phase 4 まで**に確定（2026-09-02。認証・レシピ CRUD・画像・ナビ・ホーム「全体」フィード・検索・閲覧履歴。ソーシャルは MVP 後、AI は MVP 対象外。[roadmap.md](roadmap.md) 「MVP ライン」）
 - ブロック機能・フォロー承認制 — 不要
 - 画像カルーセル — 廃止（サムネイル + 手順画像に統合）
 - プッシュ通知・メール通知 — 対象外（アプリ内通知のみ）

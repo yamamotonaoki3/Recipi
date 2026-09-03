@@ -5,7 +5,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 ## ステータス
 
 - **要件定義は継続中**。ユーザーのレビューで随時追記・修正する。完成扱いにしない。
-- **MVP（初回リリース範囲）は未確定**。[roadmap.md](roadmap.md) の Phase 分けをもとに別途決定する。
+- **MVP（初回リリース範囲）は Phase 4 まで**に確定（候補 B。認証 ＋ レシピ CRUD ＋ 画像 ＋ ナビ ＋ ホーム「全体」フィード ＋ 検索 ＋ 閲覧履歴）。詳細は [roadmap.md](roadmap.md) 「MVP ライン」。
 
 ## 読み方
 
@@ -43,7 +43,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | API 一覧・共通仕様 | [api.md](api.md) |
 | 非機能要件 | [non-functional.md](non-functional.md) |
 | 処理方式（トランザクション / 同期 / 非同期 / バッチ） | [processing-model.md](processing-model.md) |
-| 開発ロードマップ / MVP 候補ライン | [roadmap.md](roadmap.md) |
+| 開発ロードマップ / MVP ライン | [roadmap.md](roadmap.md) |
 | 未確定事項・要調査（TODO） | [todo.md](todo.md) |
 | 学び・手直しの記録 | [../lessons-learned.md](../lessons-learned.md) |
 
