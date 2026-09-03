@@ -53,12 +53,20 @@
 | `EXPO_PUBLIC_API_BASE_URL` | バックエンド API の基底 URL | per-env | `http://localhost:8000/api/v1` | エミュレータからは `10.0.2.2`（Android）等に読み替え。**秘密は入れない**（クライアントに埋め込まれる） |
 
 > フロントには**秘密情報を置かない**。`EXPO_PUBLIC_` が付いた変数はビルド成果物に埋め込まれ、誰でも読める。
+>
+> **Expo は `expoApp/` ディレクトリから `.env` を読む**（リポジトリルートではない）。そのため frontend-ts の環境変数は `expoApp/.env.development` 等に置き、テンプレートも `expoApp/.env.*.example` として `expoApp` 側に置く（`expoApp/` を作成する Issue #34 で追加）。
 
-## 3. `.env.*.example` に書く内容（3 ファイル）
+## 3. `.env.*.example` に書く内容
 
-- **`.env.development.example`**: 上表の development 相当のプレースホルダ。`APP_ENV=development` / `AI_PROVIDER=local` / MinIO のルート資格情報あり。
+### リポジトリルート（backend / infra 用・3 ファイル）
+
+- **`.env.development.example`**: 上表 backend の development 相当のプレースホルダ。`APP_ENV=development` / `AI_PROVIDER=local` / MinIO のルート資格情報あり。
 - **`.env.test.example`**: `APP_ENV=test` / `AI_PROVIDER=stub` / テスト用 DB・ストレージのプレースホルダ。
 - **`.env.production.example`**: `APP_ENV=production` / `AI_PROVIDER=anthropic` / `ANTHROPIC_API_KEY=`（空）。`MINIO_ROOT_*` は書かない（本番は S3 互換のマネージドを想定）。
+
+### `expoApp/`（frontend-ts 用・Issue #34 で追加）
+
+- `expoApp/.env.development.example` / `.env.test.example` / `.env.production.example` に `EXPO_PUBLIC_API_BASE_URL` のプレースホルダ。`.env` の実体は `expoApp/.gitignore` で除外する。
 
 すべて**プレースホルダのみ**（`changeme` 等）。`root` / `password` / `admin` のような推測可能値は使わない。辞書に載る単語を避け、必要な箇所は生成した文字列を使う。
 
@@ -68,7 +76,14 @@
 ## 4. `docker-compose.yml` での参照
 
 - コミットする `infra/docker-compose.yml` は**環境変数展開のみ**（`${POSTGRES_PASSWORD}` など）。実値を埋め込まない。
-- `env_file:` で `.env.development`（`.gitignore` 対象）を読み込む。
+- `${...}` 展開のための値は **`--env-file` で明示的に渡す**（compose は `.env.development` を自動では読まず、既定は `.env` のみ）:
+  - `docker compose --env-file .env.development -f infra/docker-compose.yml up -d postgres minio`
+- 加えて各サービスの `env_file:` でコンテナ内のランタイム環境変数として渡す（`${...}` 展開とは別の役割）。**`env_file:` のパスは compose ファイルからの相対**なので、`infra/docker-compose.yml` では `env_file: ../.env.development` と書く（リポジトリルートの `.env.development` を指す）。
+- **ホスト名は「誰が接続するか」で分ける**（3 系統）:
+  - **バックエンド → DB / ストレージ**（サーバー内部の接続。`DATABASE_URL` / `S3_ENDPOINT_URL`）: ホストで uvicorn なら `localhost`、compose の `api` サービスなら `postgres` / `minio`（`api` サービスの `environment:` で上書き）。
+  - **クライアント → バックエンド / 画像**（`EXPO_PUBLIC_API_BASE_URL` / `S3_PUBLIC_URL_BASE`。API が返す画像 URL もこれで組み立てる）: 開発マシンをどう指すかに合わせる。Web / デスクトップ / iOS シミュレータは `localhost`、**Android エミュレータは `10.0.2.2`、実機は開発マシンの LAN IP**。`EXPO_PUBLIC_API_BASE_URL` と `S3_PUBLIC_URL_BASE` は**必ず同じホスト表記に揃える**。
+  - Android エミュレータでの E2E など、`localhost` が使えない実行では両方を `10.0.2.2` にした `.env` を用意する。
+- **標準の開発フロー**: compose は `postgres` / `minio` だけ起動し、バックエンドは `uvicorn --reload` でホスト実行（高速な反復のため）。`api` サービスはフルスタック実行・E2E 用。
 
 ## 5. CI（GitHub Actions）でのテスト用の値
 
