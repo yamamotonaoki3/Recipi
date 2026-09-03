@@ -26,5 +26,8 @@ expoApp/web-build/
 coverage.xml
 .coverage
 
+# pytest / ツールの一時ディレクトリ
+.tmp/
+
 # Claude Code の内部設定（コミットしない）
 .claude/

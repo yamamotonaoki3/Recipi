@@ -1,0 +1,14 @@
+# backend の実行時依存（本番でも使うもの）
+# 従来方式（venv + pip + requirements.txt）で管理する。バージョンは
+# `==` で固定して、誰が入れても同じ環境になるようにする。
+# 更新するときは venv で入れ直して動作確認してからこのファイルを書き換える。
+# 検証環境: Python 3.14.7 / Windows（2026-09-04）
+
+fastapi==0.141.1              # Web フレームワーク。型ヒントから OpenAPI を自動生成
+uvicorn[standard]==0.52.4     # ASGI サーバー。`uvicorn app.main:app` で起動
+sqlmodel==0.0.42             # ORM（SQLAlchemy 2.0 + Pydantic のラッパー）
+alembic==1.19.1              # DB マイグレーションツール（読み: アレンビック）
+psycopg[binary]==3.3.5       # PostgreSQL ドライバ（v3）。[binary] はビルド済み wheel
+pydantic==2.13.5             # データ検証。FastAPI が内部で使う
+pydantic-settings==2.15.0    # 環境変数 / .env から設定を読む（app/config.py で使用）
+python-json-logger==4.2.0    # 標準 logging を JSON 形式で出力するフォーマッタ

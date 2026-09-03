@@ -1,0 +1,11 @@
+# 改行コードを LF に統一する（Windows で編集しても、リポジトリと CI は LF）。
+# シェルスクリプト・YAML・SQL は CRLF だと動かないことがあるため。
+* text=auto eol=lf
+
+# バイナリ扱い（改行変換しない）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary

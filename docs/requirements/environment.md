@@ -10,6 +10,9 @@
 - backend は `APP_ENV` を見て `.env.<APP_ENV>` を読み込む（`backend/app/config.py`、`pydantic-settings`）。
 - frontend（Expo）は `EXPO_PUBLIC_*` を `.env` から読む（`development` / `test` を切り替え）。
 - テスト実行時は `APP_ENV=test`。**テスト用 DB / ストレージはローカルまたは CI の使い捨てに限定し、本番・ステージングへ接続しない**。
+  - **ローカル**: 開発と同じ compose の PostgreSQL コンテナ内の**別データベース** `recipi_test` を使う（`infra/postgres-init/` が初回起動時に作成。所有ロールは `.env.development` と同じ）。`.env.test` の `DATABASE_URL` は user / password を `.env.development` と揃え、DB 名だけ `recipi_test` にする。
+  - **CI**: GitHub Actions の `postgres` service（専用ロール / DB）。`backend.yml` が `.env.test` の値を service に合わせて上書きする。
+  - pytest の `conftest.py` は、`DATABASE_URL` の DB 名に "test" を含まない場合セッションを中断する（安全網）。
 
 | 環境 | 用途 | DB / ストレージ | AI プロバイダ |
 | --- | --- | --- | --- |

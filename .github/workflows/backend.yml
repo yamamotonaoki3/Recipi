@@ -1,0 +1,87 @@
+# バックエンドの CI。
+# 品質チェック（ruff / mypy）→ マイグレーション適用 → pytest（単体 ＋ 結合）
+# を実行する。結合テストは本物の PostgreSQL（service コンテナ）に対して走る。
+# 方針は docs/requirements/testing.md。
+
+name: backend
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "openapi/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "openapi/**"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      # 結合テスト用の使い捨て PostgreSQL。ジョブが終われば破棄される。
+      # MinIO（ストレージ）は画像機能を作る Phase 3（#39）で追加する。
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: recipi_test
+          POSTGRES_USER: recipi_test
+          POSTGRES_PASSWORD: recipi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recipi_test -d recipi_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: backend/.python-version
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: 依存をインストール
+        run: pip install -r requirements-dev.txt
+
+      - name: .env.test を作る（テンプレートから。CI 用の値を追記して上書き）
+        run: |
+          cp ../.env.test.example ../.env.test
+          # .env は同じキーが複数あると「後の行」が勝つ。CI 用の実値を末尾に足す。
+          {
+            echo "DATABASE_URL=postgresql+psycopg://recipi_test:recipi_test@localhost:5432/recipi_test"
+            echo "JWT_SECRET_KEY=ci-only-not-a-real-secret"
+            echo "S3_ACCESS_KEY_ID=ci-test"
+            echo "S3_SECRET_ACCESS_KEY=ci-test"
+            echo "AI_PROVIDER=stub"
+            echo "LOG_LEVEL=WARNING"
+          } >> ../.env.test
+
+      - name: 品質チェック（ruff lint）
+        run: ruff check .
+
+      - name: 品質チェック（ruff format）
+        run: ruff format --check .
+
+      - name: 品質チェック（mypy 型チェック）
+        run: mypy .
+
+      - name: DB マイグレーションを適用
+        run: alembic upgrade head
+        env:
+          APP_ENV: test
+
+      - name: pytest（単体 ＋ 結合、行・分岐カバレッジ）
+        run: pytest --cov-report=xml --cov-fail-under=70
+        env:
+          APP_ENV: test
