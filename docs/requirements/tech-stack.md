@@ -61,7 +61,10 @@
 | バリデーション / シリアライズ | Pydantic v2 | FastAPI 標準。リクエスト / レスポンスモデル |
 | 認証 | FastAPI の Bearer 認証依存性 + JWT ライブラリ（未確定） | `Authorization: Bearer` を検証する独自の依存性で `token_version` を照合（[non-functional.md](non-functional.md)）。ログイン / リフレッシュのリクエストは [features/auth.md](features/auth.md) のとおり JSON（`{ email, password, rememberMe }` 等）で、標準 OAuth2 のフォーム形式は使わない。JWT ライブラリは PyJWT / Authlib から選定（python-jose はメンテ停滞のため回避）→ [todo.md](todo.md) |
 | パスワードハッシュ | Argon2id（`argon2-cffi`） | パスワード・秘密の質問の答えに使用 |
-| パッケージ管理 | venv + pip + requirements.txt | 従来方式で学習する。2026 年の主流は `uv` だが、まず仕組みを理解してから `uv` を試して比較する（→ [todo.md](todo.md)） |
+| パッケージ管理 | venv + pip + requirements.txt | 従来方式で学習する。2026 年の主流は `uv` だが、まず仕組みを理解してから `uv` を試して比較する（→ [todo.md](todo.md)）。各パッケージのバージョンは `backend/requirements.txt` / `requirements-dev.txt` で `==` 固定（Issue #33 で Python 3.14.7 上で確定・wheel 確認済み） |
+| DB メジャーバージョン | **PostgreSQL 18**（`postgres:18`） | サポート期間 ~2030-11。Issue #33 で確定（→ [todo.md](todo.md) #5） |
+| 構造化ログ | 標準 `logging` ＋ `python-json-logger` ＋ `contextvars` のリクエスト ID | Issue #33。`structlog` への移行は後日可（→ [todo.md](todo.md) #44） |
+| Lint / 型 / テスト | ruff ／ mypy（strict）／ pytest（＋ pytest-asyncio / pytest-cov / httpx） | [testing.md](testing.md)。バージョンは `backend/requirements-dev.txt` |
 
 ### AI 連携（レシピの誤字脱字チェック — Phase 11）
 

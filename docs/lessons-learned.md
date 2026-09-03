@@ -16,8 +16,22 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-02 処理方式（トランザクション / 非同期 / バッチ）を横断で決めるとき](#2026-09-02-処理方式を横断で決めるとき)
 - [2026-09-02 AI 機能を要件に足すとき（誤字脱字チェック）](#2026-09-02-ai-機能を要件に足すとき)
 - [2026-09-03 環境変数ファイル・ローカル実行手順を作るとき](#2026-09-03-環境変数ファイルローカル実行手順を作るとき)
+- [2026-09-04 backend の scaffold（FastAPI）を作るとき](#2026-09-04-backend-の-scaffold-を作るとき)
 
 ---
+
+## 2026-09-04 backend の scaffold を作るとき
+
+**きっかけ**: Issue #33（FastAPI scaffold ＋ CI）。実装中に踏んだ落とし穴。
+
+1. **PostgreSQL 18 はデータディレクトリのマウント位置が変わった**。`postgres:18` は `/var/lib/postgresql`（親）をマウントする構成が推奨で、旧来の `/var/lib/postgresql/data` にボリュームを当てると起動時にエラーで落ちる。
+2. **DB が居ないと `create_engine` の接続がブロックしてテストがハングする**。`connect_args={"connect_timeout": 3}` を付けて短時間で失敗判定させる。ヘルスチェック（readiness）や「DB 未起動でも通る単体テスト」で効く。
+3. **`APP_ENV=test` はコマンドに書かず conftest.py で強制する**。`pytest` とだけ打っても開発用 DB につながないため。`pyproject.toml` の `env=[...]` は `pytest-env` プラグインが要るので、依存を増やさず conftest の先頭で `os.environ["APP_ENV"]="test"` するのが軽い。
+4. **`.env.test` が無い環境（新規クローン）向けのフォールバックは `os.environ.setdefault` で**。ただし `.env.test` が存在するときは触らない（`os.environ` は `.env` ファイルより優先されるため、setdefault でも `.env.test` を上書きしてしまう）。→ 「ファイルが無いときだけ setdefault」。
+5. **mypy strict はテストにもフルで効く**。`[[tool.mypy.overrides]] module=["tests.*"]` で `disallow_untyped_defs=false` にし、テストは `-> None` の連打を不要にする。アプリ本体（`app/`）は strict のまま。
+6. **契約テスト（openapi.json の diff）は生成の安定性が命**。`json.dump(spec, sort_keys=True, indent=2)` ＋ 末尾改行で、再生成しても diff が出ないようにする。
+7. **GitHub Actions の `services:` はコンテナの `command` を上書きできない**。MinIO のように `server /data` の引数が要るイメージは service にしづらい。ストレージのテストが無い Phase 0 では postgres だけ service にして、MinIO は #39 で足す。
+8. **バージョン固定は「実際に venv で入れて解決したもの」を `==` で書く**。推測で書かず、`pip install`（floor 指定）→ 動作確認 → 解決版を requirements に固定、の順。
 
 ## 2026-09-03 環境変数ファイル・ローカル実行手順を作るとき
 

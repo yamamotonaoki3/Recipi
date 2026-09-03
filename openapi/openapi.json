@@ -1,0 +1,61 @@
+{
+  "info": {
+    "title": "Recipi API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "description": "プロセスが起動していれば 200 を返すだけの軽いエンドポイント。",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "プロセスの生存確認",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/healthz/db": {
+      "get": {
+        "description": "DB に `SELECT 1` できるかを返す。つながらなくても例外にはしない。",
+        "operationId": "healthz_db_healthz_db_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Db Healthz Db Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "DB への疎通確認",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  }
+}

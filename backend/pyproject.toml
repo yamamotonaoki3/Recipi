@@ -1,0 +1,77 @@
+# backend のツール設定をまとめたファイル。
+# パッケージ管理は requirements*.txt（従来方式）で行うため、ここには
+# [project] の依存は書かず、ruff / mypy / pytest の設定だけを置く。
+
+[project]
+name = "recipi-backend"
+version = "0.1.0"
+description = "Recipi のバックエンド（FastAPI）"
+requires-python = ">=3.14,<3.15"
+
+# ---------------------------------------------------------------------------
+# ruff — Lint（コードの誤り・スタイル崩れの検出）とフォーマット
+#   使い方: `ruff check .` / `ruff format .`（自動整形）/ `ruff format --check .`
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+# 有効にするルール群:
+#   E,W = pycodestyle（PEP 8）/ F = pyflakes（未使用 import 等）
+#   I   = isort（import の並び）/ UP = pyupgrade（新しい書き方へ）
+#   B   = flake8-bugbear（バグになりやすい書き方）
+select = ["E", "W", "F", "I", "UP", "B"]
+
+# ---------------------------------------------------------------------------
+# mypy — 静的型チェック（型ヒントの矛盾を実行前に見つける）
+#   使い方: `mypy .`
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.14"
+strict = true                    # 厳しめの設定一式を有効化
+plugins = ["pydantic.mypy"]      # Pydantic モデルの型を正しく見るためのプラグイン
+exclude = ["^\\.venv/", "^alembic/versions/"]
+
+[[tool.mypy.overrides]]
+# alembic が生成するファイルは型チェックの対象外にする
+module = ["alembic.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# テストコードは strict を少しゆるめる（毎回 `-> None` を書かなくてよい）。
+# アプリ本体（app/）は strict のまま。
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# ---------------------------------------------------------------------------
+# pytest — テストランナー
+#   使い方: `pytest`（設定はここを読む）
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# テストは必ず APP_ENV=test で走らせる（開発用 DB につながないため）。
+# コマンドで指定し忘れても、tests/conftest.py が最初に APP_ENV=test を
+# 設定して保証する。
+asyncio_mode = "auto"            # async def のテストを自動で await する
+markers = [
+  # 実際の DB / ストレージにつなぐテスト。CI では常に実行。
+  # ローカルで Docker が無いときは `pytest -m 'not integration'` で除外できる。
+  "integration: 実 DB / ストレージにつなぐ結合テスト",
+]
+filterwarnings = [
+  # サードパーティ（starlette / anyio）の将来向け警告。こちらのコードでは
+  # 対処できないのでテスト出力から除外する。
+  "ignore::DeprecationWarning:starlette.*",
+  "ignore:Using `httpx` with `starlette.testclient`:UserWarning",
+]
+addopts = [
+  "--cov=app",                   # app/ 配下のカバレッジを計測
+  "--cov-branch",                # 行だけでなく「分岐」も計測（testing.md §3）
+  "--cov-report=term-missing",   # 未カバー行を表示
+]
+
+[tool.coverage.run]
+branch = true
+omit = ["app/__init__.py"]
