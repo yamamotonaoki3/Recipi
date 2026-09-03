@@ -12,7 +12,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 1. [overview.md](overview.md) — 全体像・想定ユーザー・ユースケース・対象外・リリース段階
 2. [glossary.md](glossary.md) — 用語の定義（先に目を通すと機能ドキュメントが読みやすい）
 3. `features/` の各機能ドキュメント（下表）
-4. 横断ドキュメント（[screens/](screens/) / [data-model.md](data-model.md) / [api.md](api.md) / [non-functional.md](non-functional.md) / [processing-model.md](processing-model.md)）
+4. 横断ドキュメント（[screens/](screens/) / [data-model.md](data-model.md) / [api.md](api.md) / [non-functional.md](non-functional.md) / [processing-model.md](processing-model.md) / [testing.md](testing.md) / [environment.md](environment.md)）
 
 ### 機能ドキュメント
 
@@ -43,6 +43,8 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | API 一覧・共通仕様 | [api.md](api.md) |
 | 非機能要件 | [non-functional.md](non-functional.md) |
 | 処理方式（トランザクション / 同期 / 非同期 / バッチ） | [processing-model.md](processing-model.md) |
+| テスト / CI・CD 方針 | [testing.md](testing.md) |
+| 環境変数・シークレットのカタログ | [environment.md](environment.md) |
 | 開発ロードマップ / MVP ライン | [roadmap.md](roadmap.md) |
 | 未確定事項・要調査（TODO） | [todo.md](todo.md) |
 | 学び・手直しの記録 | [../lessons-learned.md](../lessons-learned.md) |
@@ -64,4 +66,4 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 7. 受け入れ基準
 8. 未確定・メモ
 
-最終更新: 2026-09-02（処理方式ドキュメント [processing-model.md](processing-model.md) を追加 — トランザクション境界 / 同期 / 非同期後処理（`BackgroundTasks`）/ 定期バッチ（cron）を機能横断で定義。通知 fan-out は非同期後処理に確定。以前: ボトムナビ 5 destination 化、検索をホーム上部の固定検索窓に、閲覧履歴を追加、アカウント関連を「マイページ」に集約）
+最終更新: 2026-09-03（MVP = Phase 4 まで に確定。テスト / CI 方針 [testing.md](testing.md)〈BB/WB 併用・pytest/ruff/mypy・jest-expo/MSW・Maestro・行/分岐カバレッジ〉と環境変数カタログ [environment.md](environment.md) を追加。以前: 処理方式 [processing-model.md](processing-model.md) を追加、ボトムナビ 5 destination 化、検索をホーム上部の固定検索窓に、閲覧履歴を追加）

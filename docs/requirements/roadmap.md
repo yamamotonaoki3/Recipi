@@ -11,8 +11,9 @@
 
 | Phase | 内容 | 関連ドキュメント |
 | --- | --- | --- |
-| Phase 0（backend） | scaffold: FastAPI プロジェクト雛形（`app/`）、venv + pip + requirements.txt、Alembic 初期化、Docker Compose（api + postgres + minio）、`.env.development.example` ほか、CI 雛形 | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md) |
-| Phase 0（frontend-ts） | scaffold: `expoApp` 雛形（Expo / Expo Router / NativeWind）、openapi-typescript + openapi-fetch の生成設定、TanStack Query、Tauri 2 デスクトップシェル雛形（RN Web ビルド読み込み）、EAS / ローカルビルド方針、CI 雛形 | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md) |
+| Phase 0（共通） | 環境変数・シークレット基盤: `.env.{development,test,production}.example`（プレースホルダのみ）、`.gitignore` 整備、ローカルでテストを回す手順（[environment.md](environment.md)） | [environment.md](environment.md), [testing.md](testing.md) |
+| Phase 0（backend） | scaffold: FastAPI プロジェクト雛形（`app/`・`config.py`）、venv + pip + requirements.txt、Alembic 初期化、Docker Compose（api + postgres + minio）、`openapi.json` 出力。**CI（`.github/workflows/backend.yml` `contract.yml`）: ruff + mypy + pytest 単体・結合〈postgres/minio services〉+ 行・分岐カバレッジ + 契約テスト**（[testing.md](testing.md)） | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md), [testing.md](testing.md) |
+| Phase 0（frontend-ts） | scaffold: `expoApp` 雛形（Expo / Expo Router / NativeWind）、openapi-typescript + openapi-fetch の生成設定、TanStack Query、Tauri 2 デスクトップシェル雛形（RN Web ビルド読み込み）、EAS / ローカルビルド方針。**CI（`frontend-ts.yml`）: ESLint + Prettier + tsc + jest-expo〈カバレッジ〉+ `tauri build` スモーク**（[testing.md](testing.md)） | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md), [testing.md](testing.md) |
 | Phase 0（frontend-kotlin）※随時 | scaffold: Gradle マルチモジュール、`shared` / `composeApp`（android/ios/**desktop**）/ `desktopApp` 雛形、OpenAPI Generator による Kotlin クライアント生成設定、CI 雛形 | [architecture.md](architecture.md) |
 | Phase 1 | 認証: signup（秘密の質問含む）/ login /「ログインを保持」/ アクセス＋リフレッシュトークン（ローテーション）/ `/auth/refresh` / `/auth/logout` / パスワードリセット ＋ ログイン / サインアップ / パスワードリセット画面 ＋ プロフィール編集（表示名のみ） | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md) |
 | Phase 2 | レシピ CRUD（画像なし）＋ **材料グループ（`ingredient_groups`）・材料のレシピ参照（`ref_recipe_id`）**＋ 単位マスター（`placement` 含む）・`GET /units`・単位の表示整形ロジック（各クライアント）・作成編集画面の行編集 UX | [features/recipe.md](features/recipe.md), [features/unit.md](features/unit.md) |
@@ -58,7 +59,10 @@
 | **MVP 対象外** | Phase 11 | AI 誤字脱字チェック |
 
 - MVP は「レシピを登録・共有し、他ユーザーの公開レシピを探して見る」までを通す。ソーシャル機能（フォロー / お気に入り / 感想 / 通知）は MVP 後。
-- ボトムナビの「通知」「マイページ」destination は Phase 4 時点で枠だけ置き、中身（通知一覧・フォロー導線など）は各 Phase で埋める。
+- **Phase 4 時点のスコープ（MVP）**:
+  - ホームは「全体」タブ ＋ 検索窓のみ機能。「フォロー」「フォロワー」「お気に入りレシピ」タブは Phase 5・6 で有効化（[features/home-feed.md](features/home-feed.md) / [screens/home.md](screens/home.md)）。`GET /recipes` は `feed=all` のみでよい。
+  - 「通知」destination は空状態固定の最小スタブ（`notifications` テーブル・API は Phase 8。[screens/notifications.md](screens/notifications.md)）。
+  - 「マイページ」destination は表示名 ＋ ログアウト ＋「自分のレシピ一覧」への導線のみ（フォロー数・アバターは Phase 5、アカウント削除は Phase 9。[screens/my-page.md](screens/my-page.md)）。
 - 期限は設けず学習ペースで進める。Phase ごとに backend / frontend-ts / frontend-kotlin で Issue・ブランチを分ける（[../../CLAUDE.md](../../CLAUDE.md) 「Issue駆動」章）。
 
 ### テスト・ビルド検証は Phase 10 を待たない
