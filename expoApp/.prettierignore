@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.expo/
+android/
+ios/
+src-tauri/
+src/api/schema.ts
+package-lock.json
+assets/

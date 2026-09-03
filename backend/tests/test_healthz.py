@@ -35,3 +35,19 @@ def test_healthz_db(client: TestClient):
     res = client.get("/healthz/db")
     assert res.status_code == 200
     assert res.json()["database"] in {"ok", "unavailable"}
+
+
+def test_cors_allows_configured_origin(client: TestClient):
+    """許可済みオリジンからの CORS リクエストに Allow-Origin ヘッダが返る。
+    （Expo Web / Tauri から /healthz を叩けるようにするため）"""
+    origin = "http://localhost:8081"
+    res = client.get("/healthz", headers={"Origin": origin})
+    assert res.status_code == 200
+    assert res.headers.get("access-control-allow-origin") == origin
+
+
+def test_cors_blocks_unknown_origin(client: TestClient):
+    """許可していないオリジンには Allow-Origin ヘッダを返さない。"""
+    res = client.get("/healthz", headers={"Origin": "http://evil.example.com"})
+    # リクエスト自体は通る（ヘッダで制御）が、Allow-Origin は付かない。
+    assert "access-control-allow-origin" not in {k.lower() for k in res.headers}
