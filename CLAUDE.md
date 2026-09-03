@@ -4,7 +4,7 @@
 
 手軽にレシピを登録・共有・検索できるアプリ。モバイルファーストで Android / iOS / デスクトップ（Windows・macOS）に対応。フォロー / お気に入り / 感想 / 通知など軽いソーシャル機能も持つ。バックエンドとフロントエンドを持つ複数レイヤー構成。
 
-現在は要件定義フェーズ。要件定義書は機能別に分割され [docs/requirements/](docs/requirements/)（索引: [docs/requirements/README.md](docs/requirements/README.md)）。全機能版で、MVP の線引きは未確定（[docs/requirements/roadmap.md](docs/requirements/roadmap.md) をもとに別途決定）。
+現在は要件定義フェーズ。要件定義書は機能別に分割され [docs/requirements/](docs/requirements/)（索引: [docs/requirements/README.md](docs/requirements/README.md)）。全機能版だが、**MVP（初回リリース）は Phase 4 まで**に確定（候補 B: 認証・レシピ CRUD・画像・ナビ・ホーム「全体」フィード・検索・閲覧履歴。[docs/requirements/roadmap.md](docs/requirements/roadmap.md) 「MVP ライン」）。Phase 5 以降は MVP 後、Phase 11（AI）は MVP 対象外。
 
 ## 技術スタック
 

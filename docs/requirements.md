@@ -10,4 +10,4 @@
 - 画面 / データモデル / API / 非機能: [requirements/screens.md](requirements/screens.md) ／ [requirements/data-model.md](requirements/data-model.md) ／ [requirements/api.md](requirements/api.md) ／ [requirements/non-functional.md](requirements/non-functional.md)
 - ロードマップ / TODO: [requirements/roadmap.md](requirements/roadmap.md) ／ [requirements/todo.md](requirements/todo.md)
 
-> ステータス: 要件定義は継続中。MVP（初回リリース範囲）は未確定。
+> ステータス: 要件定義は継続中。**MVP（初回リリース範囲）は Phase 4 まで**に確定（[requirements/roadmap.md](requirements/roadmap.md) 「MVP ライン」）。
