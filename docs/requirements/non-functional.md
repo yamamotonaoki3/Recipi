@@ -38,7 +38,18 @@
   - `.env.development.example` / `.env.test.example` / `.env.production.example` にプレースホルダのみ記載してコミットする
   - 推測可能な値（`root` / `password` / `admin` 等）を使わない
 
+## テスト / CI
+
+> テストのレイヤー・設計技法（ブラックボックス / ホワイトボックス）・カバレッジゲート・GitHub Actions のワークフロー構成・CD の当面の扱いは [testing.md](testing.md) を正とする。
+
+- **品質チェック（静的解析）＋ 単体 ＋ 結合 ＋ E2E ＋ 契約テスト**を CI（GitHub Actions）で回し、`main` へのマージ必須チェックにする。
+- テストは **ブラックボックス（仕様ベース・同値分割 / 境界値）** と **ホワイトボックス（実装ベース・分岐網羅）** を併用する。
+- カバレッジは行・分岐の両方でゲート（[testing.md](testing.md) §3）。
+- CD は本番デプロイ先が未定（[todo.md](todo.md) #2）のため当面ビルド / パッケージ検証のみ。
+
 ## テストデータ規約（グローバル CLAUDE.md「テストデータの標準要件」準拠）
+
+> 環境変数・テスト用の値の扱いは [environment.md](environment.md)。
 
 - メールは `@example.com` / `@example.org` / `@example.net` のみ。
 - ユーザー名は `testuser_%` / `e2euser_%` 等の接頭辞、本文は `[E2E_TEST]` 等のタグを付ける。

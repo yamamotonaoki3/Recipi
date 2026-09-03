@@ -4,6 +4,8 @@
 
 自分あての通知（フォローされた / お気に入りされた / 感想がついた / フォロー中の新着レシピ）を確認する。機能仕様は [`../features/notification.md`](../features/notification.md)。
 
+> **MVP でのスコープ**: 通知は Phase 8 の機能。Phase 4（MVP）では「通知」destination を**空状態（「通知はまだありません」）固定の最小スタブ**として置くだけで、`notifications` テーブル・API・バッジは作らない（[../roadmap.md](../roadmap.md)「MVP ライン」）。
+
 ## 2. ナビゲーション
 
 - 入口: ボトムナビ / レールの「通知」（未読があればアイコンにバッジ）。

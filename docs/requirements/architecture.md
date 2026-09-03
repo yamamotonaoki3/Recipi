@@ -7,12 +7,15 @@
 ```
 Recipi/
 ├── settings.gradle.kts / build.gradle.kts   Kotlin フロントの Gradle モジュールを登録（backend / expoApp は含めない）
+├── .github/
+│   └── workflows/  CI: backend.yml / frontend-ts.yml / contract.yml / e2e.yml（[testing.md](testing.md)）
 ├── backend/        Python プロジェクト（FastAPI / Uvicorn）。Gradle 非登録
-│   ├── app/            ルーティング、SQLModel テーブル定義、Pydantic モデル、認証依存性
+│   ├── app/            ルーティング、SQLModel テーブル定義、Pydantic モデル、認証依存性、config.py（pydantic-settings）
 │   │   └── ai/         AI 連携（校正サービスの抽象 ＋ local / anthropic / stub 実装。Phase 11）
 │   ├── alembic/        マイグレーション（シード含む）
+│   ├── tests/          pytest（単体・結合）。結合は実 Postgres / MinIO
 │   ├── requirements.txt / requirements-dev.txt
-│   ├── pyproject.toml  ツール設定（ruff 等）、requires-python = ">=3.14,<3.15"
+│   ├── pyproject.toml  ツール設定（ruff / mypy / pytest）、requires-python = ">=3.14,<3.15"
 │   ├── .python-version  3.14.7（検証済みの固定バージョン）
 │   └── Dockerfile      python:3.14.7-slim（タグを固定）
 ├── openapi/        backend が出力する openapi.json ＋ 生成設定（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）
@@ -20,7 +23,9 @@ Recipi/
 │   ├── app/            Expo Router のルート（ファイルベース）
 │   ├── src/            画面・コンポーネント（NativeWind）・状態・api（生成 schema.ts + openapi-fetch + TanStack Query）
 │   ├── src-tauri/      Tauri 2（Windows・macOS デスクトップシェル。RN Web ビルドを読み込む）
-│   ├── package.json / app.json / tsconfig.json
+│   ├── __tests__/ or *.test.tsx   jest-expo + React Native Testing Library + MSW
+│   ├── .maestro/      Maestro の E2E フロー（YAML。Phase 1 以降）
+│   ├── package.json / app.json / app.config.ts / tsconfig.json
 ├── shared/         ★Kotlin トラック。KMP共有モジュール（commonMain）。フロント内部の共通ロジック（単位の表示整形 等）＋ OpenAPI から生成した Kotlin API クライアント / DTO
 ├── composeApp/     ★Kotlin トラック。Compose Multiplatform。commonMain / androidMain / iosMain / desktopMain、Ktor Client、画面/ViewModel。implementation(project(":shared"))
 ├── iosApp/         ★Kotlin トラック。Xcode プロジェクト（iOS の殻）
@@ -88,7 +93,15 @@ Recipi/
 | `minio` | S3 互換オブジェクトストレージ（画像保存。詳細は [features/image.md](features/image.md)） |
 | `ollama`（Phase 11・要検討） | dev の AI 校正のローカル推論。追加するかは spike（→ [todo.md](todo.md)） |
 
+## テスト / CI
+
+- `.github/workflows/` に GitHub Actions のワークフローを置く（`backend.yml` / `frontend-ts.yml` / `contract.yml` / `e2e.yml`）。方針・レイヤー・ツール・カバレッジは [testing.md](testing.md) を正とする。
+- backend の結合テストは GitHub Actions の `services:`（PostgreSQL）＋ MinIO コンテナを使い、Alembic マイグレーションを適用した使い捨て DB に対して API を叩く。
+- CD はデプロイ先が未定のため当面ビルド / パッケージ検証のみ（[testing.md](testing.md) §6）。
+
 ## 秘密情報の扱い（グローバル CLAUDE.md「秘密情報の標準取り扱い要件」準拠）
+
+> 全環境変数の一覧と各値の性質は [environment.md](environment.md)。
 
 - DB 認証情報・JWT 署名鍵・ストレージ認証情報・**AI プロバイダの API キー（`ANTHROPIC_API_KEY` 等）**などの**実値は `.gitignore` 対象の `.env` にのみ置く**。
 - `docker-compose.yml` などコミット対象ファイルは環境変数展開（`${DB_PASSWORD}`・`${ANTHROPIC_API_KEY}` など）で参照し、実値を埋め込まない。
