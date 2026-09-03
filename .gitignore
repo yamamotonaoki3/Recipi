@@ -8,5 +8,23 @@ target/
 .DS_Store
 *.log
 
+# Python（backend）
+backend/.venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# JS / Expo（expoApp）
+expoApp/.expo/
+expoApp/web-build/
+
+# テストのカバレッジ出力
+**/coverage/
+coverage.xml
+.coverage
+
 # Claude Code の内部設定（コミットしない）
 .claude/

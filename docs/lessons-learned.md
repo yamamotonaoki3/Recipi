@@ -15,8 +15,22 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-01 サーバー保存の一覧機能を足すとき（閲覧履歴）](#2026-09-01-サーバー保存の一覧機能を足すとき)
 - [2026-09-02 処理方式（トランザクション / 非同期 / バッチ）を横断で決めるとき](#2026-09-02-処理方式を横断で決めるとき)
 - [2026-09-02 AI 機能を要件に足すとき（誤字脱字チェック）](#2026-09-02-ai-機能を要件に足すとき)
+- [2026-09-03 環境変数ファイル・ローカル実行手順を作るとき](#2026-09-03-環境変数ファイルローカル実行手順を作るとき)
 
 ---
+
+## 2026-09-03 環境変数ファイル・ローカル実行手順を作るとき
+
+**きっかけ**: Issue #32（`.env.*.example` ＋ ローカル実行手順）。#32 の Codex レビューで採用した指摘。
+
+1. **Expo は `expoApp/` から `.env` を読む**（リポジトリルートではない）。フロントの `EXPO_PUBLIC_*` はルートの `.env.*.example` に入れず、`expoApp/.env.*.example` に分ける。
+2. **`docker compose` は `.env.development` を自動で読まない**。`${...}` 展開用の値は `--env-file .env.development` で明示的に渡す（compose の既定は `.env` のみ）。サービスの `env_file:` は「コンテナ内のランタイム変数」で、`${...}` 展開とは別の役割。
+3. **コンテナ内 ⇄ ホストのホスト名を区別する**。バックエンドをホストで動かすなら `localhost:5432` / `localhost:9000`、compose の `api` サービスとして動かすなら `postgres` / `minio`（サービス名）。`api` サービスの `environment:` で上書きする。
+4. **クライアントが読む URL は `localhost` にできない**。`S3_PUBLIC_URL_BASE`（画像 URL）や `EXPO_PUBLIC_API_BASE_URL` は、Android エミュレータなら `10.0.2.2`、実機なら開発マシンの LAN IP。Web / デスクトップ / iOS シミュレータは `localhost` で可。
+5. **README のコマンドは Windows と POSIX を分ける**。venv 有効化（`source .venv/bin/activate` vs `.\.venv\Scripts\Activate.ps1`）、環境変数の一時設定（`VAR=x cmd` vs `$env:VAR='x'; cmd`）は互換性がない。開発者は Windows。テストの `APP_ENV=test` はコマンドに書かず **pytest 設定側で強制**すると OS 差が出ない。
+6. **接続文字列は「本物を埋め込んだ形」で `.example` に書かない**。`postgresql+psycopg://<user>:<password>@<host>:<port>/<db>` のテンプレート、または各要素を別変数に分ける。組み立て済みの実 URL は `.gitignore` 対象の `.env.<APP_ENV>` のみ。
+7. **`docs/requirements/` 配下の相対リンクに `requirements/` を前置しない**（このミスは 3 回目）。`architecture.md` から兄弟ファイルへは `[environment.md](environment.md)`。
+8. **同じ「標準フロー」を 2 つの正の文書に別々に書かない**。`environment.md` で「ホスト実行が標準」と書くなら `architecture.md` の該当記述も合わせる（片方だけ直すと矛盾する）。
 
 ## 2026-09-02 処理方式を横断で決めるとき
 
