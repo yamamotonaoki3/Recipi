@@ -34,9 +34,24 @@ engine = create_engine(
 
 
 def get_session() -> Generator[Session]:
-    """FastAPI の依存性。`Depends(get_session)` で 1 リクエスト 1 セッション。"""
+    """FastAPI の依存性。`Depends(get_session)` で 1 リクエスト 1 セッション。
+
+    例外が発生したら rollback する。正常終了時にもここで commit するが、
+    これは「呼び出し側が commit を書き忘れた場合の保険」に過ぎない。
+    FastAPI は `Depends(yield)` の `yield` より後ろのコード（この commit も
+    含む）を「レスポンスをクライアントに送信し終えた後」に実行するため、
+    ここでの自動 commit だけに頼ると、クライアントが成功レスポンスを
+    受け取った直後の別リクエストが、まだ確定していない古い状態を読んでしまう
+    競合状態になりうる。**ルーター側は書き込みを終えたら `return` する前に
+    必ず自分で `session.commit()` を呼ぶこと**（`app/api/auth.py` 冒頭参照）。
+    """
     with Session(engine) as session:
-        yield session
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
 
 
 def check_db_connection() -> bool:

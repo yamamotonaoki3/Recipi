@@ -23,6 +23,11 @@ target-version = "py314"
 #   B   = flake8-bugbear（バグになりやすい書き方）
 select = ["E", "W", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI の `Depends(...)` はデフォルト引数として書くのが公式の書き方
+# （呼び出しごとの評価ではなく DI の仕組みで解決される）。B008 の誤検知を防ぐ。
+extend-immutable-calls = ["fastapi.Depends", "fastapi.security.HTTPBearer"]
+
 # ---------------------------------------------------------------------------
 # mypy — 静的型チェック（型ヒントの矛盾を実行前に見つける）
 #   使い方: `mypy .`

@@ -12,3 +12,6 @@ psycopg[binary]==3.3.5       # PostgreSQL ドライバ（v3）。[binary] はビ
 pydantic==2.13.5             # データ検証。FastAPI が内部で使う
 pydantic-settings==2.15.0    # 環境変数 / .env から設定を読む（app/config.py で使用）
 python-json-logger==4.2.0    # 標準 logging を JSON 形式で出力するフォーマッタ
+argon2-cffi==25.1.0          # パスワード・秘密の質問の回答を Argon2id でハッシュ化
+pyjwt==2.13.0                # アクセストークン（JWT）の署名・検証
+email-validator==2.3.0       # pydantic の EmailStr（メールアドレスの形式検証）に必要
