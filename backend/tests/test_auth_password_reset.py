@@ -91,9 +91,7 @@ def test_password_reset_confirm_revokes_old_access_token(client: TestClient, uni
     assert me_res.status_code == 401
 
     # リセット前のリフレッシュトークンも失効している。
-    refresh_res = client.post(
-        "/api/v1/auth/refresh", json={"refreshToken": old_refresh_token}
-    )
+    refresh_res = client.post("/api/v1/auth/refresh", json={"refreshToken": old_refresh_token})
     assert refresh_res.status_code == 401
 
 

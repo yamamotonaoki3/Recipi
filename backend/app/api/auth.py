@@ -78,6 +78,7 @@ def _error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
     """
     return {code: {"model": ErrorEnvelope} for code in status_codes}
 
+
 # パスワードリセットの試行回数ロック（暫定値・todo #16）:
 # 同一メールアドレスで直近 15 分に 5 回失敗したら 429 にする。
 _RESET_LOCKOUT_WINDOW = timedelta(minutes=15)
@@ -143,12 +144,8 @@ def _auth_response(session: Session, user: User, raw_refresh_token: str) -> Auth
     )
 
 
-@router.post(
-    "/signup", status_code=status.HTTP_201_CREATED, responses=_error_responses(409)
-)
-def signup(
-    body: SignupRequest, session: Session = Depends(get_session)
-) -> AuthTokenResponse:
+@router.post("/signup", status_code=status.HTTP_201_CREATED, responses=_error_responses(409))
+def signup(body: SignupRequest, session: Session = Depends(get_session)) -> AuthTokenResponse:
     existing = session.exec(select(User).where(User.email == body.email)).first()
     if existing is not None:
         raise conflict("このメールアドレスは既に登録されています")
@@ -204,9 +201,7 @@ def login(body: LoginRequest, session: Session = Depends(get_session)) -> AuthTo
 
 
 @router.post("/refresh", responses=_error_responses(401))
-def refresh(
-    body: RefreshRequest, session: Session = Depends(get_session)
-) -> RefreshResponse:
+def refresh(body: RefreshRequest, session: Session = Depends(get_session)) -> RefreshResponse:
     token_hash = hash_refresh_token(body.refresh_token)
 
     # まずロック無しでトークンの存在と所有者（user_id）だけ確認する。
@@ -273,9 +268,7 @@ def refresh(
     return RefreshResponse(access_token=access_token, refresh_token=raw_refresh_token)
 
 
-@router.post(
-    "/logout", status_code=status.HTTP_204_NO_CONTENT, responses=_error_responses(401)
-)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, responses=_error_responses(401))
 def logout(
     body: LogoutRequest,
     current_user: User = Depends(get_current_user),
@@ -401,9 +394,7 @@ def password_reset_confirm(
     # ユーザー行をロックする（refresh() 側の with_for_update と対になる）。
     # これにより、このリクエストが token_version 更新・トークン全失効を
     # 終える（commit する）まで、同じユーザーの /auth/refresh を待たせる。
-    user = session.exec(
-        select(User).where(User.email == body.email).with_for_update()
-    ).first()
+    user = session.exec(select(User).where(User.email == body.email).with_for_update()).first()
 
     # 「メールが見つからない」「秘密の質問の回答が違う」「新パスワードが不正」を
     # あえて区別せず、すべて同じ 400 にする（オラクル攻撃対策）。

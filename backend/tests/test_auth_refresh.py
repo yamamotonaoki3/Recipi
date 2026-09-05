@@ -98,9 +98,7 @@ def test_refresh_preserves_remember_me_across_rotation(
     from app.security import hash_refresh_token
 
     token_row = db_session.exec(
-        select(RefreshToken).where(
-            RefreshToken.token_hash == hash_refresh_token(new_refresh_token)
-        )
+        select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(new_refresh_token))
     ).first()
     assert token_row is not None
     assert token_row.remember_me is False
@@ -111,9 +109,7 @@ def test_refresh_unknown_token_returns_401(client: TestClient):
     assert res.status_code == 401
 
 
-def test_refresh_expired_token_returns_401(
-    client: TestClient, unique_email: str, db_session
-):
+def test_refresh_expired_token_returns_401(client: TestClient, unique_email: str, db_session):
     signup_body = _signup(client, unique_email)
     raw_refresh_token = signup_body["refreshToken"]
 

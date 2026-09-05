@@ -62,9 +62,7 @@ def test_signup_password_length_boundary(
     assert res.status_code == expected_status
 
 
-def test_signup_whitespace_only_security_answer_returns_400(
-    client: TestClient, unique_email: str
-):
+def test_signup_whitespace_only_security_answer_returns_400(client: TestClient, unique_email: str):
     """空白だけの回答は、正規化すると空文字になり本人確認の意味を失うため拒否する。"""
     body = _signup_body(unique_email)
     body["securityAnswer"] = "   "

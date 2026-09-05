@@ -61,9 +61,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_refresh_tokens_user_id", "refresh_tokens", ["user_id"])
     op.create_index("ix_refresh_tokens_chain_id", "refresh_tokens", ["chain_id"])
-    op.create_index(
-        "ix_refresh_tokens_token_hash", "refresh_tokens", ["token_hash"], unique=True
-    )
+    op.create_index("ix_refresh_tokens_token_hash", "refresh_tokens", ["token_hash"], unique=True)
 
     op.create_table(
         "password_reset_attempts",
@@ -72,9 +70,7 @@ def upgrade() -> None:
         sa.Column("ip_address", sa.String(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
-    op.create_index(
-        "ix_password_reset_attempts_email", "password_reset_attempts", ["email"]
-    )
+    op.create_index("ix_password_reset_attempts_email", "password_reset_attempts", ["email"])
     op.create_index(
         "ix_password_reset_attempts_ip_address", "password_reset_attempts", ["ip_address"]
     )
