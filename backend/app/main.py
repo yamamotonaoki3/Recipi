@@ -4,7 +4,7 @@
 
 やっていること（Phase 0 の scaffold）:
 - ロギングを初期化
-- リクエスト ID ミドルウェアを登録
+- リクエスト ID ミドルウェア ＋ CORS を登録
 - ヘルスチェック用のエンドポイントを 2 つ用意
   - GET /healthz     … プロセスが生きているか（liveness）
   - GET /healthz/db  … DB につながるか（readiness）
@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db import check_db_connection
@@ -33,6 +34,16 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
 )
 app.add_middleware(RequestIdMiddleware)
+
+# CORS: Web（Expo）/ Tauri はページと API のオリジンが違うので許可が要る。
+# 許可するオリジンは環境変数 CORS_ALLOW_ORIGINS（カンマ区切り）で設定する。
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/healthz", tags=["health"], summary="プロセスの生存確認")

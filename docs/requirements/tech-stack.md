@@ -27,7 +27,9 @@
 | UI / スタイル | **NativeWind**（Tailwind for RN） | デザイントークン・ダークモード対応の詳細は → [todo.md](todo.md) |
 | HTTP / 型 | **openapi-typescript**（型生成）＋ **openapi-fetch**（軽量クライアント） | `openapi.json` から型と fetch を生成。詳細は「型共有」節 |
 | データ取得 / キャッシュ | **TanStack Query** | 一覧のカーソルページング（`useInfiniteQuery`）、楽観更新 |
-| 状態管理 | Zustand / Jotai（実装時に選定） | → [todo.md](todo.md) |
+| 状態管理（クライアント状態） | **Zustand**（Issue #34 で確定） | 認証トークン・UI トグルなど「サーバーから取らない」少量の状態。サーバーデータは TanStack Query |
+| テスト | jest（`jest-expo` preset）＋ `@testing-library/react-native` ＋ `test-renderer` | ESLint 9 ＋ Prettier ＋ `tsc --noEmit`。MSW は jest-expo の RN 環境と相性が悪く Phase 1 で node 環境用に整える（[testing.md](testing.md)） |
+| バージョン固定 | `expoApp/package-lock.json`（CI は `npm ci`） | `.npmrc` に `legacy-peer-deps=true`（RN/Expo の peer 依存ずれを許容する実務的設定）。Issue #34 で確定 |
 | ネイティブ機能 | Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
 | ビルド / 配布 | EAS Build（クラウド）or ローカルビルド、Tauri の `.msi` / `.dmg` | iOS のローカルビルドは Windows では不可 → EAS Build（クラウド）。詳細 → [todo.md](todo.md) |
 

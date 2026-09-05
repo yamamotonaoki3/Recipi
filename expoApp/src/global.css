@@ -1,0 +1,6 @@
+/* NativeWind（React Native 版 Tailwind）のベース。
+   このファイルをルートレイアウトで import すると、className="..." で
+   Tailwind のユーティリティクラスが使えるようになる。 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -85,6 +85,15 @@ class Settings(BaseSettings):
     S3_SECRET_ACCESS_KEY: str = "changeme"
     S3_PUBLIC_URL_BASE: str = "http://localhost:9000/recipi-images"
 
+    # --- CORS（フロントからのブラウザ / デスクトップ経由の呼び出しを許可） -
+    # Web（Expo）や Tauri はページのオリジン（例 http://localhost:8081）と
+    # API のオリジン（http://localhost:8000）が違うため、CORS の許可が要る。
+    # カンマ区切りで複数指定。本番はデプロイ先のフロントのオリジンを入れる。
+    CORS_ALLOW_ORIGINS: str = (
+        "http://localhost:8081,http://localhost:19006,"
+        "http://localhost:1420,http://tauri.localhost,tauri://localhost"
+    )
+
     # --- ログ ----------------------------------------------------------
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: Literal["json", "text"] = "json"
@@ -96,6 +105,11 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.APP_ENV == "test"
+
+    @property
+    def cors_allow_origins(self) -> list[str]:
+        """CORS_ALLOW_ORIGINS（カンマ区切り文字列）をリストにして返す。"""
+        return [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
 
     @model_validator(mode="after")
     def _reject_insecure_production_config(self) -> Settings:

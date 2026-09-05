@@ -17,8 +17,33 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-02 AI 機能を要件に足すとき（誤字脱字チェック）](#2026-09-02-ai-機能を要件に足すとき)
 - [2026-09-03 環境変数ファイル・ローカル実行手順を作るとき](#2026-09-03-環境変数ファイルローカル実行手順を作るとき)
 - [2026-09-04 backend の scaffold（FastAPI）を作るとき](#2026-09-04-backend-の-scaffold-を作るとき)
+- [2026-09-04 frontend の scaffold（Expo）を作るとき](#2026-09-04-frontend-の-scaffold-を作るとき)
+- [2026-09-05 ESLint を型情報ベースで厳格化するとき](#2026-09-05-eslint-を型情報ベースで厳格化するとき)
 
 ---
+
+## 2026-09-05 ESLint を型情報ベースで厳格化するとき
+
+**きっかけ**: Issue #34 の scaffold に、ユーザー要望で `no-floating-promises` / `no-explicit-any` / `react-hooks/exhaustive-deps` を追加。
+
+1. **`no-floating-promises` は型情報が要る**。フラットコンフィグでは対象ファイルの `languageOptions.parserOptions.projectService: true` を設定しないと有効にならない（構文だけのルールと違い、`tsconfig.json` の型チェックに相乗りする）。
+2. **`eslint-config-expo/flat` は `@typescript-eslint` と `react-hooks` プラグインを既に登録済み**。追加のルールを使うだけなら `plugins` を自前で再登録する必要はなく、`files` を絞った設定オブジェクトに `rules` だけ足せばよい（フラットコンフィグは対象ファイルにマッチする全設定オブジェクトの `plugins` をマージする）。
+3. **`tsconfigRootDir: __dirname` を `.js` の設定ファイル自身に書くと `no-undef` で落ちる**。`eslint.config.js` は Node の CommonJS 実行だが、Expo のベース設定は `.js` ファイルに Node のフル環境（`__dirname` 等）まではグローバル登録していない。`projectService` は既定で `process.cwd()` 起点に tsconfig を探すため、通常は `tsconfigRootDir` を省略してよい。
+4. **`react-native-reanimated` を実際に使い始めたら `babel.config.js` に `plugins: ["react-native-reanimated/plugin"]` の追加が必須**（配列の最後に置く）。`package.json` には依存として入っているが、現状の scaffold では `useSharedValue` 等の API をまだ使っていないため未設定。設定を忘れたままアニメーション実装に着手すると動かず詰まるので、着手時に思い出すこと。
+
+## 2026-09-04 frontend の scaffold を作るとき
+
+**きっかけ**: Issue #34（Expo scaffold ＋ CI）。React Native / Expo エコシステムの依存の食い違いを多数踏んだ。
+
+1. **`create-expo-app --template default` はデモ盛りだくさん**。テーマ切替・アニメアイコン・タブデモ・`.claude/`・`AGENTS.md`・`LICENSE`・大量の画像。scaffold としては `src/app/{_layout,index}.tsx` だけ残して他は削る。
+2. **`.npmrc` に `legacy-peer-deps=true` を置く**。RN/Expo の周辺パッケージは peer 依存の範囲が古いままのことが多く（例: `openapi-typescript` が `typescript@^5` を要求するが Expo は TS 6 を入れる）、これが無いと `npm install` が止まる。
+3. **`@testing-library/react-native@14` は `test-renderer`（React 19 で `react-test-renderer` から分離した別パッケージ）を peer に要求する**。入れないと「Cannot find module 'test-renderer'」でテストが全滅。
+4. **`jest` / `@react-native/jest-preset` は明示インストールが必要**、かつ jest-preset は **RN と同じバージョン**にそろえる（`@0.86.3`）。latest を入れると別の RN 向け設定と食い違って壊れる。
+5. **MSW は jest-expo の react-native 実行環境で動かない**（msw の `exports` が `"react-native": null` を宣言）。`jest.setup` で `import "msw/node"` すると全テストが「require of ESM」で落ちる。Phase 0 は API クライアントを `jest.mock` で差し替える方式にし、MSW の本格導入（node 環境のテスト）は Phase 1 に回す。
+6. **`eslint` は 9.x に固定**。`eslint-config-expo` の依存する `eslint-plugin-react` が ESLint 10 の API 変更（`context.getFilename` 廃止）で壊れる。
+7. **`EXPO_PUBLIC_API_BASE_URL` は「ホストまで」**（`http://localhost:8000`）にし、`/api/v1` などのパスは `openapi.json` → `schema.ts` 側に含める。openapi-fetch の `baseUrl` ＋ 型付きパスの標準の使い方。
+8. **`expo-env.d.ts` はコミットする**（テンプレは gitignore するが、CI の `tsc` を安定させるため `/// <reference types="expo/types" />` の 1 行版を置く）。
+9. **prettier / eslint の ignore に `src-tauri/` と生成物を必ず入れる**。入れないと `src-tauri/target/` の数百ファイルを prettier がスキャンする。
 
 ## 2026-09-04 backend の scaffold を作るとき
 

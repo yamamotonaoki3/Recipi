@@ -33,8 +33,8 @@ if config.config_file_name is not None:
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # autogenerate が比較する「あるべきスキーマ」。
-# Phase 1 以降で `import app.models  # noqa` を足すと、その全モデルが
-# SQLModel.metadata に登録されて対象になる。
+# Phase 1 以降で app.models（SQLModel テーブル定義）を import すると、
+# その全モデルが SQLModel.metadata に登録されて autogenerate の対象になる。
 target_metadata = SQLModel.metadata
 
 

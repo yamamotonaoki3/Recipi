@@ -44,6 +44,7 @@
 | `S3_PUBLIC_URL_BASE` | 表示用 URL の基底（公開バケット時） | per-env | `http://localhost:9000/recipi-images` | 署名付き URL 方式なら未使用（[features/image.md](features/image.md)） |
 | `MINIO_ROOT_USER` | compose の MinIO のルートユーザー | secret / local-only | `changeme` | `S3_ACCESS_KEY_ID` と一致させる。`.env.production` には**書かない** |
 | `MINIO_ROOT_PASSWORD` | compose の MinIO のルートパスワード | secret / local-only | `changeme` | `S3_SECRET_ACCESS_KEY` と一致させる |
+| `CORS_ALLOW_ORIGINS` | Web / Tauri からの API 呼び出しを許可するオリジン（カンマ区切り） | per-env | `http://localhost:8081,http://tauri.localhost,tauri://localhost` | 本番はデプロイ先フロントのオリジン。Issue #34 |
 | `LOG_LEVEL` | ログレベル | per-env | `INFO` | dev は `DEBUG` 可 |
 | `LOG_FORMAT` | ログ形式 | per-env | `json` | 本番は `json`（構造化ログ・[non-functional.md](non-functional.md) / [todo.md](todo.md) #44） |
 | `AI_PROVIDER` | AI 校正プロバイダの選択（**Phase 11**） | per-env | `local`（dev）/ `stub`（test）/ `anthropic`（prod） | 契約はプロバイダ非依存（[features/ai-proofread.md](features/ai-proofread.md)） |
@@ -53,11 +54,11 @@
 
 | 変数 | 用途 | 値の性質 | 例プレースホルダ | 備考 |
 | --- | --- | --- | --- | --- |
-| `EXPO_PUBLIC_API_BASE_URL` | バックエンド API の基底 URL | per-env | `http://localhost:8000/api/v1` | エミュレータからは `10.0.2.2`（Android）等に読み替え。**秘密は入れない**（クライアントに埋め込まれる） |
+| `EXPO_PUBLIC_API_BASE_URL` | バックエンド API の**ホストまで**（例: `http://localhost:8000`。`/api/v1` などのパスは付けない） | per-env | `http://localhost:8000` | Android エミュレータからは `http://10.0.2.2:8000`、実機は LAN IP。**秘密は入れない**（クライアントに埋め込まれる） |
 
 > フロントには**秘密情報を置かない**。`EXPO_PUBLIC_` が付いた変数はビルド成果物に埋め込まれ、誰でも読める。
 >
-> **Expo は `expoApp/` ディレクトリから `.env` を読む**（リポジトリルートではない）。そのため frontend-ts の環境変数は `expoApp/.env.development` 等に置き、テンプレートも `expoApp/.env.*.example` として `expoApp` 側に置く（`expoApp/` を作成する Issue #34 で追加）。
+> **Expo は `expoApp/` ディレクトリから `.env` を読む**（リポジトリルートではない）。そのため frontend-ts の環境変数は `expoApp/.env.development` 等に置き、テンプレートも `expoApp/.env.*.example` として `expoApp` 側に置く（`expoApp/` に作成済み。Issue #34）。
 
 ## 3. `.env.*.example` に書く内容
 
@@ -67,7 +68,7 @@
 - **`.env.test.example`**: `APP_ENV=test` / `AI_PROVIDER=stub` / テスト用 DB・ストレージのプレースホルダ。
 - **`.env.production.example`**: `APP_ENV=production` / `AI_PROVIDER=anthropic` / `ANTHROPIC_API_KEY=`（空）。`MINIO_ROOT_*` は書かない（本番は S3 互換のマネージドを想定）。
 
-### `expoApp/`（frontend-ts 用・Issue #34 で追加）
+### `expoApp/`（frontend-ts 用・作成済み）
 
 - `expoApp/.env.development.example` / `.env.test.example` / `.env.production.example` に `EXPO_PUBLIC_API_BASE_URL` のプレースホルダ。`.env` の実体は `expoApp/.gitignore` で除外する。
 

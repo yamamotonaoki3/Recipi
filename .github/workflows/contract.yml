@@ -1,8 +1,8 @@
-# 契約テスト（Phase 0 版）。
-# FastAPI から openapi.json を作り直して、コミット済みと一致するか確認する。
-# 差分が出る = API を変えたのに openapi/openapi.json を更新し忘れている。
-#
-# フロント（expoApp）の生成物 schema.ts の diff チェックは #34 で追加する。
+# 契約テスト。
+# 1) FastAPI から openapi.json を作り直して、コミット済みと一致するか確認
+# 2) その openapi.json からフロントの型（expoApp/src/api/schema.ts）を
+#    作り直して、コミット済みと一致するか確認
+# 差分が出る = API を変えたのに生成物を更新し忘れている。
 # 方針は docs/requirements/testing.md §1・§5。
 
 name: contract
@@ -11,12 +11,14 @@ on:
   push:
     paths:
       - "backend/**"
+      - "expoApp/**"
       - "openapi/**"
       - ".github/workflows/contract.yml"
   pull_request:
     branches: [main]
     paths:
       - "backend/**"
+      - "expoApp/**"
       - "openapi/**"
       - ".github/workflows/contract.yml"
 
@@ -45,9 +47,38 @@ jobs:
         run: python -m scripts.export_openapi
 
       - name: コミット済みと差分が無いか確認
-        working-directory: ${{ github.workspace }}   # リポジトリルートで git を実行
+        working-directory: ${{ github.workspace }} # リポジトリルートで git を実行
         run: |
           if ! git diff --exit-code -- openapi/openapi.json; then
             echo "::error::openapi/openapi.json がコードと一致しません。backend/ で 'python -m scripts.export_openapi' を実行してコミットしてください。"
+            exit 1
+          fi
+
+  schema-ts-in-sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: expoApp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: expoApp/package-lock.json
+
+      - name: 依存をインストール
+        run: npm ci
+
+      - name: schema.ts を再生成
+        run: npm run gen:api
+
+      - name: コミット済みと差分が無いか確認
+        working-directory: ${{ github.workspace }}
+        run: |
+          if ! git diff --exit-code -- expoApp/src/api/schema.ts; then
+            echo "::error::expoApp/src/api/schema.ts が openapi.json と一致しません。expoApp/ で 'npm run gen:api' を実行してコミットしてください。"
             exit 1
           fi
