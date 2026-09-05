@@ -18,8 +18,17 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-03 環境変数ファイル・ローカル実行手順を作るとき](#2026-09-03-環境変数ファイルローカル実行手順を作るとき)
 - [2026-09-04 backend の scaffold（FastAPI）を作るとき](#2026-09-04-backend-の-scaffold-を作るとき)
 - [2026-09-04 frontend の scaffold（Expo）を作るとき](#2026-09-04-frontend-の-scaffold-を作るとき)
+- [2026-09-05 ESLint を型情報ベースで厳格化するとき](#2026-09-05-eslint-を型情報ベースで厳格化するとき)
 
 ---
+
+## 2026-09-05 ESLint を型情報ベースで厳格化するとき
+
+**きっかけ**: Issue #34 の scaffold に、ユーザー要望で `no-floating-promises` / `no-explicit-any` / `react-hooks/exhaustive-deps` を追加。
+
+1. **`no-floating-promises` は型情報が要る**。フラットコンフィグでは対象ファイルの `languageOptions.parserOptions.projectService: true` を設定しないと有効にならない（構文だけのルールと違い、`tsconfig.json` の型チェックに相乗りする）。
+2. **`eslint-config-expo/flat` は `@typescript-eslint` と `react-hooks` プラグインを既に登録済み**。追加のルールを使うだけなら `plugins` を自前で再登録する必要はなく、`files` を絞った設定オブジェクトに `rules` だけ足せばよい（フラットコンフィグは対象ファイルにマッチする全設定オブジェクトの `plugins` をマージする）。
+3. **`tsconfigRootDir: __dirname` を `.js` の設定ファイル自身に書くと `no-undef` で落ちる**。`eslint.config.js` は Node の CommonJS 実行だが、Expo のベース設定は `.js` ファイルに Node のフル環境（`__dirname` 等）まではグローバル登録していない。`projectService` は既定で `process.cwd()` 起点に tsconfig を探すため、通常は `tsconfigRootDir` を省略してよい。
 
 ## 2026-09-04 frontend の scaffold を作るとき
 
