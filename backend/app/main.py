@@ -15,12 +15,20 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 
+from app.api.auth import router as auth_router
+from app.api.users import router as users_router
 from app.config import settings
 from app.db import check_db_connection
+from app.errors import AppError
 from app.logging_config import configure_logging
 from app.middleware import RequestIdMiddleware
 
@@ -44,6 +52,93 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(AppError)
+def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
+    """`AppError`（とそのファクトリ関数）を api.md の統一エラー形式に変換する。"""
+    return JSONResponse(status_code=exc.status_code, content=exc.to_envelope())
+
+
+@app.exception_handler(RequestValidationError)
+def handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """FastAPI 標準のバリデーションエラー（デフォルト 422）を 400 に統一する。"""
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "リクエストの内容が不正です",
+                "details": {"errors": jsonable_encoder(exc.errors())},
+            }
+        },
+    )
+
+
+@app.exception_handler(Exception)
+def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    """想定外の例外は 500 + INTERNAL にする（詳細はログにのみ出す）。"""
+    logger.exception("unhandled exception")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {"code": "INTERNAL", "message": "サーバー内部エラーです", "details": None}
+        },
+    )
+
+
+app.include_router(auth_router)
+app.include_router(users_router)
+
+
+def _custom_openapi() -> dict[str, Any]:
+    """`openapi.json` 上のバリデーションエラー応答を実際の挙動（400）に合わせる。
+
+    FastAPI は標準では「リクエストの形式が不正」なら 422 を返す前提で
+    OpenAPI を生成するが、上の `handle_validation_error` で実際には 400 +
+    共通エラー形式に変換している。生成される openapi.json（→ フロントの型）が
+    実際のレスポンスと食い違わないよう、ここで 422 を 400 に置き換える。
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+        openapi_version=app.openapi_version,
+    )
+    schema.setdefault("components", {}).setdefault("schemas", {})["ErrorEnvelope"] = {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+            "error": {
+                "type": "object",
+                "required": ["code", "message"],
+                "properties": {
+                    "code": {"type": "string"},
+                    "message": {"type": "string"},
+                    "details": {"type": "object", "nullable": True},
+                },
+            }
+        },
+    }
+    error_response = {
+        "description": "リクエストの内容が不正です",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}},
+    }
+    for path_item in schema.get("paths", {}).values():
+        for operation in path_item.values():
+            responses = operation.get("responses")
+            if responses and "422" in responses:
+                del responses["422"]
+                responses["400"] = error_response
+
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = _custom_openapi  # type: ignore[method-assign]
 
 
 @app.get("/healthz", tags=["health"], summary="プロセスの生存確認")

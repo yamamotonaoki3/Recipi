@@ -20,6 +20,9 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
+# モデルを import すると、そのテーブル定義が SQLModel.metadata に登録される。
+# ここで import しておかないと autogenerate が新しいテーブルに気づかない。
+import app.models  # noqa: F401,E402
 from alembic import context
 from app.config import settings
 

@@ -65,3 +65,60 @@ def client() -> TestClient:
     from app.main import app
 
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _reset_password_reset_attempts(request: pytest.FixtureRequest):
+    """結合テストの前に `password_reset_attempts` を空にする。
+
+    `TestClient` はどのテストでも同じダミー IP（"testclient"）を使うため、
+    このテーブルの行を残したままにすると、IP 単位のレート制限（app/api/auth.py
+    の `_IP_LOCKOUT_MAX_ATTEMPTS`）が別々のテスト実行をまたいで蓄積し、
+    本来レート制限を意図していないテストまで 429 になってしまう。
+
+    `@pytest.mark.integration` が付いたテストだけに絞る: DB / マイグレーション
+    を必要としない単体テスト（test_config.py 等）は、Docker が無い環境でも
+    `pytest -m "not integration"` で動く前提（README・testing.md）なので、
+    ここで無条件に DB へ接続すると、その前提を壊してしまう。
+    """
+    if request.node.get_closest_marker("integration") is None:
+        yield
+        return
+
+    from sqlmodel import Session, delete
+
+    from app.db import engine
+    from app.models.password_reset_attempt import PasswordResetAttempt
+
+    with Session(engine) as session:
+        session.exec(delete(PasswordResetAttempt))
+        session.commit()
+    yield
+
+
+@pytest.fixture
+def unique_email() -> str:
+    """テストごとに衝突しないメールアドレスを作る。
+
+    実在しうるドメインを避け、必ず `@example.com`（RFC 2606 予約ドメイン）を
+    使う（グローバル CLAUDE.md のテストデータ規約）。
+    """
+    import uuid
+
+    return f"testuser_{uuid.uuid4().hex}@example.com"
+
+
+@pytest.fixture
+def db_session():
+    """テストコードから直接 DB を読み書きするためのセッション。
+
+    アプリの `get_session`（1 リクエスト単位で自動 commit）とは別に、
+    テスト側で任意のタイミングで commit したいときに使う
+    （例: token_version を直接書き換えて 401 になることを確認する）。
+    """
+    from sqlmodel import Session
+
+    from app.db import engine
+
+    with Session(engine) as session:
+        yield session
