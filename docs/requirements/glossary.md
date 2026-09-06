@@ -72,7 +72,7 @@
 | 削除キュー（`pending_storage_deletions`） | あとで消す画像オブジェクトキーの ToDo リスト。ストレージ障害を削除 API に波及させないため、いったんキューに積んで定期バッチでまとめて消す。[processing-model.md](processing-model.md) §9 |
 | ジョブキュー（arq / Celery + Redis） | やることをキューに積み専用ワーカーが実行する仕組み。再試行・可視化に強いが Redis と運用コストが増える。Recipi は MVP では使わず Phase 10 以降に再検討 |
 | 品質チェック（静的解析） | 実行せずにコードを解析して誤り・スタイル崩れを弾くこと。backend は ruff（lint/format）＋ mypy（型）、frontend は ESLint ＋ Prettier ＋ `tsc`。[testing.md](testing.md) |
-| 単体テスト / 結合テスト / E2E テスト | 単体 = 関数・部品を単独で検証（外部依存はモック）。結合 = 複数部品を実 DB / ストレージにつないで検証。E2E = ユーザー操作の流れを端から端まで（Maestro）。[testing.md](testing.md) §1 |
+| 単体テスト / 結合テスト / E2E テスト | 単体 = 関数・部品を単独で検証（外部依存はモック）。結合 = 複数部品を実 DB / ストレージにつないで検証。E2E = ユーザー操作の流れを端から端まで（Web = Playwright、Android = Appium + WebdriverIO）。[testing.md](testing.md) §1 |
 | ブラックボックステスト | 内部実装を見ず、仕様（受け入れ基準・API 契約・画面仕様）から入力と期待結果を決めるテスト。[testing.md](testing.md) §2 |
 | ホワイトボックステスト | 実装の条件分岐・状態遷移を見て、各分岐・各経路を通すようにケースを決めるテスト。[testing.md](testing.md) §2 |
 | 同値分割 / 境界値分析 | ブラックボックスの技法。入力を「同じ結果になるグループ」に分けて代表値を選び（同値分割）、グループの境目の内・外を突く（境界値分析）。例: タイトル 1〜120 字 → 0・1・120・121 文字 |

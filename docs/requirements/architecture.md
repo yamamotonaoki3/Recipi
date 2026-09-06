@@ -24,7 +24,7 @@ Recipi/
 │   ├── src/            画面・コンポーネント（NativeWind）・状態・api（生成 schema.ts + openapi-fetch + TanStack Query）
 │   ├── src-tauri/      Tauri 2（Windows・macOS デスクトップシェル。RN Web ビルドを読み込む）
 │   ├── __tests__/ or *.test.tsx   jest-expo + React Native Testing Library + MSW
-│   ├── .maestro/      Maestro の E2E フロー（YAML。Phase 1 以降）
+│   ├── e2e/            E2E フロー（Phase 1 以降）。web/ = Playwright、android/ = Appium + WebdriverIO
 │   ├── package.json / app.json / app.config.ts / tsconfig.json
 ├── shared/         ★Kotlin トラック。KMP共有モジュール（commonMain）。フロント内部の共通ロジック（単位の表示整形 等）＋ OpenAPI から生成した Kotlin API クライアント / DTO
 ├── composeApp/     ★Kotlin トラック。Compose Multiplatform。commonMain / androidMain / iosMain / desktopMain、Ktor Client、画面/ViewModel。implementation(project(":shared"))
