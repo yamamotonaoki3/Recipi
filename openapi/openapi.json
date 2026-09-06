@@ -93,6 +93,173 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "IngredientGroupInput": {
+        "properties": {
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/IngredientInput"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Ingredients",
+            "type": "array"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "ingredients"
+        ],
+        "title": "IngredientGroupInput",
+        "type": "object"
+      },
+      "IngredientGroupOutput": {
+        "properties": {
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/IngredientOutput"
+            },
+            "title": "Ingredients",
+            "type": "array"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "name",
+          "ingredients"
+        ],
+        "title": "IngredientGroupOutput",
+        "type": "object"
+      },
+      "IngredientInput": {
+        "properties": {
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,7}|(?=[\\d.]{1,11}0*$)\\d{0,7}\\.\\d{0,3}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "refRecipeId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refrecipeid"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "IngredientInput",
+        "type": "object"
+      },
+      "IngredientOutput": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "placement": {
+            "title": "Placement",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "refRecipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RefRecipe"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "name",
+          "quantity",
+          "unit",
+          "placement",
+          "refRecipe"
+        ],
+        "title": "IngredientOutput",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -184,6 +351,291 @@
         "title": "PasswordResetRequestResponse",
         "type": "object"
       },
+      "RecipeAuthor": {
+        "properties": {
+          "avatarUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatarurl"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "title": "RecipeAuthor",
+        "type": "object"
+      },
+      "RecipeListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "title": "RecipeListResponse",
+        "type": "object"
+      },
+      "RecipeResponse": {
+        "properties": {
+          "author": {
+            "$ref": "#/components/schemas/RecipeAuthor"
+          },
+          "commentCount": {
+            "title": "Commentcount",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "favoriteCount": {
+            "title": "Favoritecount",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "ingredientGroups": {
+            "items": {
+              "$ref": "#/components/schemas/IngredientGroupOutput"
+            },
+            "title": "Ingredientgroups",
+            "type": "array"
+          },
+          "isFavorited": {
+            "title": "Isfavorited",
+            "type": "boolean"
+          },
+          "isPublic": {
+            "title": "Ispublic",
+            "type": "boolean"
+          },
+          "servings": {
+            "title": "Servings",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepOutput"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "thumbnailUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnailurl"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "title",
+          "description",
+          "servings",
+          "isPublic",
+          "thumbnailUrl",
+          "isFavorited",
+          "favoriteCount",
+          "commentCount",
+          "ingredientGroups",
+          "steps",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "RecipeResponse",
+        "type": "object"
+      },
+      "RecipeSummary": {
+        "description": "自分のレシピ一覧のカード 1 枚分（features/recipe.md §2「自分のレシピ一覧」）。",
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isPublic": {
+            "title": "Ispublic",
+            "type": "boolean"
+          },
+          "thumbnailUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnailurl"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "thumbnailUrl",
+          "isPublic",
+          "createdAt"
+        ],
+        "title": "RecipeSummary",
+        "type": "object"
+      },
+      "RecipeWriteRequest": {
+        "description": "`POST /recipes` と `PUT /recipes/{id}` 共通のリクエスト body。\n\n`PUT` の「`thumbnailKey` 省略 = サムネイル変更なし」は、ルーター側で\n`model_fields_set` に `\"thumbnail_key\"` が含まれるかで判定する\n（features/recipe.md §5「省略 = 変更なし / null = 削除 / 既存キー再送 = 維持 /\n新キー = 差し替え」）。",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Description",
+            "type": "string"
+          },
+          "ingredientGroups": {
+            "items": {
+              "$ref": "#/components/schemas/IngredientGroupInput"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Ingredientgroups",
+            "type": "array"
+          },
+          "isPublic": {
+            "default": false,
+            "title": "Ispublic",
+            "type": "boolean"
+          },
+          "servings": {
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Servings",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepInput"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Steps",
+            "type": "array"
+          },
+          "thumbnailKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnailkey"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "servings",
+          "ingredientGroups",
+          "steps"
+        ],
+        "title": "RecipeWriteRequest",
+        "type": "object"
+      },
+      "RefRecipe": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RefRecipe",
+        "type": "object"
+      },
       "RefreshRequest": {
         "properties": {
           "refreshToken": {
@@ -255,6 +707,90 @@
           "securityAnswer"
         ],
         "title": "SignupRequest",
+        "type": "object"
+      },
+      "StepInput": {
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "title": "Body",
+            "type": "string"
+          },
+          "imageKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imagekey"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "StepInput",
+        "type": "object"
+      },
+      "StepOutput": {
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "imageUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imageurl"
+          }
+        },
+        "required": [
+          "body",
+          "imageUrl"
+        ],
+        "title": "StepOutput",
+        "type": "object"
+      },
+      "UnitOption": {
+        "properties": {
+          "placement": {
+            "title": "Placement",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "placement"
+        ],
+        "title": "UnitOption",
+        "type": "object"
+      },
+      "UnitsResponse": {
+        "properties": {
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/UnitOption"
+            },
+            "title": "Units",
+            "type": "array"
+          }
+        },
+        "required": [
+          "units"
+        ],
+        "title": "UnitsResponse",
         "type": "object"
       },
       "UpdateMeRequest": {
@@ -676,6 +1212,310 @@
         ]
       }
     },
+    "/api/v1/recipes": {
+      "post": {
+        "operationId": "create_recipe_api_v1_recipes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Recipe",
+        "tags": [
+          "recipes"
+        ]
+      }
+    },
+    "/api/v1/recipes/{recipe_id}": {
+      "delete": {
+        "operationId": "delete_recipe_api_v1_recipes__recipe_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipe_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipe Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Recipe",
+        "tags": [
+          "recipes"
+        ]
+      },
+      "get": {
+        "operationId": "get_recipe_api_v1_recipes__recipe_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipe_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipe Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {},
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Recipe",
+        "tags": [
+          "recipes"
+        ]
+      },
+      "put": {
+        "operationId": "update_recipe_api_v1_recipes__recipe_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipe_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipe Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Recipe",
+        "tags": [
+          "recipes"
+        ]
+      }
+    },
+    "/api/v1/units": {
+      "get": {
+        "operationId": "list_units_api_v1_units_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Units",
+        "tags": [
+          "units"
+        ]
+      }
+    },
     "/api/v1/users/me": {
       "patch": {
         "operationId": "update_me_api_v1_users_me_patch",
@@ -729,6 +1569,98 @@
         "summary": "Update Me",
         "tags": [
           "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/recipes": {
+      "get": {
+        "operationId": "list_my_recipes_api_v1_users_me_recipes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List My Recipes",
+        "tags": [
+          "recipes"
         ]
       }
     },

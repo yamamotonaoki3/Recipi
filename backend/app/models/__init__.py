@@ -8,8 +8,22 @@ Alembic の `env.py` は `SQLModel.metadata` を見て autogenerate するが、
 
 from __future__ import annotations
 
+from app.models.ingredient import Ingredient
+from app.models.ingredient_group import IngredientGroup
 from app.models.password_reset_attempt import PasswordResetAttempt
+from app.models.recipe import Recipe
 from app.models.refresh_token import RefreshToken
+from app.models.step import Step
+from app.models.unit import Unit
 from app.models.user import User
 
-__all__ = ["PasswordResetAttempt", "RefreshToken", "User"]
+__all__ = [
+    "Ingredient",
+    "IngredientGroup",
+    "PasswordResetAttempt",
+    "Recipe",
+    "RefreshToken",
+    "Step",
+    "Unit",
+    "User",
+]

@@ -10,7 +10,7 @@
 | 6 | Android minSdk / iOS 対応下限の確定 | Phase 0 | [non-functional.md](non-functional.md) |
 | 7 | フロントの状態管理 / ナビゲーション。**TS**: クライアント状態 = **Zustand**（Issue #34 で確定）、サーバーデータ = TanStack Query、ルーティング = Expo Router（採用済み）。キャッシュ無効化の細かい方針は各機能実装時に詰める。**Kotlin**: ViewModel / Koin / Compose Navigation 等（随時） | Phase 0（TS 済）| [tech-stack.md](tech-stack.md) |
 | 8 | S3 互換ストレージの本番サービス選定（R2 / S3 等）、署名付き URL か公開バケットか | Phase 3〜10 | [features/image.md](features/image.md) |
-| 9 | 検索: `pg_trgm` 拡張の採否、`title_normalized` / `name_normalized` の正規化仕様（かな / カナ・送り仮名ゆれをどこまで吸収するか）、`q` の語数・長さ上限 | Phase 4 | [features/search.md](features/search.md) |
+| 9 | 検索: `pg_trgm` 拡張の採否、`title_normalized` / `name_normalized` の正規化仕様のうち **かな / カナ・送り仮名ゆれをどこまで吸収するか**。**Phase 2（Issue #37）で確定した分**: 正規化は `trim + NFKC（全角/半角そろえ）+ casefold（小文字化）` の最小仕様（`app/text_normalize.normalize_search_text`）。`q` は素の `ILIKE '%語%'`（`GET /users/me/recipes` は自分のレシピのみが対象なので pg_trgm 不要）。`q` の上限は **最大 5 語 / 各語 30 文字**（超過は 400）。**残**: フィード全体検索 `GET /recipes`（Phase 4）での pg_trgm 採否と、かな/カナ・送り仮名の吸収範囲 | Phase 4 | [features/search.md](features/search.md) |
 | 9b | ホームの検索窓: スクロール時の挙動（完全固定 / 縮小）、確定タイミング（Enter のみ / 入力停止でインクリメンタル）、検索履歴・サジェスト（将来） | Phase 4 | [screens/home.md](screens/home.md), [features/search.md](features/search.md) |
 | 9c | ボトムナビ / レールのレイアウトの見た目（5 destination = ホーム / 履歴 / ＋ / 通知 / マイページ。「＋」は中央 3 番目・目立つスタイル） | Phase 4 | [screens/navigation.md](screens/navigation.md), [screens/components.md](screens/components.md) |
 | 9d | 閲覧履歴: ユーザーあたりの保持件数の上限と超過分の削除方式（挿入時トリミング / 定期ジョブ）、履歴からの個別削除（スワイプ削除等）を入れるか、記録トリガーは「詳細を開いたときのみ」で確定 | Phase 4 | [features/view-history.md](features/view-history.md) |
@@ -40,7 +40,7 @@
 | 34 | 通知バッジの更新方式（他 destination 滞在中に `unread-count` をポーリングするか、間隔） | Phase 8 | [screens/notifications.md](screens/notifications.md) |
 | 35 | レシピ作成画面をデスクトップでフルスクリーンダイアログにするか、大きめダイアログにするか | Phase 2 | [screens/recipe-editor.md](screens/recipe-editor.md) |
 | 36 | 破壊的操作の取り消し（Undo スナックバー）を入れるか | MVP 完了後 | [screens/components.md](screens/components.md) |
-| 37 | 材料グループ: グループ数・グループあたり材料数の上限、名前なしグループが複数あるときの詳細表示（見出しなしで連結 / 区切り線） | Phase 2 | [features/recipe.md](features/recipe.md) |
+| 37 | 材料グループ: ~~グループ数・グループあたり材料数の上限~~（**Issue #37 で確定**: グループ 1〜20 / グループあたり材料 1〜50 / 手順 1〜100。API 層バリデーションで担保）、名前なしグループが複数あるときの詳細表示（見出しなしで連結 / 区切り線）は未確定のまま | Phase 2 | [features/recipe.md](features/recipe.md) |
 | 38 | 材料のレシピ参照: 「レシピから選ぶ」ピッカーの UI 詳細（一覧 / 検索 / 最近作ったもの）、循環参照（A↔B）の表示上の扱い、`ingredient_groups.name` / `ref_recipe_title` を検索対象に含めるか | Phase 2 / Phase 4 | [features/recipe.md](features/recipe.md), [features/search.md](features/search.md) |
 | 39 | パッケージ管理: まず venv + pip + requirements.txt で進め、その後 `uv` に置き換えて何が変わるか比較・検証する（学習後） | Phase 0 後の学習 | [tech-stack.md](tech-stack.md) |
 | 40 | 本番 ASGI 実行構成の確定（Uvicorn workers / Gunicorn + Uvicorn worker / Granian）、ワーカー数、リバースプロキシ | Phase 10 前後 | [tech-stack.md](tech-stack.md), [architecture.md](architecture.md) |

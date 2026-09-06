@@ -55,3 +55,22 @@ def get_current_user(
         raise unauthorized()
 
     return user
+
+
+def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    session: Session = Depends(get_session),
+) -> User | None:
+    """認証が「任意」のエンドポイント用。
+
+    - `Authorization` ヘッダーが無ければ `None`（匿名アクセス）。
+    - ヘッダーがあるのに無効なら、黙って `None` にせず 401 にする
+      （期限切れトークンを黙殺すると、フロントが「まだログイン中のつもり」
+      なのに匿名として扱われ、非公開レシピが見えない理由が分からなくなる）。
+
+    使うのは `GET /recipes/{id}`（公開レシピは誰でも / 非公開は本人のみ /
+    他人は 404。features/recipe.md §3）。
+    """
+    if credentials is None:
+        return None
+    return get_current_user(credentials=credentials, session=session)

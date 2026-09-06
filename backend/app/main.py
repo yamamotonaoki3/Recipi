@@ -25,6 +25,8 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 from app.api.auth import router as auth_router
+from app.api.recipes import router as recipes_router
+from app.api.units import router as units_router
 from app.api.users import router as users_router
 from app.config import settings
 from app.db import check_db_connection
@@ -89,6 +91,8 @@ def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(recipes_router)
+app.include_router(units_router)
 
 
 def _custom_openapi() -> dict[str, Any]:

@@ -21,6 +21,21 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-05 ESLint を型情報ベースで厳格化するとき](#2026-09-05-eslint-を型情報ベースで厳格化するとき)
 - [2026-09-05 認証（Issue #35）でトランザクション・同時実行制御を書くとき](#2026-09-05-認証issue-35でトランザクション同時実行制御を書くとき)
 - [2026-09-06 認証画面（Issue #36）で frontend-ts の認証状態・セキュアストレージを書くとき](#2026-09-06-認証画面issue-36でfrontend-tsの認証状態セキュアストレージを書くとき)
+- [2026-09-06 レシピ CRUD（Issue #37）で backend の書き込み API・検索を書くとき](#2026-09-06-レシピ-crudissue-37でbackendの書き込み-api検索を書くとき)
+
+---
+
+## 2026-09-06 レシピ CRUD（Issue #37）で backend の書き込み API・検索を書くとき
+
+**きっかけ**: Issue #37（レシピ CRUD ＋ 単位 backend）の Codex レビュー（`--uncommitted`、3 巡・指摘ゼロで収束）。「request バリデーションは通るのに永続化 / 検索の段で壊れる」型の指摘が続いたため、書き込み API を作るときのチェックリストとして残す。
+
+1. **`min_length=1` は「保存前に `.strip()` する項目」には効かない**。`title` や材料 `name` を `Field(min_length=1)` で受けても、スペースだけの入力（`"   "` / 全角 `"　"`）は生の長さが 1 以上なので通過し、その後 `.strip()` して空文字が保存される（ドキュメントの「1 文字以上」に違反）。**保存前に正規化する項目は、正規化後の値を `field_validator` で検証する**（`app/schemas/recipe.py` の `_reject_blank`）。認証の `_reject_blank_security_answer` と同じパターンで、`.strip()` するフィールドが増えるたびに必要。
+2. **検索語を `ILIKE` パターンに素で埋め込むと `%` `_` `\` が SQL ワイルドカードとして効く**。`q=%` が全件マッチするなど「部分一致」の意味が壊れる。検索語側で `\` → `\\`、`%` → `\%`、`_` → `\_` にエスケープし、SQLAlchemy の `.ilike(pattern, escape="\\")` を必ず付ける（`app/services/recipe.py` の `list_my_recipes`）。Phase 4 のフィード全体検索 `GET /recipes` でも同じ。
+3. **Pydantic の `Decimal` 型は DB の `NUMERIC(p, s)` の桁数・精度を勝手には守らない**。`quantity: Decimal = Field(gt=0)` だけだと、整数部 8 桁や過剰な小数を受け付けてしまい、`commit()` の瞬間に DB エラー → 500（バリデーションエラー 400 にならない）。DB カラムが `NUMERIC(10, 3)` なら、スキーマ側も `Field(max_digits=10, decimal_places=3)` でそろえる。
+4. **`Depends` で `HTTPBearer` を使う「認証任意」エンドポイントは、それでも openapi.json に `security` を必須として出力する**。`GET /recipes/{id}` は公開レシピを匿名で見られる契約なのに、生成されたクライアント型 / API ツールには「認証必須」と伝わる。ルートデコレータに `openapi_extra={"security": [{}, {"HTTPBearer": []}]}` を付け、`{}`（＝認証なし）を選択肢に加える。認証必須の 422→400 置き換え（lessons 2026-09-05 認証 #10）と同じく、「例外ハンドラ / 依存性でデフォルト挙動を変えたら openapi 生成も直す」の一例。
+5. **ユーザー入力を decode する経路は、想定外の例外型まで 400 に落とす**。カーソルページングの base64 デコードで `ValueError` / `binascii.Error` は捕捉していたが、非 ASCII 文字を含むカーソルは `cursor.encode("ascii")` が `UnicodeError` を投げ、捕捉漏れで 500 になった。`str` を受けて内部で decode / parse する箇所は、投げうる例外を洗い出して `validation_error` に変換する。
+6. **材料と親グループの `recipe_id` 一致は複合 FK で担保する**（lessons 2026-09-01 材料リスト拡張 #1 の実装確認）。`ingredient_groups` に `UNIQUE(id, recipe_id)`、`ingredients` に `ForeignKeyConstraint(["group_id", "recipe_id"], ["ingredient_groups.id", "ingredient_groups.recipe_id"])`。SQLModel では複合制約は `__table_args__` に `sa.ForeignKeyConstraint` / `sa.UniqueConstraint` / `sa.CheckConstraint` を並べる（`Field(foreign_key=...)` では書けない）。手書きマイグレーションと 2 か所に書くことになるので、モデルとマイグレーションで制約名をそろえる。
+7. **単位マスターの自動追加は `pg_insert(...).on_conflict_do_nothing(index_elements=["normalized"])`**。正規化キー（`trim + NFKC + casefold`）の UNIQUE で重複排除。SQLModel の `session.exec()` は SELECT 用なので、INSERT 文は `session.execute()` を使う（`session.exec(delete(...))` は可）。
 
 ---
 
