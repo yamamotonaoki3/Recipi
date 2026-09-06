@@ -34,6 +34,28 @@ function scrollToId(testId: string) {
   );
 }
 
+/**
+ * `waitForDisplayed()` は、CI 上で「page source では displayed="true" に
+ * なっているのに、待っても "still not displayed" のまま失敗し続ける」
+ * という再現性のある不具合があった（60秒待っても解消しない・page source
+ * では要素が正しく存在＆表示済みだったことをスクリーンショットで確認済み）。
+ * `isExisting()` を使った自前のポーリングに切り替えることで回避する
+ * （内部実装が異なるため、同じ不具合を踏まない可能性が高い）。
+ */
+async function waitUntilExists(selector: string, timeout = 30_000) {
+  await browser.waitUntil(
+    async () => {
+      return await $(selector).isExisting();
+    },
+    {
+      timeout,
+      interval: 1_000,
+      timeoutMsg: `element (${selector}) still not found after ${timeout}ms`,
+    },
+  );
+  return $(selector);
+}
+
 describe("signup-login-logout", () => {
   it("signup → 自動ログイン確認 → logout → 再ログイン", async () => {
     // 起動後は splash → 未ログインなのでログイン画面に着地する。
@@ -42,13 +64,9 @@ describe("signup-login-logout", () => {
 
     // アプリの初回起動（コールドスタート）は JS バンドルの読み込み・
     // 認証復元処理（useAuthRefresh）・画面遷移が重なり、CI のエミュレータ
-    // （ソフトウェアレンダリング）では既定の待機時間を大きく超えることが
-    // あった。30秒でも足りず「あと少し」でタイムアウトしていた
-    // （失敗直後に取得した page source では resource-id 自体は正しく
-    // "signup-email" のまま既に displayed="true" になっており、
-    // ロケータの問題ではなく単純な初回起動の遅さが原因と判明）ため、
-    // 60秒まで余裕を持たせる。最初の要素だけ明示的に長めに待つ。
-    await $(id("signup-email")).waitForDisplayed({ timeout: 60_000 });
+    // （ソフトウェアレンダリング）では時間がかかることがあるため、
+    // 最初の要素だけ長めに待つ（waitUntilExists の理由は上記コメント参照）。
+    await waitUntilExists(id("signup-email"), 60_000);
     await $(id("signup-email")).setValue("e2euser_001@example.com");
     await $(id("signup-password")).setValue("TestPass123!");
     await $(id("signup-password-confirm")).setValue("TestPass123!");
@@ -65,13 +83,12 @@ describe("signup-login-logout", () => {
 
     // 登録成功 → 自動ログイン状態でホームに遷移し、
     // 表示名入りのウェルカムメッセージが出ることを確認する。
-    const welcome = $('android=new UiSelector().textContains("ようこそ、E2EUser A さん")');
-    await welcome.waitForDisplayed({ timeout: 15_000 });
+    await waitUntilExists('android=new UiSelector().textContains("ようこそ、E2EUser A さん")');
 
     await $(id("home-logout")).click();
 
     // ログアウト後は認可ゲート（useProtectedRoute）によりログイン画面へ戻される。
-    await $(id("login-email")).waitForDisplayed({ timeout: 10_000 });
+    await waitUntilExists(id("login-email"));
 
     await $(id("login-email")).setValue("e2euser_001@example.com");
     await $(id("login-password")).setValue("TestPass123!");
@@ -84,7 +101,6 @@ describe("signup-login-logout", () => {
     });
     await $(id("login-submit")).click();
 
-    const welcomeAgain = $('android=new UiSelector().textContains("ようこそ、E2EUser A さん")');
-    await welcomeAgain.waitForDisplayed({ timeout: 15_000 });
+    await waitUntilExists('android=new UiSelector().textContains("ようこそ、E2EUser A さん")');
   });
 });
