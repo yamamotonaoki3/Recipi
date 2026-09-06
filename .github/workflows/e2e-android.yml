@@ -25,6 +25,17 @@ on:
       - "expoApp/**"
       - "infra/**"
       - ".github/workflows/e2e-android.yml"
+  # main へのマージ後にも同じ paths で実行する。GitHub Actions の cache は
+  # 「default ブランチで作られた cache は全 PR から復元できる」「PR で作られた
+  # cache はその PR 内でしか使えない」スコープ規則なので、main での実行が
+  # ないと Gradle / AVD cache が PR 間で共有されず、毎 PR が cold build に
+  # なってしまう（Issue #50）。
+  push:
+    branches: [main]
+    paths:
+      - "expoApp/**"
+      - "infra/**"
+      - ".github/workflows/e2e-android.yml"
   workflow_dispatch:
 
 jobs:
