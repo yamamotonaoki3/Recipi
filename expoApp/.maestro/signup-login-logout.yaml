@@ -33,6 +33,9 @@ appId: com.recipi.app
 - tapOn:
     id: "signup-security-answer"
 - inputText: "ラーメン"
+# ソフトキーボードが開いたままだと画面下部の「登録」ボタンが隠れて
+# タップできない（CI で "Element not found: signup-submit" になった原因）。
+- hideKeyboard
 - tapOn:
     id: "signup-submit"
 
@@ -53,6 +56,7 @@ appId: com.recipi.app
 - tapOn:
     id: "login-password"
 - inputText: "TestPass123!"
+- hideKeyboard
 - tapOn:
     id: "login-submit"
 

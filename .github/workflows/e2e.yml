@@ -105,8 +105,17 @@ jobs:
         with:
           version: "2.10.0"
 
-      - name: Maestro フローを実行（Web / Chromium）
-        run: maestro test .maestro/signup-login-logout.web.yaml -e E2E_WEB_BASE_URL=http://localhost:8081
+      # Maestro の Web（Chromium）サポートはヘッドレス指定をせず素の Chrome を
+      # 起動するため、ディスプレイの無い GitHub Actions ランナーでは
+      # 「Chrome instance exited」で即座に失敗する。`--headless` フラグ自体は
+      # あるが scroll 系コマンドが不安定になる既知の不具合があるため、
+      # 代わりに Xvfb（仮想ディスプレイ）を使い、通常の（非ヘッドレス）
+      # Chrome をそのまま動かす。
+      - name: Xvfb をインストール
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Maestro フローを実行（Web / Chromium、Xvfb 上で）
+        run: xvfb-run --auto-servernum maestro test .maestro/signup-login-logout.web.yaml -e E2E_WEB_BASE_URL=http://localhost:8081
         working-directory: expoApp
 
       - name: 後片付け
