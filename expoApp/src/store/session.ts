@@ -10,7 +10,7 @@
  * - ログイン済みかどうか
  * - 「ログインを保持」の選択（rememberMe。true ならリフレッシュトークンを
  *   セキュアストレージにも永続化する）
- * - 認可ゲートに関する状態（hydrated / pendingRedirect。詳細は
+ * - 認可ゲートに関する状態（hydrated。詳細は
  *   src/features/auth/useProtectedRoute.ts を参照）
  * レシピ一覧などのサーバーデータは TanStack Query が持つ（src/api/）。
  *
@@ -40,8 +40,6 @@ type SessionState = {
   user: SessionUser | null;
   rememberMe: boolean;
   isAuthenticated: boolean;
-  /** 認可ゲートで保護画面への遷移が弾かれたときの、元々の行き先。 */
-  pendingRedirect: string | null;
   /** splash でのセッション復元（自動 refresh）試行が完了したか。 */
   hydrated: boolean;
 
@@ -49,7 +47,6 @@ type SessionState = {
   setAuth: (args: SetAuthArgs) => void;
   /** refresh のレスポンスは user を含まないため、アクセストークンだけ更新したいときに使う。 */
   setAccessTokenOnly: (accessToken: string, refreshToken: string) => void;
-  setPendingRedirect: (path: string | null) => void;
   setHydrated: (value: boolean) => void;
   /** ログアウト・アカウント削除・リフレッシュ失敗時に呼ぶ。メモリ上の状態のみ消去する。 */
   clear: () => void;
@@ -61,7 +58,6 @@ export const useSession = create<SessionState>((set) => ({
   user: null,
   rememberMe: false,
   isAuthenticated: false,
-  pendingRedirect: null,
   hydrated: false,
 
   setAuth: ({ accessToken, refreshToken, user, rememberMe }) =>
@@ -75,8 +71,6 @@ export const useSession = create<SessionState>((set) => ({
 
   setAccessTokenOnly: (accessToken, refreshToken) =>
     set({ accessToken, refreshToken, isAuthenticated: true }),
-
-  setPendingRedirect: (path) => set({ pendingRedirect: path }),
 
   setHydrated: (value) => set({ hydrated: value }),
 

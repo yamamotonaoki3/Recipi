@@ -46,7 +46,6 @@ beforeEach(() => {
   mockReplace.mockClear();
   mockSignup.mockReset();
   useSession.getState().clear();
-  useSession.setState({ pendingRedirect: null });
 });
 
 describe("SignupScreen", () => {
@@ -71,8 +70,7 @@ describe("SignupScreen", () => {
     });
   });
 
-  it("pendingRedirect があれば、そこへ遷移する", async () => {
-    useSession.getState().setPendingRedirect("/(app)/profile-edit");
+  it("ディープリンク経由でも、サインアップ成功後は常にホームへ遷移する（Issue #53）", async () => {
     mockSignup.mockResolvedValue({
       user: { id: "u1", displayName: "テスト太郎" },
       accessToken: "access-1",
@@ -83,7 +81,7 @@ describe("SignupScreen", () => {
     await fillValidForm(getByTestId);
     await fireEvent.press(getByTestId("signup-submit"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)/profile-edit"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)"));
   });
 
   it("パスワードが不一致だと、API を呼ばずにエラー表示する", async () => {

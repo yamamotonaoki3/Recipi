@@ -2,9 +2,8 @@
  * ログイン画面（screens/login.md）。
  *
  * `useState` でフォームの入力値を持ち、送信ボタンで `useLogin`
- * （useMutation）を呼ぶ。成功したら、認可ゲートが憶えている
- * `pendingRedirect`（弾かれる前に行こうとしていた画面）があればそこへ、
- * 無ければホームへ遷移する。
+ * （useMutation）を呼ぶ。成功したら**常にホーム（`/(app)`）へ遷移する**
+ * （Issue #53。以前の「弾かれる前に行こうとしていた画面へ戻す」挙動は廃止）。
  */
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
@@ -13,7 +12,6 @@ import { Pressable, Switch, Text, TextInput, View } from "react-native";
 import { ApiError } from "@/features/auth/api";
 import { useLogin } from "@/features/auth/useLogin";
 import { PasswordField } from "@/components/PasswordField";
-import { useSession } from "@/store/session";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -30,9 +28,7 @@ export default function LoginScreen() {
       { email, password, rememberMe },
       {
         onSuccess: () => {
-          const pendingRedirect = useSession.getState().pendingRedirect;
-          useSession.getState().setPendingRedirect(null);
-          router.replace(pendingRedirect ? (pendingRedirect as never) : "/(app)");
+          router.replace("/(app)");
         },
         onError: (error) => {
           if (error instanceof ApiError && error.status === 401) {
