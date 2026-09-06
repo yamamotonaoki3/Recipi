@@ -302,7 +302,15 @@ def delete_recipe(session: Session, recipe: Recipe) -> None:
 # --- レスポンス整形 ----------------------------------------------
 
 
-def serialize_recipe(session: Session, recipe: Recipe, author: User) -> RecipeResponse:
+def serialize_recipe(
+    session: Session, recipe: Recipe, author: User, *, include_image_keys: bool = False
+) -> RecipeResponse:
+    """レシピをレスポンスへ整形する。
+
+    `include_image_keys` は「サムネ / 手順画像のオブジェクトキー」を含めるか。
+    キーは編集画面が PUT で既存画像を維持するためだけに必要で、内部のストレージ
+    識別子なので **投稿者本人向けのレスポンスでのみ True にする**（公開レシピを
+    匿名で見た第三者には出さない。Codex #38 レビュー指摘）。"""
     groups = session.exec(
         select(IngredientGroup)
         .where(IngredientGroup.recipe_id == recipe.id)
@@ -351,11 +359,19 @@ def serialize_recipe(session: Session, recipe: Recipe, author: User) -> RecipeRe
         servings=recipe.servings,
         is_public=recipe.is_public,
         thumbnail_url=image_url(recipe.thumbnail_key),
+        thumbnail_key=recipe.thumbnail_key if include_image_keys else None,
         is_favorited=False,
         favorite_count=recipe.favorite_count,
         comment_count=recipe.comment_count,
         ingredient_groups=group_outputs,
-        steps=[StepOutput(body=s.body, image_url=image_url(s.image_key)) for s in steps],
+        steps=[
+            StepOutput(
+                body=s.body,
+                image_url=image_url(s.image_key),
+                image_key=s.image_key if include_image_keys else None,
+            )
+            for s in steps
+        ],
         created_at=recipe.created_at,
         updated_at=recipe.updated_at,
     )

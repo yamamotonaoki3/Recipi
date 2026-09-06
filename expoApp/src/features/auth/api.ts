@@ -20,6 +20,10 @@ export class ApiError extends Error {
     message: string,
     public readonly code: string | undefined,
     public readonly status: number,
+    // 統一エラー形式（api.md）の `error.details`。バリデーションエラー時は
+    // `{ errors: [...] }` が入り、レシピ作成/編集画面がフィールド別の
+    // エラー表示に使う（features/recipe/api.ts の extractValidationErrors）。
+    public readonly details: Record<string, unknown> | null = null,
   ) {
     super(message);
   }
@@ -29,7 +33,7 @@ function toApiError(error: unknown, status: number): ApiError {
   const envelope = error as Partial<ErrorEnvelope> | undefined;
   const message = envelope?.error?.message ?? "通信エラーが発生しました";
   const code = envelope?.error?.code;
-  return new ApiError(message, code, status);
+  return new ApiError(message, code, status, envelope?.error?.details ?? null);
 }
 
 export async function signup(body: {

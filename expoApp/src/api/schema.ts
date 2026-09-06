@@ -398,6 +398,8 @@ export interface components {
             servings: number;
             /** Steps */
             steps: components["schemas"]["StepOutput"][];
+            /** Thumbnailkey */
+            thumbnailKey: string | null;
             /** Thumbnailurl */
             thumbnailUrl: string | null;
             /** Title */
@@ -507,6 +509,8 @@ export interface components {
         StepOutput: {
             /** Body */
             body: string;
+            /** Imagekey */
+            imageKey: string | null;
             /** Imageurl */
             imageUrl: string | null;
         };

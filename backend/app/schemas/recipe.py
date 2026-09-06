@@ -149,6 +149,10 @@ class IngredientGroupOutput(CamelModel):
 class StepOutput(CamelModel):
     body: str
     image_url: str | None
+    # 画像の「オブジェクトキー」。編集画面は PUT（全入れ替え）で既存画像を
+    # 維持するためにこのキーを再送する必要がある（features/recipe.md §5）。
+    # image_url は表示用の派生値でキーの代わりにはならない。
+    image_key: str | None
 
 
 class RecipeResponse(CamelModel):
@@ -159,6 +163,9 @@ class RecipeResponse(CamelModel):
     servings: int
     is_public: bool
     thumbnail_url: str | None
+    # サムネイルのオブジェクトキー（PUT で「省略 = 変更なし」を選ぶか、
+    # 明示的に同じキーを再送するかは画面側の判断。features/recipe.md §5）。
+    thumbnail_key: str | None
     is_favorited: bool  # Phase 6 まで常に false
     favorite_count: int
     comment_count: int

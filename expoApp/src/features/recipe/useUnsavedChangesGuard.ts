@@ -1,0 +1,55 @@
+/**
+ * 「未保存の変更がある状態で画面を離れようとしたら確認ダイアログを出す」ガード。
+ *
+ * Expo Router 57 は新しいナビゲーションコアで、React Navigation の
+ * `usePreventRemove` / `beforeRemove` に相当する横取りフックが安定提供されて
+ * いない。そこで #38 では実際に閉じる経路（画面の「×」ボタン、Android の
+ * ハードウェアバック）を明示的に横取りする。iOS モーダルのスワイプ down は
+ * 呼び出し側が `<Stack.Screen options={{ gestureEnabled: !dirty }}>` で塞ぐ。
+ * Web のブラウザバックの横取りは #38 スコープ外（todo）。
+ *
+ * dirty 判定そのもの（`isDirty`）は recipeForm.ts の純粋関数。
+ */
+import { useCallback, useEffect, useState } from "react";
+import { BackHandler } from "react-native";
+
+export type UnsavedChangesGuard = {
+  /** 確認ダイアログを出すべきか。 */
+  confirmVisible: boolean;
+  /** 「閉じる」操作の入口。dirty なら確認を出し、そうでなければ即 `onLeave`。 */
+  requestClose: () => void;
+  /** 確認ダイアログで「破棄する」を選んだとき。 */
+  confirmLeave: () => void;
+  /** 確認ダイアログで「キャンセル」を選んだとき。 */
+  cancelLeave: () => void;
+};
+
+export function useUnsavedChangesGuard(dirty: boolean, onLeave: () => void): UnsavedChangesGuard {
+  const [confirmVisible, setConfirmVisible] = useState(false);
+
+  const requestClose = useCallback(() => {
+    if (dirty) {
+      setConfirmVisible(true);
+    } else {
+      onLeave();
+    }
+  }, [dirty, onLeave]);
+
+  const confirmLeave = useCallback(() => {
+    setConfirmVisible(false);
+    onLeave();
+  }, [onLeave]);
+
+  const cancelLeave = useCallback(() => setConfirmVisible(false), []);
+
+  // Android のハードウェアバックも同じ入口に流す。
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      requestClose();
+      return true; // イベントを消費してデフォルトの「前の画面へ戻る」を止める
+    });
+    return () => sub.remove();
+  }, [requestClose]);
+
+  return { confirmVisible, requestClose, confirmLeave, cancelLeave };
+}

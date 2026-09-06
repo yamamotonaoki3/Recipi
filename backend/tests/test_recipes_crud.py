@@ -25,6 +25,10 @@ def test_create_minimal_recipe_returns_flat_group(client: TestClient) -> None:
     assert len(body["ingredientGroups"]) == 1
     assert body["ingredientGroups"][0]["name"] is None
     assert [s["body"] for s in body["steps"]] == ["材料を切る", "煮る"]
+    # 画像キーは編集画面が PUT で維持するために必要（features/recipe.md §5）。
+    # 画像未設定なので null だが、フィールド自体は返る。
+    assert body["thumbnailKey"] is None
+    assert all(s["imageKey"] is None for s in body["steps"])
 
 
 def test_create_requires_auth(client: TestClient) -> None:

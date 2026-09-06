@@ -462,6 +462,17 @@
             "title": "Steps",
             "type": "array"
           },
+          "thumbnailKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnailkey"
+          },
           "thumbnailUrl": {
             "anyOf": [
               {
@@ -491,6 +502,7 @@
           "servings",
           "isPublic",
           "thumbnailUrl",
+          "thumbnailKey",
           "isFavorited",
           "favoriteCount",
           "commentCount",
@@ -740,6 +752,17 @@
             "title": "Body",
             "type": "string"
           },
+          "imageKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imagekey"
+          },
           "imageUrl": {
             "anyOf": [
               {
@@ -754,7 +777,8 @@
         },
         "required": [
           "body",
-          "imageUrl"
+          "imageUrl",
+          "imageKey"
         ],
         "title": "StepOutput",
         "type": "object"
