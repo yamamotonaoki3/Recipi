@@ -54,7 +54,10 @@ export const config = {
 
   logLevel: "info",
   bail: 0,
-  waitforTimeout: 15_000,
+  // CI のエミュレータでは初回起動（コールドスタート）が既定の待機時間
+  // より遅くなることがあったため、標準の 5 秒（WebdriverIO 既定値）より
+  // 大きめに設定する。
+  waitforTimeout: 20_000,
   connectionRetryTimeout: 120_000,
   connectionRetryCount: 3,
 

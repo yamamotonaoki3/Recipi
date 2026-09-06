@@ -40,6 +40,13 @@ describe("signup-login-logout", () => {
     // そこから「新規登録」リンクでサインアップ画面へ移動する。
     await $('android=new UiSelector().textContains("新規登録")').click();
 
+    // アプリの初回起動（コールドスタート）は JS バンドルの読み込み・
+    // 認証復元処理（useAuthRefresh）・画面遷移が重なり、CI のエミュレータ
+    // では既定の待機時間（15秒）を超えることがあった（page source では
+    // resource-id 自体は正しく "signup-email" になっており、ロケータの
+    // 問題ではなく単純な初回起動の遅さが原因と判明）。最初の要素だけ
+    // 明示的に長めに待つ。
+    await $(id("signup-email")).waitForDisplayed({ timeout: 30_000 });
     await $(id("signup-email")).setValue("e2euser_001@example.com");
     await $(id("signup-password")).setValue("TestPass123!");
     await $(id("signup-password-confirm")).setValue("TestPass123!");
