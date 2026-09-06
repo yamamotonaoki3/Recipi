@@ -23,8 +23,19 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-06 認証画面（Issue #36）で frontend-ts の認証状態・セキュアストレージを書くとき](#2026-09-06-認証画面issue-36でfrontend-tsの認証状態セキュアストレージを書くとき)
 - [2026-09-06 レシピ CRUD（Issue #37）で backend の書き込み API・検索を書くとき](#2026-09-06-レシピ-crudissue-37でbackendの書き込み-api検索を書くとき)
 - [2026-09-07 レシピ画面（Issue #38）で frontend-ts のフォーム・一覧・ナビを書くとき](#2026-09-07-レシピ画面issue-38でfrontend-tsのフォーム一覧ナビを書くとき)
+- [2026-09-07 CI のバージョン更新（Actions / JDK / Android API レベル）をするとき](#2026-09-07-ci-のバージョン更新をするとき)
 
 ---
+
+## 2026-09-07 CI のバージョン更新をするとき
+
+**きっかけ**: Issue #55（CI の GitHub Actions・JDK・Android API レベルの最新化）。Android E2E 不具合調査のためローカルにエミュレータ環境を作る過程で、CI が広範に陳腐化していることが判明した。
+
+1. **RN プロジェクトの「使える JDK の上限」は AGP が決める。JDK 単独では上げられない**。RN 0.86 が同梱する `@react-native/gradle-plugin` の `gradle/libs.versions.toml` に AGP・Kotlin・（wrapper に）Gradle のバージョンが固定されている。RN 0.86 は **AGP 8.12.0 / Kotlin 2.1.20 / Gradle 9.3.1**。AGP 8.12 の対応 JDK は「最小・既定ともに 17」で、**JDK 24 / 25 は記載なし**（AGP 8.13 でも最小 17 のまま）。Gradle 側は 9.1+ で JDK 25 対応済みだが、AGP 内包の R8 / D8 / lint / core library desugaring が認証外 JDK で壊れる。**JDK を上げたいときは Expo SDK（＝ RN ＝ AGP）のメジャー更新を待つ**。現実的な上限は 21（LTS・現行 Android Studio 同梱 JBR）。
+2. **`expo prebuild` が生成する `android/` は `.gitignore` 対象なので、ビルド設定（Gradle wrapper・AGP・compileSdk・`sourceCompatibility`）はリポジトリに無い**。バージョンの事実は `expoApp/node_modules/@react-native/gradle-plugin/gradle/libs.versions.toml` と `react-native/package.json` の `engines`、Expo の prebuild テンプレートから確認する。「リポジトリを grep しても出てこない = 最新」ではない。
+3. **GitHub Actions の公式アクションはメジャーが速い**。2026-09 時点で `actions/checkout@v7` / `setup-node@v7` / `setup-python@v7` / `setup-java@v6` / `cache@v6` / `upload-artifact@v7` / `gradle/actions/setup-gradle@v6`。プロジェクトは v4〜v5 で 1〜3 メジャー遅れていた。各メジャーの実体は **ESM 化 ＋ ランナー Node 24 化 ＋ 細かな enhancement** が大半で、我々の使い方（`node-version` / `cache` / `python-version-file` / `distribution: temurin` / `cache-read-only`）に破壊的変更は無かった。`upload-artifact` は v4.4 で隠しファイルがデフォルト除外（`include-hidden-files` で戻せる）だが、対象パスにドット始まりが無ければ影響なし。まとめて上げてよいが、**コミット前に全アクションのリリースノートを一読**する。
+4. **`reactivecircus/android-emulator-runner` の `target` 既定は `default`（AOSP）で `google_apis` ではない**。`target` 未指定なら Play Services 無しの軽い AOSP イメージが使われる（Appium/UiAutomator2 での APK 操作にはこれで十分）。ローカルで `avdmanager` で AVD を作るときに `google_apis` を選ぶと CI と構成がずれるので、**CI に合わせるならローカルも `system-images;android-35;default;x86_64`** にする。AVD の cache key（`avd-35-x86_64` など）には必ず api-level を含め、レベルを上げたら key も変える（古い cache を引くと別レベルのイメージが復元される）。
+5. **AGP バージョンより新しい JDK は「テストが存在しない」**。AGP 8.12 は 2025-07、JDK 25 は 2025-09。リリース時系列で後発の JDK は、そのツールでの検証結果が物理的に存在しない。「動くかもしれない」で本番 CI に入れない。
 
 ## 2026-09-07 レシピ画面（Issue #38）で frontend-ts のフォーム・一覧・ナビを書くとき
 

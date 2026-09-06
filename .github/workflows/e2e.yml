@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: .env.development を作る（テンプレートから。CI 用の値を追記して上書き）
         run: |
@@ -50,7 +50,7 @@ jobs:
         run: docker compose --env-file ../.env.development -f docker-compose.yml up -d --wait postgres minio
         working-directory: infra
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version-file: backend/.python-version
           cache: pip
@@ -79,7 +79,7 @@ jobs:
           echo "api did not become healthy in time" >&2
           exit 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -120,7 +120,7 @@ jobs:
 
       - name: Playwright のデバッグ出力（レポート・スクリーンショット・トレース）を保存
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
