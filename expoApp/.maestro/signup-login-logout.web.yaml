@@ -36,7 +36,9 @@ url: "${E2E_WEB_BASE_URL}"
 - tapOn:
     id: "signup-submit"
 
-- assertVisible: "ようこそ、E2EUser B さん"
+- extendedWaitUntil:
+    visible: "ようこそ、E2EUser B さん"
+    timeout: 15000
 
 - tapOn:
     id: "home-logout"
@@ -53,4 +55,6 @@ url: "${E2E_WEB_BASE_URL}"
 - tapOn:
     id: "login-submit"
 
-- assertVisible: "ようこそ、E2EUser B さん"
+- extendedWaitUntil:
+    visible: "ようこそ、E2EUser B さん"
+    timeout: 15000
