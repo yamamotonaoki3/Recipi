@@ -72,11 +72,7 @@ export const config = {
   // signup-email 等が resource-id で見つからない不具合の原因切り分け用
   // （React Native の New Architecture 下では testID が resource-id に
   // 期待通り反映されない可能性がある。docs/lessons-learned.md 参照）。
-  afterTest: async function (
-    _test: unknown,
-    _context: unknown,
-    result: { passed: boolean },
-  ) {
+  afterTest: async function (_test: unknown, _context: unknown, result: { passed: boolean }) {
     if (result.passed) return;
     const fs = await import("node:fs/promises");
     await fs.mkdir("./wdio-debug", { recursive: true });
