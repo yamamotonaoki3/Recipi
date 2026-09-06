@@ -11,7 +11,7 @@
 | **品質チェック（静的解析）** | 実行しなくても分かる誤り・スタイル崩れを機械的に弾く | **ruff**（lint ＋ `format --check`）、**mypy**（型チェック） | **ESLint**（Expo 設定）、**Prettier `--check`**、**`tsc --noEmit`**（型チェック） |
 | **単体テスト（unit）** | 関数・クラス・hook・コンポーネントを単体で検証。外部依存はモック | **pytest**。純粋関数（正規化・単位整形・カーソルのエンコード）、Pydantic モデルのバリデーション、サービス層のロジック（DB はモック / インメモリ） | **jest-expo ＋ @testing-library/react-native**。表示整形などの util、hooks、コンポーネント（API は MSW でモック） |
 | **結合テスト（integration）** | 複数の部品を実際につないで検証。DB・ストレージは本物 | **pytest ＋ 実 PostgreSQL**（Alembic マイグレーションを適用したテスト DB）＋ **MinIO**。API を `httpx` ＋ `ASGITransport` で直接叩き、認証フロー・CRUD のトランザクション・カウント列・CASCADE を検証 | **MSW** で生成 API クライアントをモックし、画面 → API 呼び出し → 状態更新（TanStack Query のキャッシュ / 無効化）→ 再描画 の一連を検証 |
-| **E2E テスト** | ユーザーがアプリを操作する流れを端から端まで検証 | — | **Maestro**（YAML でフロー記述）。`infra/docker-compose.yml` のフルスタック（api ＋ postgres ＋ minio）に対し、Phase ごとの主要フローを実行 |
+| **E2E テスト** | ユーザーがアプリを操作する流れを端から端まで検証 | — | Web = **Playwright**、Android = **Appium + WebdriverIO**。`infra/docker-compose.yml` のフルスタック（api ＋ postgres ＋ minio）に対し、Phase ごとの主要フローを実行 |
 | **契約テスト（contract）** | backend の API 契約とフロントの生成コードのズレを検知 | CI で FastAPI から `openapi.json` を再生成し、コミット済みと一致するか（`git diff --exit-code`） | CI で `openapi-typescript` を再実行し、生成物（`expoApp/src/api/schema.ts`）に差分が出たら失敗（[todo.md](todo.md) #42） |
 
 > 「単体」「結合」の線引きが曖昧なケースは、**実 DB につなぐなら結合、つながないなら単体**で分類する。
@@ -73,12 +73,12 @@
 | `backend.yml` | `backend/**` を含む push / PR | ruff → mypy → pytest（単体）→ pytest（結合。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ カバレッジ集計・PR コメント |
 | `frontend-ts.yml` | `expoApp/**` を含む push / PR | ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、カバレッジ）→ `expo export`（Web）＋ `tauri build` スモーク |
 | `contract.yml` | backend / `openapi.json` / 生成設定の変更 | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後） |
-| `e2e.yml` | PR（Phase 1 以降）／ 手動 | docker-compose でフルスタック起動 → シード → Maestro フロー実行（Android エミュレータ ＋ Web） |
+| `e2e.yml` | PR（Phase 1 以降）／ 手動 | docker-compose でフルスタック起動 → シード → E2E フロー実行（Android エミュレータ = Appium + WebdriverIO、Web = Playwright） |
 
 - **トリガー**: `pull_request`（→ `main`。マージの必須チェックにする）＋ feature ブランチへの `push`。
 - **パスフィルタ**: `backend/**` の変更で frontend ジョブを回さない（逆も同様）。共通ファイル（`openapi.json` 等）は両方を回す。
 - **ブランチ保護**: `main` への直接 push 禁止（既存ルール）＋ 上記チェックを必須にする（有効化は Phase 0 着手前にユーザーへ確認）。
-- **ローカルでの再現**: `backend/` は `pytest` / `ruff check` / `mypy`、`expoApp/` は `npm test` / `npm run lint` / `npm run typecheck`。手順はルート `README.md`（Issue で作成）。Maestro CLI は各自インストール（JDK 25 導入済み。[todo.md](todo.md)）。
+- **ローカルでの再現**: `backend/` は `pytest` / `ruff check` / `mypy`、`expoApp/` は `npm test` / `npm run lint` / `npm run typecheck`。E2E は `npm run e2e:web`（Playwright）/ `npm run e2e:android`（要 Appium サーバー起動・エミュレータ）。手順はルート `README.md`（Issue で作成）。
 
 ## 6. CD（継続的デリバリー）
 
@@ -100,7 +100,8 @@
 | frontend 型チェック | **`tsc --noEmit`** | |
 | frontend テスト | **jest-expo ＋ @testing-library/react-native** | Expo 標準。vitest は使わない |
 | frontend API モック | **MSW**（Mock Service Worker） | 生成した API クライアントの下でネットワークをモック |
-| E2E | **Maestro**（CLI・Apache 2.0 の無料 OSS） | モバイル（エミュレータ）＋ Web を 1 ツールで。ホスティング型クラウド（有料）は使わない |
+| E2E（Web） | **Playwright**（`@playwright/test`。Apache 2.0 の無料 OSS） | 実ブラウザを CDP で直接操作。React Native Web の `data-testid` を `getByTestId` でそのまま拾える |
+| E2E（Android） | **Appium**（UiAutomator2 ドライバ）＋ **WebdriverIO** （いずれも Apache 2.0 の無料 OSS） | ビルド済み `.apk` を OS レベルから操作する「ブラックボックス」型のため Expo / React Native のバージョンに依存しない。ホスティング型クラウド（有料）は使わない |
 | 契約 | `openapi-typescript`（フロント）／ FastAPI 標準出力（backend） | [tech-stack.md](tech-stack.md) 「型共有」 |
 
 ## 8. 未確定（各 Phase 着手時に `resolve-tech-stack` で確定）
