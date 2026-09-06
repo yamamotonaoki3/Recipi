@@ -6,8 +6,8 @@
  *
  * navigation.md の要求:
  * 「未ログインで保護画面に到達しようとしたら、ログイン画面へ差し替える。
- *   ログイン/サインアップ成功後、元々行こうとしていた画面があればそこへ、
- *   なければホームへ。」
+ *   ログイン/サインアップ成功後は常にホームへ。」（Issue #53 で
+ *   「元々行こうとしていた画面へ戻す」挙動を廃止した）
  *
  * `hydrated` が false の間（= スプラッシュでの自動ログイン復元がまだ
  * 終わっていない間）は何もしない。ここで判定してしまうと、復元が
@@ -18,7 +18,7 @@
  * ハンドリングが担当する。この hook は `isAuthenticated` の変化を
  * 見て「画面を切り替える」ことだけに専念する（責務を分けている）。
  */
-import { usePathname, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect } from "react";
 
 import { useSession } from "@/store/session";
@@ -26,15 +26,13 @@ import { useSession } from "@/store/session";
 export function useProtectedRoute(): void {
   const isAuthenticated = useSession((s) => s.isAuthenticated);
   const hydrated = useSession((s) => s.hydrated);
-  const setPendingRedirect = useSession((s) => s.setPendingRedirect);
-  const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     if (!hydrated) return;
     if (isAuthenticated) return;
 
-    setPendingRedirect(pathname);
+    // 行こうとしていた画面は覚えない（Issue #53）。認証後は常にホームへ着地する。
     router.replace("/(auth)/login");
-  }, [isAuthenticated, hydrated, pathname, router, setPendingRedirect]);
+  }, [isAuthenticated, hydrated, router]);
 }

@@ -35,7 +35,6 @@ beforeEach(() => {
   mockReplace.mockClear();
   mockLogin.mockReset();
   useSession.getState().clear();
-  useSession.setState({ pendingRedirect: null });
 });
 
 describe("LoginScreen", () => {
@@ -59,8 +58,7 @@ describe("LoginScreen", () => {
     });
   });
 
-  it("pendingRedirect があれば、そこへ遷移する", async () => {
-    useSession.getState().setPendingRedirect("/(app)/profile-edit");
+  it("ディープリンク経由でも、ログイン成功後は常にホームへ遷移する（Issue #53）", async () => {
     mockLogin.mockResolvedValue({
       user: { id: "u1", displayName: "太郎" },
       accessToken: "access-1",
@@ -72,7 +70,7 @@ describe("LoginScreen", () => {
     await fireEvent.changeText(getByTestId("login-password"), "TestPass123!");
     await fireEvent.press(getByTestId("login-submit"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)/profile-edit"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)"));
   });
 
   it("401 エラーは固定文言を表示する", async () => {

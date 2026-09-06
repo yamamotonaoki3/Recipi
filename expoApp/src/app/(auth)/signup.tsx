@@ -14,7 +14,6 @@ import { ApiError } from "@/features/auth/api";
 import { useSignup } from "@/features/auth/useSignup";
 import { validateSignup, type SignupFieldErrors } from "@/features/auth/validation";
 import { PasswordField } from "@/components/PasswordField";
-import { useSession } from "@/store/session";
 
 export default function SignupScreen() {
   const [email, setEmail] = useState("");
@@ -46,11 +45,8 @@ export default function SignupScreen() {
       { email, password, displayName, securityQuestion, securityAnswer },
       {
         onSuccess: () => {
-          // login.tsx と同じく、認可ゲートに弾かれて来た場合は
-          // 元々行こうとしていた画面へ戻す（navigation.md）。
-          const pendingRedirect = useSession.getState().pendingRedirect;
-          useSession.getState().setPendingRedirect(null);
-          router.replace(pendingRedirect ? (pendingRedirect as never) : "/(app)");
+          // サインアップ成功後は常にホームへ（Issue #53。login.tsx と同じ方針）。
+          router.replace("/(app)");
         },
         onError: (error) => {
           if (error instanceof ApiError && error.status === 409) {

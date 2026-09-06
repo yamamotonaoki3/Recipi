@@ -3,7 +3,7 @@ import { useSession } from "./session";
 
 beforeEach(() => {
   useSession.getState().clear();
-  useSession.setState({ pendingRedirect: null, hydrated: false });
+  useSession.setState({ hydrated: false });
 });
 
 describe("useSession", () => {
@@ -59,14 +59,12 @@ describe("useSession", () => {
     expect(s.user).toEqual({ id: "u1", displayName: "テスト太郎" });
   });
 
-  it("setPendingRedirect / setHydrated がそれぞれ反映される", () => {
-    useSession.getState().setPendingRedirect("/(app)/profile-edit");
-    expect(useSession.getState().pendingRedirect).toBe("/(app)/profile-edit");
+  it("setHydrated が反映される", () => {
     useSession.getState().setHydrated(true);
     expect(useSession.getState().hydrated).toBe(true);
   });
 
-  it("clear でメモリ上の認証状態が消える（hydrated/pendingRedirect は変えない）", () => {
+  it("clear でメモリ上の認証状態が消える（hydrated は変えない）", () => {
     useSession.getState().setAuth({
       accessToken: "access-1",
       refreshToken: "refresh-1",
