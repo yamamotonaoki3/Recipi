@@ -16,7 +16,7 @@ MY_RECIPES_URL = "/api/v1/users/me/recipes"
 def _create(client: TestClient, headers: dict[str, str], **overrides) -> str:
     res = client.post(RECIPES_URL, json=recipe_payload(**overrides), headers=headers)
     assert res.status_code == 201, res.text
-    return res.json()["id"]
+    return str(res.json()["id"])
 
 
 def test_lists_own_public_and_private(client: TestClient) -> None:
@@ -45,7 +45,7 @@ def test_pagination_walks_all_rows(client: TestClient) -> None:
     seen: set[str] = set()
     cursor: str | None = None
     for _ in range(10):  # 無限ループ保険
-        params = {"limit": 2}
+        params: dict[str, object] = {"limit": 2}
         if cursor:
             params["cursor"] = cursor
         page = client.get(MY_RECIPES_URL, params=params, headers=headers).json()

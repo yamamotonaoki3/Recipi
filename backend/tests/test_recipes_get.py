@@ -15,7 +15,7 @@ RECIPES_URL = "/api/v1/recipes"
 def _create(client: TestClient, headers: dict[str, str], *, is_public: bool) -> str:
     res = client.post(RECIPES_URL, json=recipe_payload(isPublic=is_public), headers=headers)
     assert res.status_code == 201, res.text
-    return res.json()["id"]
+    return str(res.json()["id"])
 
 
 def test_public_recipe_is_visible_to_anonymous(client: TestClient) -> None:

@@ -175,7 +175,7 @@ def test_response_includes_unit_placement(client: TestClient) -> None:
 def _create(client: TestClient, headers: dict[str, str], **overrides) -> str:
     res = client.post(RECIPES_URL, json=recipe_payload(**overrides), headers=headers)
     assert res.status_code == 201, res.text
-    return res.json()["id"]
+    return str(res.json()["id"])
 
 
 def test_put_replaces_groups_and_steps(client: TestClient) -> None:
