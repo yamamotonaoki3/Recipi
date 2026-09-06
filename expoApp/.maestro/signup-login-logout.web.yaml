@@ -1,0 +1,56 @@
+# Maestro E2E フロー（Web / Chromium 向け）: 新規登録 → 自動ログイン確認 →
+# ログアウト → 再ログイン（Issue #36）。
+#
+# appId の代わりに url を指定すると、Maestro が管理下の Chromium で開く
+# （ベータ機能。docs.maestro.dev「Web Browsers」）。
+# CI（.github/workflows/e2e.yml）では `expo export -p web` の静的出力を
+# ローカルサーバーで配信し、そのオリジンを url に渡す。
+#
+# テストデータの規約は signup-login-logout.yaml と同じ（@example.com、
+# e2euser_ プレフィックス）。Android フローと同じ DB を使い回さないよう、
+# メールアドレスは別の連番にしてある。
+url: "${E2E_WEB_BASE_URL}"
+---
+- launchApp
+# 起動後は splash → 未ログインなのでログイン画面に着地する。
+# そこから「新規登録」リンクでサインアップ画面へ移動する。
+- tapOn: "新規登録"
+- tapOn:
+    id: "signup-email"
+- inputText: "e2euser_002@example.com"
+- tapOn:
+    id: "signup-password"
+- inputText: "TestPass123!"
+- tapOn:
+    id: "signup-password-confirm"
+- inputText: "TestPass123!"
+- tapOn:
+    id: "signup-display-name"
+- inputText: "E2EUser B"
+- tapOn:
+    id: "signup-security-question"
+- inputText: "好きな食べ物は？"
+- tapOn:
+    id: "signup-security-answer"
+- inputText: "ラーメン"
+- tapOn:
+    id: "signup-submit"
+
+- assertVisible: "ようこそ、E2EUser B さん"
+
+- tapOn:
+    id: "home-logout"
+
+- assertVisible:
+    id: "login-email"
+
+- tapOn:
+    id: "login-email"
+- inputText: "e2euser_002@example.com"
+- tapOn:
+    id: "login-password"
+- inputText: "TestPass123!"
+- tapOn:
+    id: "login-submit"
+
+- assertVisible: "ようこそ、E2EUser B さん"

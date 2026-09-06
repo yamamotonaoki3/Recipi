@@ -1,0 +1,59 @@
+# Maestro E2E フロー（Android エミュレータ向け）: 新規登録 → 自動ログイン確認 →
+# ログアウト → 再ログイン（Issue #36）。
+#
+# 対象アプリは com.recipi.app（app.json の android.package）。
+# CI（.github/workflows/e2e.yml）では reactivecircus/android-emulator-runner で
+# 起動したエミュレータに、expo prebuild + gradle でビルドしたデバッグ APK を
+# インストールしてから実行する。
+#
+# テストデータはグローバル CLAUDE.md の規約に従い、実在しないメールアドレス
+# （@example.com）＋ e2euser_ プレフィックスを使う。CI では postgres コンテナを
+# 毎回作り直すため固定値で問題ない。
+appId: com.recipi.app
+---
+- launchApp
+# 起動後は splash → 未ログインなのでログイン画面に着地する。
+# そこから「新規登録」リンクでサインアップ画面へ移動する。
+- tapOn: "新規登録"
+- tapOn:
+    id: "signup-email"
+- inputText: "e2euser_001@example.com"
+- tapOn:
+    id: "signup-password"
+- inputText: "TestPass123!"
+- tapOn:
+    id: "signup-password-confirm"
+- inputText: "TestPass123!"
+- tapOn:
+    id: "signup-display-name"
+- inputText: "E2EUser A"
+- tapOn:
+    id: "signup-security-question"
+- inputText: "好きな食べ物は？"
+- tapOn:
+    id: "signup-security-answer"
+- inputText: "ラーメン"
+- tapOn:
+    id: "signup-submit"
+
+# 登録成功 → 自動ログイン状態でホーム（(app)/index.tsx）に遷移し、
+# 表示名入りのウェルカムメッセージが出ることを確認する。
+- assertVisible: "ようこそ、E2EUser A さん"
+
+- tapOn:
+    id: "home-logout"
+
+# ログアウト後は認可ゲート（useProtectedRoute）によりログイン画面へ戻される。
+- assertVisible:
+    id: "login-email"
+
+- tapOn:
+    id: "login-email"
+- inputText: "e2euser_001@example.com"
+- tapOn:
+    id: "login-password"
+- inputText: "TestPass123!"
+- tapOn:
+    id: "login-submit"
+
+- assertVisible: "ようこそ、E2EUser A さん"
