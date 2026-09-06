@@ -42,11 +42,13 @@ describe("signup-login-logout", () => {
 
     // アプリの初回起動（コールドスタート）は JS バンドルの読み込み・
     // 認証復元処理（useAuthRefresh）・画面遷移が重なり、CI のエミュレータ
-    // では既定の待機時間（15秒）を超えることがあった（page source では
-    // resource-id 自体は正しく "signup-email" になっており、ロケータの
-    // 問題ではなく単純な初回起動の遅さが原因と判明）。最初の要素だけ
-    // 明示的に長めに待つ。
-    await $(id("signup-email")).waitForDisplayed({ timeout: 30_000 });
+    // （ソフトウェアレンダリング）では既定の待機時間を大きく超えることが
+    // あった。30秒でも足りず「あと少し」でタイムアウトしていた
+    // （失敗直後に取得した page source では resource-id 自体は正しく
+    // "signup-email" のまま既に displayed="true" になっており、
+    // ロケータの問題ではなく単純な初回起動の遅さが原因と判明）ため、
+    // 60秒まで余裕を持たせる。最初の要素だけ明示的に長めに待つ。
+    await $(id("signup-email")).waitForDisplayed({ timeout: 60_000 });
     await $(id("signup-email")).setValue("e2euser_001@example.com");
     await $(id("signup-password")).setValue("TestPass123!");
     await $(id("signup-password-confirm")).setValue("TestPass123!");
