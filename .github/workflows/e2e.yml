@@ -247,6 +247,11 @@ jobs:
           disable-animations: true
           script: |
             adb install -r expoApp/android/app/build/outputs/apk/release/app-release.apk
+            # AOSP キーボードは初回入力時に「連絡先へのアクセスを許可しますか？」の
+            # 権限ダイアログを出し、これが画面下部のボタン等を覆って E2E が
+            # 引っかかる（デバッグスクリーンショットで確認）。事前に許可しておき、
+            # ダイアログ自体が出ないようにする。
+            adb shell pm grant com.recipi.app android.permission.READ_CONTACTS
             maestro test expoApp/.maestro/signup-login-logout.yaml
 
       - name: Maestro のデバッグ出力（ログ・スクリーンショット）を保存
