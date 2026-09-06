@@ -106,6 +106,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Recipe */
+        post: operations["create_recipe_api_v1_recipes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Recipe */
+        get: operations["get_recipe_api_v1_recipes__recipe_id__get"];
+        /** Update Recipe */
+        put: operations["update_recipe_api_v1_recipes__recipe_id__put"];
+        post?: never;
+        /** Delete Recipe */
+        delete: operations["delete_recipe_api_v1_recipes__recipe_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Units */
+        get: operations["list_units_api_v1_units_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me": {
         parameters: {
             query?: never;
@@ -121,6 +174,23 @@ export interface paths {
         head?: never;
         /** Update Me */
         patch: operations["update_me_api_v1_users_me_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/me/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List My Recipes */
+        get: operations["list_my_recipes_api_v1_users_me_recipes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/healthz": {
@@ -198,6 +268,43 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IngredientGroupInput */
+        IngredientGroupInput: {
+            /** Ingredients */
+            ingredients: components["schemas"]["IngredientInput"][];
+            /** Name */
+            name?: string | null;
+        };
+        /** IngredientGroupOutput */
+        IngredientGroupOutput: {
+            /** Ingredients */
+            ingredients: components["schemas"]["IngredientOutput"][];
+            /** Name */
+            name: string | null;
+        };
+        /** IngredientInput */
+        IngredientInput: {
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Refrecipeid */
+            refRecipeId?: string | null;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** IngredientOutput */
+        IngredientOutput: {
+            /** Name */
+            name: string;
+            /** Placement */
+            placement: string;
+            /** Quantity */
+            quantity: string | null;
+            refRecipe: components["schemas"]["RefRecipe"] | null;
+            /** Unit */
+            unit: string | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /**
@@ -243,6 +350,124 @@ export interface components {
             /** Securityquestion */
             securityQuestion: string;
         };
+        /** RecipeAuthor */
+        RecipeAuthor: {
+            /** Avatarurl */
+            avatarUrl?: string | null;
+            /** Displayname */
+            displayName: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** RecipeListResponse */
+        RecipeListResponse: {
+            /** Items */
+            items: components["schemas"]["RecipeSummary"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** RecipeResponse */
+        RecipeResponse: {
+            author: components["schemas"]["RecipeAuthor"];
+            /** Commentcount */
+            commentCount: number;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Description */
+            description: string;
+            /** Favoritecount */
+            favoriteCount: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ingredientgroups */
+            ingredientGroups: components["schemas"]["IngredientGroupOutput"][];
+            /** Isfavorited */
+            isFavorited: boolean;
+            /** Ispublic */
+            isPublic: boolean;
+            /** Servings */
+            servings: number;
+            /** Steps */
+            steps: components["schemas"]["StepOutput"][];
+            /** Thumbnailurl */
+            thumbnailUrl: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * RecipeSummary
+         * @description 自分のレシピ一覧のカード 1 枚分（features/recipe.md §2「自分のレシピ一覧」）。
+         */
+        RecipeSummary: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ispublic */
+            isPublic: boolean;
+            /** Thumbnailurl */
+            thumbnailUrl: string | null;
+            /** Title */
+            title: string;
+        };
+        /**
+         * RecipeWriteRequest
+         * @description `POST /recipes` と `PUT /recipes/{id}` 共通のリクエスト body。
+         *
+         *     `PUT` の「`thumbnailKey` 省略 = サムネイル変更なし」は、ルーター側で
+         *     `model_fields_set` に `"thumbnail_key"` が含まれるかで判定する
+         *     （features/recipe.md §5「省略 = 変更なし / null = 削除 / 既存キー再送 = 維持 /
+         *     新キー = 差し替え」）。
+         */
+        RecipeWriteRequest: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Ingredientgroups */
+            ingredientGroups: components["schemas"]["IngredientGroupInput"][];
+            /**
+             * Ispublic
+             * @default false
+             */
+            isPublic: boolean;
+            /** Servings */
+            servings: number;
+            /** Steps */
+            steps: components["schemas"]["StepInput"][];
+            /** Thumbnailkey */
+            thumbnailKey?: string | null;
+            /** Title */
+            title: string;
+        };
+        /** RefRecipe */
+        RefRecipe: {
+            /** Id */
+            id: string | null;
+            /** Title */
+            title: string;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refreshtoken */
@@ -270,6 +495,32 @@ export interface components {
             securityAnswer: string;
             /** Securityquestion */
             securityQuestion: string;
+        };
+        /** StepInput */
+        StepInput: {
+            /** Body */
+            body: string;
+            /** Imagekey */
+            imageKey?: string | null;
+        };
+        /** StepOutput */
+        StepOutput: {
+            /** Body */
+            body: string;
+            /** Imageurl */
+            imageUrl: string | null;
+        };
+        /** UnitOption */
+        UnitOption: {
+            /** Placement */
+            placement: string;
+            /** Value */
+            value: string;
+        };
+        /** UnitsResponse */
+        UnitsResponse: {
+            /** Units */
+            units: components["schemas"]["UnitOption"][];
         };
         /** UpdateMeRequest */
         UpdateMeRequest: {
@@ -577,6 +828,235 @@ export interface operations {
             };
         };
     };
+    create_recipe_api_v1_recipes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_recipe_api_v1_recipes__recipe_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_recipe_api_v1_recipes__recipe_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_recipe_api_v1_recipes__recipe_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_units_api_v1_units_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitsResponse"];
+                };
+            };
+        };
+    };
     update_me_api_v1_users_me_patch: {
         parameters: {
             query?: never;
@@ -597,6 +1077,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserMeResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_my_recipes_api_v1_users_me_recipes_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeListResponse"];
                 };
             };
             /** @description リクエストの内容が不正です */
