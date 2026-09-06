@@ -1,8 +1,16 @@
-# E2E テスト（Maestro）。
+# E2E テスト。
 # infra/docker-compose.yml でバックエンド一式（postgres + minio + api）を
 # 起動し、Android エミュレータ ＋ Web（Chromium）の 2 系統で
 # signup → 自動ログイン確認 → logout → 再ログイン の一連を検証する。
 # 方針・スコープ（iOS は対象外）は docs/requirements/testing.md §5, §7。
+#
+# ツールは Web = Playwright、Android = Appium + WebdriverIO
+# （2026-09-06 変更。元は両方 Maestro だったが、Web 版で tapOn 直後の
+# inputText が別の欄へ混入する再現性100%の不具合があり、Android 版でも
+# 特定の欄間で同系統の不具合が再現した。4種類の回避策を試しても解消せず、
+# Maestro から置き換えた。Detox は Expo SDK 57 に対応する config-plugin が
+# 無かったため見送り、SDK に依存しない Appium を採用した。
+# 詳細は docs/lessons-learned.md 参照）。
 
 name: e2e
 
@@ -100,30 +108,24 @@ jobs:
           echo "static server did not start in time" >&2
           exit 1
 
-      - name: Maestro CLI をインストール
-        uses: dniHze/maestro-test-action@v1
-        with:
-          version: "2.10.0"
-
-      # Maestro の Web（Chromium）サポートはヘッドレス指定をせず素の Chrome を
-      # 起動するため、ディスプレイの無い GitHub Actions ランナーでは
-      # 「Chrome instance exited」で即座に失敗する。`--headless` フラグ自体は
-      # あるが scroll 系コマンドが不安定になる既知の不具合があるため、
-      # 代わりに Xvfb（仮想ディスプレイ）を使い、通常の（非ヘッドレス）
-      # Chrome をそのまま動かす。
-      - name: Xvfb をインストール
-        run: sudo apt-get update && sudo apt-get install -y xvfb
-
-      - name: Maestro フローを実行（Web / Chromium、Xvfb 上で）
-        run: xvfb-run --auto-servernum maestro test .maestro/signup-login-logout.web.yaml -e E2E_WEB_BASE_URL=http://localhost:8081
+      - name: Playwright の Chromium をインストール
+        run: npx playwright install --with-deps chromium
         working-directory: expoApp
 
-      - name: Maestro のデバッグ出力（ログ・スクリーンショット）を保存
+      - name: Playwright フローを実行（Web / Chromium）
+        run: npx playwright test
+        working-directory: expoApp
+        env:
+          E2E_WEB_BASE_URL: http://localhost:8081
+
+      - name: Playwright のデバッグ出力（レポート・スクリーンショット・トレース）を保存
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: maestro-debug-web
-          path: ~/.maestro/tests
+          name: playwright-report
+          path: |
+            expoApp/playwright-report
+            expoApp/test-results
           retention-days: 7
 
       - name: 後片付け
@@ -234,12 +236,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Maestro CLI をインストール
-        uses: dniHze/maestro-test-action@v1
-        with:
-          version: "2.10.0"
-
-      - name: エミュレータを起動し、Maestro フローを実行（Android）
+      - name: エミュレータを起動し、Appium サーバーと WebdriverIO のフローを実行（Android）
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
@@ -248,24 +245,26 @@ jobs:
           script: |
             adb install -r expoApp/android/app/build/outputs/apk/release/app-release.apk
             # AOSP キーボードは初回入力時に「連絡先へのアクセスを許可しますか？」の
-            # 権限ダイアログを出し、これが画面下部のボタン等を覆って E2E が
-            # 引っかかる（デバッグスクリーンショットで確認）。この権限を要求して
-            # いるのはアプリ（com.recipi.app）ではなく AOSP キーボード自身
-            # （com.android.inputmethod.latin）なので、そちらに事前許可する
-            # （com.recipi.app へ付与しようとすると
-            # 「has not requested permission」で失敗する）。
-            # システムイメージによってはパッケージ名が異なる可能性があるため、
-            # 失敗してもジョブ全体を落とさない（保険として Maestro 側でも
-            # ダイアログが出た場合に閉じるようにしてある）。
+            # 権限ダイアログを出すことがある。この権限を要求しているのは
+            # アプリ（com.recipi.app）ではなく AOSP キーボード自身
+            # （com.android.inputmethod.latin）。システムイメージによっては
+            # パッケージ名が異なる可能性があるため、失敗してもジョブ全体は
+            # 落とさない。
             adb shell pm grant com.android.inputmethod.latin android.permission.READ_CONTACTS || true
-            maestro test expoApp/.maestro/signup-login-logout.yaml
+            cd expoApp
+            npx appium server --address 127.0.0.1 --port 4723 > /tmp/appium.log 2>&1 &
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:4723/status > /dev/null; then break; fi
+              sleep 1
+            done
+            npx wdio run wdio.conf.ts
 
-      - name: Maestro のデバッグ出力（ログ・スクリーンショット）を保存
+      - name: Appium / WebdriverIO のログを保存
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: maestro-debug-android
-          path: ~/.maestro/tests
+          name: appium-wdio-log
+          path: /tmp/appium.log
           retention-days: 7
 
       - name: 後片付け

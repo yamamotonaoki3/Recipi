@@ -40,6 +40,11 @@ yarn-error.*
 coverage/
 .jest-cache/
 
+# E2E（Playwright / WebdriverIO）の実行成果物
+playwright-report/
+test-results/
+.wdio/
+
 # typescript
 *.tsbuildinfo
 

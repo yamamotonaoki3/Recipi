@@ -22,7 +22,10 @@ module.exports = {
     {
       displayName: "react-native",
       preset: "jest-expo",
-      testPathIgnorePatterns: ["/node_modules/", "\\.msw\\.test\\.ts$"],
+      // e2e/ は Playwright（*.spec.ts）と WebdriverIO（*.e2e.ts）が使う
+      // ディレクトリで、jest の対象ではない（jest のデフォルト testMatch は
+      // *.spec.ts も拾ってしまうため明示的に除外する）。
+      testPathIgnorePatterns: ["/node_modules/", "\\.msw\\.test\\.ts$", "<rootDir>/e2e/"],
       // `_layout.tsx` が読み込む `global.css`（NativeWind / Tailwind の
       // `@tailwind` ディレクティブ）は jest の変換対象外なので、
       // テストでは中身を見ない空モジュールに差し替える。
