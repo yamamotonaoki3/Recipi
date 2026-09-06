@@ -1,0 +1,211 @@
+# Android E2E テスト（Appium + WebdriverIO）。
+#
+# infra/docker-compose.yml でバックエンド一式（postgres + minio + api）を
+# 起動し、Android エミュレータで signup → 自動ログイン確認 → logout →
+# 再ログイン の一連を検証する。Web（Chromium / Playwright）は e2e.yml。
+#
+# 【このワークフローを e2e.yml から分離した理由（Issue #50 Phase 1）】
+# - Android E2E は 1 回 約16分（`expo prebuild` + `gradlew assembleRelease` +
+#   エミュレータ起動が重い）かかる。
+# - しかも `android` ジョブは continue-on-error で品質ゲートではなく、
+#   さらに Appium の要素検索が画面遷移後に効かなくなる不具合を調査中で
+#   正常完走しない（詳細は下の continue-on-error のコメント）。
+# - そのため **backend / openapi だけの変更では Android E2E を回さない**。
+#   backend 契約の検証は contract.yml（openapi 差分）＋ backend の結合テスト、
+#   および Web E2E（e2e.yml、こちらは backend/** でも起動）が担う。
+# - Android のネイティブ側に影響しうる `expoApp/**` / `infra/**` の変更、
+#   または手動実行（workflow_dispatch）でのみ起動する。
+
+name: e2e-android
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "expoApp/**"
+      - "infra/**"
+      - ".github/workflows/e2e-android.yml"
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    # 【暫定・2026-09-06】Appium + WebdriverIO で、画面遷移後に findElement /
+    # isExisting 等の要素検索コマンド全般が機能しなくなる（getPageSource だけ
+    # は正常で、実際の画面は正しく描画されている）という再現性のある深い
+    # 不具合が判明した。待機時間の延長・isExisting への切り替え等、複数の
+    # 対策を試しても解消しなかったため、Web 版（Playwright、安定動作確認済み）
+    # の足を引っ張らないよう、このジョブの失敗ではワークフロー全体を失敗に
+    # しない。詳細・再調査の方針は docs/lessons-learned.md と
+    # docs/requirements/todo.md を参照。
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .env.development を作る（テンプレートから。CI 用の値を追記して上書き）
+        run: |
+          cp .env.development.example .env.development
+          {
+            echo "POSTGRES_PASSWORD=ci-only-not-a-real-secret"
+            echo "DATABASE_URL=postgresql+psycopg://recipi:ci-only-not-a-real-secret@localhost:5432/recipi"
+            echo "JWT_SECRET_KEY=ci-only-not-a-real-secret"
+            echo "MINIO_ROOT_USER=ci-test"
+            echo "MINIO_ROOT_PASSWORD=ci-only-not-a-real-secret"
+            echo "S3_ACCESS_KEY_ID=ci-test"
+            echo "S3_SECRET_ACCESS_KEY=ci-only-not-a-real-secret"
+            # Android エミュレータからホストへは 10.0.2.2 で到達する（environment.md）。
+            echo "CORS_ALLOW_ORIGINS=http://10.0.2.2:8081"
+          } >> .env.development
+
+      - name: バックエンド一式を起動（postgres + minio）
+        run: docker compose --env-file ../.env.development -f docker-compose.yml up -d --wait postgres minio
+        working-directory: infra
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: backend/.python-version
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: バックエンドの依存をインストール
+        run: pip install -r requirements-dev.txt
+        working-directory: backend
+
+      - name: DB マイグレーションを適用
+        run: alembic upgrade head
+        working-directory: backend
+        env:
+          APP_ENV: development
+
+      - name: api を起動
+        run: docker compose --env-file ../.env.development -f docker-compose.yml up -d --build api
+        working-directory: infra
+
+      - name: api の起動を待つ（/healthz）
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/healthz > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "api did not become healthy in time" >&2
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: expoApp/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Gradle の依存・ラッパー・build cache（タスク出力）を GitHub Actions cache
+      # に保存し、次回以降のビルドで復元する（Issue #50 Phase 1）。
+      # cache-read-only を false にして、この PR 内の複数回実行でも cache が
+      # 育つようにする（本命は main マージ後: main のジョブが作った cache を
+      # 全 PR が復元できるようになる）。
+      - name: Gradle をセットアップ（依存・build cache の復元 / 保存）
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: 依存をインストール
+        run: npm ci
+        working-directory: expoApp
+
+      - name: Android ネイティブプロジェクトを生成（expo prebuild）
+        run: npx expo prebuild --platform android --non-interactive
+        working-directory: expoApp
+        env:
+          # エミュレータからホストの api コンテナへは 10.0.2.2 で到達する。
+          EXPO_PUBLIC_API_BASE_URL: http://10.0.2.2:8000
+
+      # Android 9 (API 28) 以降は平文（HTTP）通信がデフォルトで禁止されるため、
+      # このままだと signup 等のリクエストがすべて失敗する。本番の app.json は
+      # 変更せず（本番は HTTPS 前提）、E2E 用に生成された使い捨てのネイティブ
+      # プロジェクトの AndroidManifest.xml にだけ属性を追記する。
+      - name: E2E 用に限り平文通信を許可する
+        run: |
+          sed -i 's/<application /<application android:usesCleartextTraffic="true" /' \
+            android/app/src/main/AndroidManifest.xml
+        working-directory: expoApp
+
+      # release variant にすることで JS バンドルを APK に同梱する
+      # （debug variant は Metro 経由でバンドルを取得する前提のため、
+      # エミュレータ単体では起動できない）。JS バンドル自体はこのステップの
+      # gradle タスクの中で行われる（EXPO_PUBLIC_ 変数はバンドル時に埋め込まれる
+      # ため、prebuild だけでなくここにも同じ値を渡す必要がある）。
+      # `reactNativeArchitectures` で x86_64（後段のエミュレータの CPU
+      # アーキテクチャ）だけに絞る。`--build-cache` で前回のタスク出力を再利用する。
+      - name: APK をビルド（release variant、エミュレータの CPU アーキテクチャのみ）
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --build-cache
+        working-directory: expoApp/android
+        env:
+          EXPO_PUBLIC_API_BASE_URL: http://10.0.2.2:8000
+
+      - name: KVM を有効化（エミュレータのハードウェアアクセラレーション用）
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # AVD（エミュレータ本体 ＋ 初回 boot 済みのスナップショット）を
+      # GitHub Actions cache に保存し、次回以降は cold boot を省く
+      # （Issue #50 Phase 1。android-emulator-runner の README 推奨方式）。
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-29-x86_64
+
+      # cache miss のときだけ AVD を作り、boot 済みスナップショットを生成して
+      # 保存する（`script` はスナップショット生成のためのダミー）。
+      - name: AVD を作成してスナップショットを生成（cache miss 時のみ）
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+
+      - name: エミュレータを起動し、Appium サーバーと WebdriverIO のフローを実行（Android）
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          # reactivecircus/android-emulator-runner の `script` は各行を
+          # 独立した `sh -c` として実行する（複数行にまたがる `for` や、
+          # 前の行の `cd` の効果が次の行に引き継がれない）。そのため
+          # 状態を共有する必要のあるコマンド（cd・バックグラウンド起動・
+          # 待機ループ・実行）は 1 行にまとめてある。
+          script: |
+            adb install -r expoApp/android/app/build/outputs/apk/release/app-release.apk
+            adb shell pm grant com.android.inputmethod.latin android.permission.READ_CONTACTS || true
+            cd expoApp && (npx appium server --address 127.0.0.1 --port 4723 > /tmp/appium.log 2>&1 &) && for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4723/status > /dev/null && break; sleep 1; done && npx wdio run wdio.conf.ts
+
+      - name: Appium / WebdriverIO のログとデバッグ出力（画面構造・スクリーンショット）を保存
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appium-wdio-log
+          path: |
+            /tmp/appium.log
+            expoApp/wdio-debug
+          retention-days: 7
+
+      - name: 後片付け
+        if: always()
+        run: docker compose --env-file ../.env.development -f docker-compose.yml down -v
+        working-directory: infra

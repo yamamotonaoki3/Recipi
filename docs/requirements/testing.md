@@ -73,7 +73,8 @@
 | `backend.yml` | `backend/**` を含む push / PR | ruff → mypy → pytest（単体）→ pytest（結合。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ カバレッジ集計・PR コメント |
 | `frontend-ts.yml` | `expoApp/**` を含む push / PR | ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、カバレッジ）→ `expo export`（Web）＋ `tauri build` スモーク |
 | `contract.yml` | backend / `openapi.json` / 生成設定の変更 | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後） |
-| `e2e.yml` | PR（Phase 1 以降）／ 手動 | docker-compose でフルスタック起動 → シード → E2E フロー実行（Android エミュレータ = Appium + WebdriverIO、Web = Playwright） |
+| `e2e.yml` | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行 |
+| `e2e-android.yml` | **`expoApp/**` / `infra/**` の PR ／ 手動のみ**（backend / openapi だけの変更では回さない。Issue #50） | docker-compose でフルスタック起動 → `expo prebuild` → release APK ビルド（Gradle cache）→ エミュレータ（AVD snapshot cache）→ **Android（Appium + WebdriverIO）** の E2E フロー実行。実行時間が長く（数十分）、かつ Appium の既知不具合を調査中のため `continue-on-error`（品質ゲートではない） |
 
 - **トリガー**: `pull_request`（→ `main`。マージの必須チェックにする）＋ feature ブランチへの `push`。
 - **パスフィルタ**: `backend/**` の変更で frontend ジョブを回さない（逆も同様）。共通ファイル（`openapi.json` 等）は両方を回す。
