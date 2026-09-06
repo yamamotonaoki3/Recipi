@@ -44,6 +44,12 @@ appId: com.recipi.app
 - inputText: "好きな食べ物は？"
 - tapOn:
     id: "signup-security-answer"
+# この欄への遷移だけ、何度検証しても直前の「秘密の質問」欄に文字が
+# 連結される問題が再現した（デバッグスクリーンショットで確認）。
+# tapOn を連続で行うことで、UI 階層を再取得させてから実際にフォーカスを
+# 移す（Maestro のタップ取りこぼしに対する定番の回避策）。
+- tapOn:
+    id: "signup-security-answer"
 - eraseText: 1
 - inputText: "ラーメン"
 # ソフトキーボードが開いたままだと画面下部の「登録」ボタンが隠れて
