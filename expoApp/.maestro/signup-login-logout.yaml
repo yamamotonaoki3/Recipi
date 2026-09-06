@@ -9,6 +9,13 @@
 # テストデータはグローバル CLAUDE.md の規約に従い、実在しないメールアドレス
 # （@example.com）＋ e2euser_ プレフィックスを使う。CI では postgres コンテナを
 # 毎回作り直すため固定値で問題ない。
+#
+# 【既知の制約】tapOn 直後に inputText すると、まれに直前の欄へ文字が
+# 連結されることがある（デバッグスクリーンショットで確認: 「秘密の質問」
+# 欄に質問文と答えの両方が入り、「秘密の質問の答え」欄が空になっていた）。
+# Web 版ほど頻発しないが同じ系統の問題のため、各 tapOn の直後に
+# eraseText を1回挟み、その欄に対して実際にキーボードイベントを発生させて
+# から inputText する（対象欄は元々空文字のため、通常は入力値に影響しない）。
 appId: com.recipi.app
 ---
 - launchApp
@@ -17,21 +24,27 @@ appId: com.recipi.app
 - tapOn: "新規登録"
 - tapOn:
     id: "signup-email"
+- eraseText: 1
 - inputText: "e2euser_001@example.com"
 - tapOn:
     id: "signup-password"
+- eraseText: 1
 - inputText: "TestPass123!"
 - tapOn:
     id: "signup-password-confirm"
+- eraseText: 1
 - inputText: "TestPass123!"
 - tapOn:
     id: "signup-display-name"
+- eraseText: 1
 - inputText: "E2EUser A"
 - tapOn:
     id: "signup-security-question"
+- eraseText: 1
 - inputText: "好きな食べ物は？"
 - tapOn:
     id: "signup-security-answer"
+- eraseText: 1
 - inputText: "ラーメン"
 # ソフトキーボードが開いたままだと画面下部の「登録」ボタンが隠れて
 # タップできない（CI で "Element not found: signup-submit" になった原因）。
@@ -47,7 +60,9 @@ appId: com.recipi.app
 
 # 登録成功 → 自動ログイン状態でホーム（(app)/index.tsx）に遷移し、
 # 表示名入りのウェルカムメッセージが出ることを確認する。
-- assertVisible: "ようこそ、E2EUser A さん"
+- extendedWaitUntil:
+    visible: "ようこそ、E2EUser A さん"
+    timeout: 15000
 
 - tapOn:
     id: "home-logout"
@@ -58,12 +73,16 @@ appId: com.recipi.app
 
 - tapOn:
     id: "login-email"
+- eraseText: 1
 - inputText: "e2euser_001@example.com"
 - tapOn:
     id: "login-password"
+- eraseText: 1
 - inputText: "TestPass123!"
 - hideKeyboard
 - tapOn:
     id: "login-submit"
 
-- assertVisible: "ようこそ、E2EUser A さん"
+- extendedWaitUntil:
+    visible: "ようこそ、E2EUser A さん"
+    timeout: 15000
