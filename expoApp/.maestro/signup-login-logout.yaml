@@ -36,6 +36,12 @@ appId: com.recipi.app
 # ソフトキーボードが開いたままだと画面下部の「登録」ボタンが隠れて
 # タップできない（CI で "Element not found: signup-submit" になった原因）。
 - hideKeyboard
+# AOSP キーボードが「連絡先へのアクセスを許可しますか？」の権限ダイアログを
+# 出すことがある（CI ワークフロー側で事前に許可しているが、念のための保険）。
+# ダイアログが無ければ何もしない（optional）。
+- tapOn:
+    text: "ALLOW"
+    optional: true
 - tapOn:
     id: "signup-submit"
 

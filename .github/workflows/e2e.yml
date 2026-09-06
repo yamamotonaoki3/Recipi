@@ -249,9 +249,15 @@ jobs:
             adb install -r expoApp/android/app/build/outputs/apk/release/app-release.apk
             # AOSP キーボードは初回入力時に「連絡先へのアクセスを許可しますか？」の
             # 権限ダイアログを出し、これが画面下部のボタン等を覆って E2E が
-            # 引っかかる（デバッグスクリーンショットで確認）。事前に許可しておき、
-            # ダイアログ自体が出ないようにする。
-            adb shell pm grant com.recipi.app android.permission.READ_CONTACTS
+            # 引っかかる（デバッグスクリーンショットで確認）。この権限を要求して
+            # いるのはアプリ（com.recipi.app）ではなく AOSP キーボード自身
+            # （com.android.inputmethod.latin）なので、そちらに事前許可する
+            # （com.recipi.app へ付与しようとすると
+            # 「has not requested permission」で失敗する）。
+            # システムイメージによってはパッケージ名が異なる可能性があるため、
+            # 失敗してもジョブ全体を落とさない（保険として Maestro 側でも
+            # ダイアログが出た場合に閉じるようにしてある）。
+            adb shell pm grant com.android.inputmethod.latin android.permission.READ_CONTACTS || true
             maestro test expoApp/.maestro/signup-login-logout.yaml
 
       - name: Maestro のデバッグ出力（ログ・スクリーンショット）を保存
