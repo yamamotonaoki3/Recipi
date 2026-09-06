@@ -256,12 +256,14 @@ jobs:
             adb shell pm grant com.android.inputmethod.latin android.permission.READ_CONTACTS || true
             cd expoApp && (npx appium server --address 127.0.0.1 --port 4723 > /tmp/appium.log 2>&1 &) && for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4723/status > /dev/null && break; sleep 1; done && npx wdio run wdio.conf.ts
 
-      - name: Appium / WebdriverIO のログを保存
+      - name: Appium / WebdriverIO のログとデバッグ出力（画面構造・スクリーンショット）を保存
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: appium-wdio-log
-          path: /tmp/appium.log
+          path: |
+            /tmp/appium.log
+            expoApp/wdio-debug
           retention-days: 7
 
       - name: 後片付け

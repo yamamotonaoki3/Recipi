@@ -64,4 +64,31 @@ export const config = {
     ui: "bdd",
     timeout: 120_000,
   },
+
+  // 失敗時に画面構造（page source）とスクリーンショットを残す。
+  // signup-email 等が resource-id で見つからない不具合の原因切り分け用
+  // （React Native の New Architecture 下では testID が resource-id に
+  // 期待通り反映されない可能性がある。docs/lessons-learned.md 参照）。
+  afterTest: async function (
+    _test: unknown,
+    _context: unknown,
+    result: { passed: boolean },
+  ) {
+    if (result.passed) return;
+    const fs = await import("node:fs/promises");
+    await fs.mkdir("./wdio-debug", { recursive: true });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const source: string = await (globalThis as any).browser.getPageSource();
+      await fs.writeFile("./wdio-debug/page-source.xml", source, "utf-8");
+    } catch {
+      // 取得自体に失敗しても後続の後片付けは継続する。
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (globalThis as any).browser.saveScreenshot("./wdio-debug/screenshot.png");
+    } catch {
+      // 同上。
+    }
+  },
 };
