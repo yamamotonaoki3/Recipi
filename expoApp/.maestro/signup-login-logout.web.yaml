@@ -13,10 +13,14 @@
 # 【既知の制約】CI 上で実行すると、tapOn 直後に inputText すると別の欄
 # （直前にフォーカスしていた欄）へ文字が入ってしまうことがあった
 # （スクリーンショットで確認: 複数欄の入力がメールアドレス欄へ連結されて
-# いた）。Maestro の Web サポートはベータ機能で、要素タップ直後の DOM/
-# フォーカスの反映にラグがあるとみられる。`waitForAnimationToEnd` で
-# タップ後に一呼吸置くことで、正しい欄にフォーカスが移ってから
-# `inputText` するようにする。
+# いた）。waitForAnimationToEnd を挟んでも改善しなかった（tapOn はDOM上は
+# 成功するが、Maestro 側が実際に入力対象としている要素が前の欄のまま
+# ずれている可能性が高い。Maestro Web はベータ機能で、tapOn/inputText の
+# 内部的な要素認識に既知の不具合が報告されている）。
+# 対策として、各 tapOn の直後に eraseText を1回挟み、その入力欄に対して
+# 実際にキーボードイベントを発生させてから inputText する
+# （「入力経路のウォームアップ」）。対象欄は元々空文字なので、
+# 通常は入力値そのものには影響しない。
 url: "${E2E_WEB_BASE_URL}"
 ---
 - launchApp
@@ -25,33 +29,27 @@ url: "${E2E_WEB_BASE_URL}"
 - tapOn: "新規登録"
 - tapOn:
     id: "signup-email"
-- waitForAnimationToEnd:
-    timeout: 1000
+- eraseText: 1
 - inputText: "e2euser_002@example.com"
 - tapOn:
     id: "signup-password"
-- waitForAnimationToEnd:
-    timeout: 1000
+- eraseText: 1
 - inputText: "TestPass123!"
 - tapOn:
     id: "signup-password-confirm"
-- waitForAnimationToEnd:
-    timeout: 1000
+- eraseText: 1
 - inputText: "TestPass123!"
 - tapOn:
     id: "signup-display-name"
-- waitForAnimationToEnd:
-    timeout: 1000
+- eraseText: 1
 - inputText: "E2EUser B"
 - tapOn:
     id: "signup-security-question"
-- waitForAnimationToEnd:
-    timeout: 1000
+- eraseText: 1
 - inputText: "好きな食べ物は？"
 - tapOn:
     id: "signup-security-answer"
-- waitForAnimationToEnd:
-    timeout: 1000
+- eraseText: 1
 - inputText: "ラーメン"
 - tapOn:
     id: "signup-submit"
@@ -68,13 +66,11 @@ url: "${E2E_WEB_BASE_URL}"
 
 - tapOn:
     id: "login-email"
-- waitForAnimationToEnd:
-    timeout: 1000
+- eraseText: 1
 - inputText: "e2euser_002@example.com"
 - tapOn:
     id: "login-password"
-- waitForAnimationToEnd:
-    timeout: 1000
+- eraseText: 1
 - inputText: "TestPass123!"
 - tapOn:
     id: "login-submit"
