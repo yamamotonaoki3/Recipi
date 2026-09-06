@@ -224,8 +224,12 @@ jobs:
       # エミュレータ単体では起動できない）。JS バンドル自体はこのステップの
       # gradle タスクの中で行われる（EXPO_PUBLIC_ 変数はバンドル時に埋め込まれる
       # ため、prebuild だけでなくここにも同じ値を渡す必要がある）。
-      - name: APK をビルド（release variant）
-        run: ./gradlew assembleRelease
+      # `reactNativeArchitectures` で x86_64（後段のエミュレータの CPU
+      # アーキテクチャ）だけに絞る。指定しないと arm64-v8a / armeabi-v7a /
+      # x86 / x86_64 の 4 種類すべてをネイティブビルドしてしまい、
+      # E2E では使わない 3 種類の分だけビルド時間を無駄にする。
+      - name: APK をビルド（release variant、エミュレータの CPU アーキテクチャのみ）
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=x86_64
         working-directory: expoApp/android
         env:
           EXPO_PUBLIC_API_BASE_URL: http://10.0.2.2:8000
@@ -242,22 +246,15 @@ jobs:
           api-level: 29
           arch: x86_64
           disable-animations: true
+          # reactivecircus/android-emulator-runner の `script` は各行を
+          # 独立した `sh -c` として実行する（複数行にまたがる `for` や、
+          # 前の行の `cd` の効果が次の行に引き継がれない）。そのため
+          # 状態を共有する必要のあるコマンド（cd・バックグラウンド起動・
+          # 待機ループ・実行）は 1 行にまとめてある。
           script: |
             adb install -r expoApp/android/app/build/outputs/apk/release/app-release.apk
-            # AOSP キーボードは初回入力時に「連絡先へのアクセスを許可しますか？」の
-            # 権限ダイアログを出すことがある。この権限を要求しているのは
-            # アプリ（com.recipi.app）ではなく AOSP キーボード自身
-            # （com.android.inputmethod.latin）。システムイメージによっては
-            # パッケージ名が異なる可能性があるため、失敗してもジョブ全体は
-            # 落とさない。
             adb shell pm grant com.android.inputmethod.latin android.permission.READ_CONTACTS || true
-            cd expoApp
-            npx appium server --address 127.0.0.1 --port 4723 > /tmp/appium.log 2>&1 &
-            for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:4723/status > /dev/null; then break; fi
-              sleep 1
-            done
-            npx wdio run wdio.conf.ts
+            cd expoApp && (npx appium server --address 127.0.0.1 --port 4723 > /tmp/appium.log 2>&1 &) && for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4723/status > /dev/null && break; sleep 1; done && npx wdio run wdio.conf.ts
 
       - name: Appium / WebdriverIO のログを保存
         if: failure()
