@@ -22,6 +22,29 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-05 認証（Issue #35）でトランザクション・同時実行制御を書くとき](#2026-09-05-認証issue-35でトランザクション同時実行制御を書くとき)
 - [2026-09-06 認証画面（Issue #36）で frontend-ts の認証状態・セキュアストレージを書くとき](#2026-09-06-認証画面issue-36でfrontend-tsの認証状態セキュアストレージを書くとき)
 - [2026-09-06 レシピ CRUD（Issue #37）で backend の書き込み API・検索を書くとき](#2026-09-06-レシピ-crudissue-37でbackendの書き込み-api検索を書くとき)
+- [2026-09-07 レシピ画面（Issue #38）で frontend-ts のフォーム・一覧・ナビを書くとき](#2026-09-07-レシピ画面issue-38でfrontend-tsのフォーム一覧ナビを書くとき)
+
+---
+
+## 2026-09-07 レシピ画面（Issue #38）で frontend-ts のフォーム・一覧・ナビを書くとき
+
+**きっかけ**: Issue #38（レシピ作成/編集・詳細・自分の一覧）の Codex レビュー（`--uncommitted` / `--base main` を複数巡）と、Chrome DevTools でブラウザから実バックエンドに繋いだ通し確認。
+
+### レビュー運用の反省（重要）
+
+1. **`codex review` の「重大なバグは 5 回上限を適用しない」例外を広げすぎない**。#38 では「編集保存で既存の手順画像が消える」指摘が 1・3・5 巡目に繰り返し出て、これをデータ破損の例外扱いで巡を続けた。しかし当時は `POST /images` が無く**画像を持つレシピが作れない**＝実害ゼロだった。さらに 5 巡目の対応（`RecipeResponse` に画像キーを追加）が 6 巡目の新しい指摘（キーが匿名ユーザーに漏れる）を生み、後追い修正が連鎖した。**「これが公開されたら第三者が今すぐ悪用できるか」「今この瞬間にデータが壊れるか」で判定し、"将来 X が入ったら壊れる" は受け皿だけ用意して todo 化 → ユーザーに一覧提示**して打ち切る。
+
+### 実装で踏んだこと
+
+2. **Expo Router の web スタックは遷移元の画面を DOM に残す（重ねて描画する）**。E2E（Playwright）で `getByText("タイトル")` がヒットしない / strict mode violation になるのは、旧画面の同じテキストが hidden で残っているため。**画面固有の要素は testID を振り、`.last()`（最前面）で取る**。`getByText().first()` は最下層の hidden 要素を掴む。
+3. **`EXPO_PUBLIC_*` の値変更は Metro のキャッシュを確実にはバストしない**（既知の Expo の挙動）。`.env.development` を直しても `expo export` が古い値をインライン展開したままになる。API の向き先がおかしい（接続できない・ポートが違う）ときは **`expo export --clear` / `expo start -c`** でキャッシュを消す。
+4. **web ビルドを E2E 用に静的配信するときは CORS 許可済みのポートを使う**。backend の `CORS_ALLOW_ORIGINS` は `localhost:8081` 等に限定。`npx serve -l 8082` のように任意ポートで配信すると signup 等が CORS で失敗し「通信エラー」になる（画面上は 409 と区別つかない）。
+5. **backend の `NUMERIC(p, s)` は `"300.000"` のような文字列でシリアライズされる**。表示は整形関数（`formatQuantity`）で吸収できるが、**編集フォームの入力欄にそのまま出すと `300.000` と見える**。`fromRecipeResponse` で `Number(x).toString()` 相当の正規化をかける。テストのフィクスチャを `"3"` でなく `"3.000"` にしておかないと回帰で気づけない。
+6. **内部のストレージ識別子（画像のオブジェクトキー等）はレスポンスに無条件で足さない**。編集の PUT で既存画像を維持するために `thumbnailKey` / `steps[].imageKey` を `RecipeResponse` に追加したが、公開レシピを匿名で見た第三者にも出てしまう。`serialize_recipe(..., include_image_keys=bool)` を足し、**投稿者本人向けのレスポンス（作成・更新・本人の GET）でのみ True**。
+7. **モーダル / 詳細をディープリンクで直接開くと `router.back()` の戻り先が無い**。保存成功・削除成功・「×」で `router.back()` すると no-op で画面から出られなくなる。`router.canGoBack() ? router.back() : router.replace(<安定した行き先>)` にする（編集 = そのレシピ詳細、作成・削除 = ホーム）。
+8. **`react-hooks` の新しい厳格ルール（`refs` / `set-state-in-effect`）**: 「取得が確定した最初の値を latch する」ために描画中に ref を書く / `useEffect` 内で `setState` するパターンはどちらも lint エラーになる。#38 では「初回マウント時に `useReducer` で 1 回だけ初期化」の既存挙動に留め、キャッシュ更新への追随は todo 化した。
+9. **フォームの状態ロジックは `useReducer` の純粋な reducer ＋ 変換ヘルパー（`buildSubmission` / `isDirty` / `fromRecipeResponse`）に切り出す**。行追加・削除・並べ替え・グループ間移動・送信 body への正規化・dirty 判定を React 抜きで単体テストでき、WB テスト要件（分岐網羅）を満たしやすい。サーバー 400 の `details.errors[].loc`（配列インデックス）を行の localId へ翻訳するには、`buildSubmission` が「送信した i 番目 = どの localId か」の対応表も一緒に返す。
+10. **並べ替え UI は上下ボタン方式で MVP を通す**（todo #21 で確定）。ドラッグ&ドロップは `react-native-draggable-flatlist` 等の新規依存 ＋ `react-native-reanimated` 運用（babel plugin・jest 設定）が要り、E2E も不安定になる。`screens/recipe-editor.md` §7 が「デスクトップは上下ボタンも用意」と既に書いており、両プラットフォーム共通で使える。
 
 ---
 
