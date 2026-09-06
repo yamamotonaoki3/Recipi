@@ -45,6 +45,29 @@ def test_private_recipe_hidden_from_anonymous_as_404(client: TestClient) -> None
     assert client.get(f"{RECIPES_URL}/{recipe_id}").status_code == 404
 
 
+def test_image_keys_only_returned_to_owner(client: TestClient) -> None:
+    """サムネ / 手順画像のオブジェクトキーは投稿者本人にだけ返す（内部識別子）。"""
+    owner = auth_headers(client)
+    other = auth_headers(client)
+    res = client.post(
+        RECIPES_URL,
+        json=recipe_payload(isPublic=True, thumbnailKey="uploads/thumb-1"),
+        headers=owner,
+    )
+    assert res.status_code == 201
+    recipe_id = res.json()["id"]
+
+    as_owner = client.get(f"{RECIPES_URL}/{recipe_id}", headers=owner).json()
+    assert as_owner["thumbnailKey"] == "uploads/thumb-1"
+
+    as_other = client.get(f"{RECIPES_URL}/{recipe_id}", headers=other).json()
+    assert as_other["thumbnailKey"] is None
+    assert as_other["thumbnailUrl"] is not None  # 表示用 URL は誰でも見える
+
+    anon = client.get(f"{RECIPES_URL}/{recipe_id}").json()
+    assert anon["thumbnailKey"] is None
+
+
 def test_missing_recipe_returns_404(client: TestClient) -> None:
     assert client.get(f"{RECIPES_URL}/00000000-0000-0000-0000-000000000000").status_code == 404
 

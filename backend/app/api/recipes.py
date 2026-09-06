@@ -58,7 +58,7 @@ def create_recipe(
     recipe = recipe_service.create_recipe(session, current_user, body)
     session.commit()
     session.refresh(recipe)
-    return recipe_service.serialize_recipe(session, recipe, current_user)
+    return recipe_service.serialize_recipe(session, recipe, current_user, include_image_keys=True)
 
 
 @router.get(
@@ -83,7 +83,9 @@ def get_recipe(
         raise not_found("レシピが見つかりません")
     author = session.get(User, recipe.user_id)
     assert author is not None  # FK があるので投稿者は必ず存在する
-    return recipe_service.serialize_recipe(session, recipe, author)
+    # 画像キー（内部のストレージ識別子）は投稿者本人にだけ返す。
+    is_owner = current_user is not None and current_user.id == recipe.user_id
+    return recipe_service.serialize_recipe(session, recipe, author, include_image_keys=is_owner)
 
 
 @router.put("/recipes/{recipe_id}", responses=_error_responses(400, 401, 403, 404))
@@ -101,7 +103,7 @@ def update_recipe(
     )
     session.commit()
     session.refresh(recipe)
-    return recipe_service.serialize_recipe(session, recipe, current_user)
+    return recipe_service.serialize_recipe(session, recipe, current_user, include_image_keys=True)
 
 
 @router.delete(

@@ -35,7 +35,24 @@ export default function HomeScreen() {
         )}
       </View>
 
-      <Link href="/(app)/profile-edit" className="mt-6 text-sm text-neutral-600">
+      {/* Issue #38 のレシピ画面への一時的な導線。正式なボトムナビ（「＋」で作成 /
+          マイページから一覧）は #42 で置き換わる。 */}
+      <Link
+        testID="home-link-my-recipes"
+        href="/(app)/my-recipes"
+        className="mt-6 text-sm text-neutral-600"
+      >
+        自分のレシピ一覧
+      </Link>
+      <Link
+        testID="home-link-new-recipe"
+        href="/(app)/recipes/new"
+        className="text-sm text-neutral-600"
+      >
+        レシピを作成
+      </Link>
+
+      <Link href="/(app)/profile-edit" className="mt-2 text-sm text-neutral-600">
         プロフィール編集
       </Link>
 
