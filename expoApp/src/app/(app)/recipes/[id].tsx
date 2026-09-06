@@ -203,7 +203,12 @@ export default function RecipeDetailScreen() {
         onConfirm={() => {
           setConfirmDelete(false);
           deleteRecipe.mutate(recipe.id, {
-            onSuccess: () => router.back(),
+            onSuccess: () => {
+              // 詳細を直接開いていて戻り先が無いと、削除後もこの（消えた）
+              // レシピの画面に留まってしまう。戻れなければホームへ replace する。
+              if (router.canGoBack()) router.back();
+              else router.replace("/(app)" as never);
+            },
             // 削除に失敗したら詳細画面に留まり、エラーを知らせる（無言で閉じない）。
             onError: () => setDeleteError(true),
           });
