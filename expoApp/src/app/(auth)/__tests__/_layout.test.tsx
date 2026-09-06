@@ -1,11 +1,11 @@
 import { render } from "@testing-library/react-native";
 
-import RootLayout from "./_layout";
+import AuthLayout from "../_layout";
 
 jest.mock("expo-router", () => ({ Stack: () => null }));
 
-describe("RootLayout", () => {
+describe("AuthLayout", () => {
   it("正常にレンダリングされる", async () => {
-    await expect(render(<RootLayout />)).resolves.toBeDefined();
+    await expect(render(<AuthLayout />)).resolves.toBeDefined();
   });
 });

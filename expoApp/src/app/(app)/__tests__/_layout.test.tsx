@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react-native";
 
-import AppLayout from "./_layout";
+import AppLayout from "../_layout";
 import { useProtectedRoute } from "@/features/auth/useProtectedRoute";
 
 jest.mock("expo-router", () => ({

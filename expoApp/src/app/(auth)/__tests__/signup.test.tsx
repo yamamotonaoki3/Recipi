@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
-import SignupScreen from "./signup";
+import SignupScreen from "../signup";
 import { ApiError, signup } from "@/features/auth/api";
 import { useSession } from "@/store/session";
 

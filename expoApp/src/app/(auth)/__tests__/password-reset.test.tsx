@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
-import PasswordResetScreen from "./password-reset";
+import PasswordResetScreen from "../password-reset";
 import { ApiError, confirmPasswordReset, requestPasswordReset } from "@/features/auth/api";
 
 const mockReplace = jest.fn();

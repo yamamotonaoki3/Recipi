@@ -8,7 +8,7 @@
  */
 import { render, waitFor } from "@testing-library/react-native";
 
-import SplashScreen from "./splash";
+import SplashScreen from "../splash";
 import { useSession } from "@/store/session";
 
 const mockReplace = jest.fn();

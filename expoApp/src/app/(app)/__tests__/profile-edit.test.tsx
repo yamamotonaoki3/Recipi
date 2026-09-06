@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
-import ProfileEditScreen from "./profile-edit";
+import ProfileEditScreen from "../profile-edit";
 import { updateMe } from "@/features/auth/api";
 import { useSession } from "@/store/session";
 
