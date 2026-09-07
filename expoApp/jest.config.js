@@ -34,6 +34,12 @@ module.exports = {
       },
       // SafeArea（`useSafeAreaInsets`）のモック。理由は jest.setup.js のコメント。
       setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
+      // 既定の 5 秒だと、CI の遅いランナーでファイル内の最初のテストが
+      // モジュール読み込みのコストを被ってタイムアウトすることがある
+      // （RNTL v14 は render / fireEvent が非同期で、画面コンポーネントの
+      // 依存ツリーも大きい）。ローカルは 1 テスト 1 秒未満で終わるので、
+      // 「本当に固まっている」ケースを検出する余裕は残したまま引き上げる。
+      testTimeout: 20_000,
     },
     {
       displayName: "node",
