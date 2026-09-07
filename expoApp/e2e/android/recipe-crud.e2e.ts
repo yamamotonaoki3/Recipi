@@ -59,7 +59,12 @@ describe("recipe-crud", () => {
     await $(id("g0-i0-name")).setValue("じゃがいも");
     await $(id("g0-i0-quantity")).setValue("2");
     await $(id("g0-i0-unit")).setValue("個");
-    await $(id("step-0-body")).setValue("材料を切って煮る");
+    // 単位欄の入力で候補ドロップダウンが開くので、キーボードごと閉じてから次へ。
+    await hideKeyboard();
+    // 手順欄はフォームの下の方にあり、CI のエミュレータ（既定プロファイルは
+    // 320x640 dp と小さい）では画面外になる。UiAutomator2 は ScrollView の
+    // 画面外の子をツリーに出さないため、まずスクロールして可視領域へ入れる。
+    await scrollToId("step-0-body").setValue("材料を切って煮る");
     await hideKeyboard();
     // 最後の TextInput の onChangeText が JS 側の reducer に反映されるまで待つ。
     await browser.pause(500);
