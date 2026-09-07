@@ -130,20 +130,27 @@ api.use({
     const requestClone = pendingRequestClones.get(id);
     pendingRequestClones.delete(id);
 
-    if (response.status !== 401) return response;
-    if (new URL(request.url).pathname.endsWith(REFRESH_PATH)) return response;
+    // openapi-fetch 0.17 の onResponse は「レスポンスを差し替えるときだけ
+    // `new Response()` を返す。変えないなら undefined を返す」という契約。
+    // 受け取った `response` をそのまま return すると
+    // 「must return new Response() when modifying the response」で throw する
+    // （Node / ブラウザは `instanceof Response` が通るので顕在化しないが、
+    // React Native の Hermes ランタイムでは全 API 呼び出しが失敗する。Issue #57）。
+    // → 差し替えない経路はすべて `return`（undefined）にする。
+    if (response.status !== 401) return;
+    if (new URL(request.url).pathname.endsWith(REFRESH_PATH)) return;
 
     const { refreshToken } = useSession.getState();
     if (!refreshToken || !requestClone) {
       await clearSessionAndStorage();
-      return response;
+      return;
     }
 
     const result = await refreshCoordinator.refresh(refreshToken);
     if (!result.ok) {
       // 永続化の失敗（callRefreshEndpoint 内）もここに含まれる。
       await clearSessionAndStorage();
-      return response;
+      return;
     }
 
     // 退避しておいた複製を、新しいアクセストークンを付けてやり直す。
@@ -164,7 +171,20 @@ api.use({
       // 誘導できず、以降のリクエストのたびに無駄なリフレッシュを繰り返す。
       await clearSessionAndStorage();
     }
-    return retryResponse;
+
+    // ここで返すレスポンスは openapi-fetch の `result instanceof Response`
+    // 判定を通る必要がある。`fetch()` が返したオブジェクトをそのまま返すと、
+    // Hermes ではこの判定に落ちて上と同じ throw になる（上のコメント参照）ため、
+    // `new Response()` で作り直す（この場で `new` したものは必ず instanceof を
+    // 満たす）。204 / 205 / 304 は body を持てないので null にする。
+    const isNullBodyStatus =
+      retryResponse.status === 204 || retryResponse.status === 205 || retryResponse.status === 304;
+    const retryBody = isNullBodyStatus ? null : await retryResponse.arrayBuffer();
+    return new Response(retryBody, {
+      status: retryResponse.status,
+      statusText: retryResponse.statusText,
+      headers: retryResponse.headers,
+    });
   },
 
   onError({ id }) {

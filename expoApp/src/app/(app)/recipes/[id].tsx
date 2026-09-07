@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ApiError } from "@/features/auth/api";
 import { formatQuantity, type Placement } from "@/features/recipe/formatQuantity";
@@ -19,6 +20,7 @@ import { useSession } from "@/store/session";
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const recipeQuery = useRecipe(id);
   const deleteRecipe = useDeleteRecipe();
   const currentUserId = useSession((s) => s.user?.id);
@@ -59,8 +61,12 @@ export default function RecipeDetailScreen() {
 
   return (
     <View className="flex-1 bg-white">
-      {/* アプリバー */}
-      <View className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3">
+      {/* アプリバー。`paddingTop` にステータスバーの inset を足す
+          （Issue #57 / #58。理由は RecipeEditor.tsx の同じ箇所のコメント参照）。 */}
+      <View
+        style={{ paddingTop: insets.top }}
+        className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3"
+      >
         <Pressable testID="recipe-detail-header-back" onPress={() => router.back()}>
           <Text className="text-neutral-500">← 戻る</Text>
         </Pressable>

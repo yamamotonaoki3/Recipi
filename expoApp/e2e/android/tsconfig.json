@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["node", "mocha"]
+    // `@wdio/globals/types` が無いと `browser.pause()` 等の WebdriverIO
+    // 固有コマンドが型解決できない（実行はできるが tsc が落ちる）。
+    "types": ["node", "mocha", "@wdio/globals/types"]
   },
   "include": ["**/*.ts"],
   "exclude": []

@@ -8,6 +8,7 @@
  * プロバイダ（TanStack Query）と 1 本の Stack を用意するだけ。
  */
 import { Stack } from "expo-router";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useAuthRefresh } from "@/features/auth/useAuthRefresh";
 import { QueryProvider } from "@/providers/QueryProvider";
@@ -24,9 +25,18 @@ function AuthBootstrap() {
 
 export default function RootLayout() {
   return (
-    <QueryProvider>
-      <AuthBootstrap />
-      <Stack screenOptions={{ headerShown: false }} />
-    </QueryProvider>
+    // `SafeAreaProvider` は各画面が `useSafeAreaInsets()` で
+    // ステータスバー / ナビゲーションバーの領域（inset）を知るために必要。
+    // Android 15（targetSdk 35）以降は edge-to-edge が強制され、アプリの
+    // 描画領域がシステムバーの下まで広がる。inset を考慮しないと画面上端の
+    // 固定ヘッダーがステータスバーに隠れ、**見た目が崩れるだけでなく
+    // アクセシビリティツリーからも剪定されて TalkBack や E2E から
+    // 到達できなくなる**（Issue #57 / #58 で実際に発生）。
+    <SafeAreaProvider>
+      <QueryProvider>
+        <AuthBootstrap />
+        <Stack screenOptions={{ headerShown: false }} />
+      </QueryProvider>
+    </SafeAreaProvider>
   );
 }

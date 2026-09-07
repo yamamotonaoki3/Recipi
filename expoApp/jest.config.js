@@ -32,6 +32,8 @@ module.exports = {
       moduleNameMapper: {
         "\\.css$": "<rootDir>/jest.cssMock.js",
       },
+      // SafeArea（`useSafeAreaInsets`）のモック。理由は jest.setup.js のコメント。
+      setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
     },
     {
       displayName: "node",

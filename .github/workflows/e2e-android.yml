@@ -5,11 +5,8 @@
 # 再ログイン の一連を検証する。Web（Chromium / Playwright）は e2e.yml。
 #
 # 【このワークフローを e2e.yml から分離した理由（Issue #50 Phase 1）】
-# - Android E2E は 1 回 約16分（`expo prebuild` + `gradlew assembleRelease` +
+# - Android E2E は 1 回 十数分（`expo prebuild` + `gradlew assembleRelease` +
 #   エミュレータ起動が重い）かかる。
-# - しかも `android` ジョブは continue-on-error で品質ゲートではなく、
-#   さらに Appium の要素検索が画面遷移後に効かなくなる不具合を調査中で
-#   正常完走しない（詳細は下の continue-on-error のコメント）。
 # - そのため **backend / openapi だけの変更では Android E2E を回さない**。
 #   backend 契約の検証は contract.yml（openapi 差分）＋ backend の結合テスト、
 #   および Web E2E（e2e.yml、こちらは backend/** でも起動）が担う。
@@ -41,15 +38,6 @@ on:
 jobs:
   android:
     runs-on: ubuntu-latest
-    # 【暫定・2026-09-06】Appium + WebdriverIO で、画面遷移後に findElement /
-    # isExisting 等の要素検索コマンド全般が機能しなくなる（getPageSource だけ
-    # は正常で、実際の画面は正しく描画されている）という再現性のある深い
-    # 不具合が判明した。待機時間の延長・isExisting への切り替え等、複数の
-    # 対策を試しても解消しなかったため、Web 版（Playwright、安定動作確認済み）
-    # の足を引っ張らないよう、このジョブの失敗ではワークフロー全体を失敗に
-    # しない。詳細・再調査の方針は docs/lessons-learned.md と
-    # docs/requirements/todo.md を参照。
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v7
@@ -100,6 +88,15 @@ jobs:
             sleep 2
           done
           echo "api did not become healthy in time" >&2
+          exit 1
+
+      - name: api の認証ルートを確認（/openapi.json）
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/api/v1/openapi.json | grep -q '/api/v1/auth/signup'; then exit 0; fi
+            sleep 2
+          done
+          echo "api auth routes did not become ready in time" >&2
           exit 1
 
       - uses: actions/setup-node@v7

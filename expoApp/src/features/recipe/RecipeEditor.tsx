@@ -21,6 +21,8 @@ import {
   type TextInput as RNTextInput,
 } from "react-native";
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { extractValidationErrors, type RecipeResponse } from "./api";
 import { formatQuantity, type Placement } from "./formatQuantity";
 import { useSaveRecipe, useUnits } from "./hooks";
@@ -45,6 +47,7 @@ const emptyErrors: RecipeFormErrors = { groups: {}, ingredients: {}, steps: {} }
 
 export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { state, dispatch, dirty } = useRecipeForm(recipe);
   const units = useUnits();
   const save = useSaveRecipe();
@@ -97,8 +100,10 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
             // 直接開いていて戻り先が無ければ詳細へ replace する。
             leaveEditor();
           } else {
-            // 作成モードはモーダルを閉じ、作成したレシピの詳細へ置き換え遷移。
-            router.replace(`/(app)/recipes/${saved.id}` as never);
+            // 作成画面はモーダルなので、モーダルスタックを閉じてから詳細へ
+            // 遷移する。`replace` だと Android のネイティブスタック上で
+            // モーダルのルートが残り、保存後も編集画面が表示され続けることがある。
+            router.dismissTo(`/(app)/recipes/${saved.id}` as never);
           }
         },
         onError: (error) => {
@@ -129,8 +134,16 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
           Android のハードウェアバックは useUnsavedChangesGuard が横取りする）。 */}
       <Stack.Screen options={{ gestureEnabled: !dirty }} />
 
-      {/* アプリバー: × / タイトル / 保存 */}
-      <View className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3">
+      {/* アプリバー: × / タイトル / 保存。
+          `paddingTop` にステータスバーの inset を足す（Issue #57 / #58）。
+          Android 15 以降は edge-to-edge が強制で、これが無いとヘッダーが
+          ステータスバーの下に潜り込み、見た目が崩れるうえに
+          アクセシビリティツリーからも剪定されて TalkBack / E2E から
+          `editor-save` に到達できなくなる。 */}
+      <View
+        style={{ paddingTop: insets.top }}
+        className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3"
+      >
         <Pressable testID="editor-close" onPress={guard.requestClose} accessibilityRole="button">
           <Text className="text-neutral-500">×</Text>
         </Pressable>
