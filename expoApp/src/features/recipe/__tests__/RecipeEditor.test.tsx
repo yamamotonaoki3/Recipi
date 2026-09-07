@@ -11,11 +11,17 @@ import { ApiError } from "@/features/auth/api";
 import { RecipeEditor } from "../RecipeEditor";
 
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
 
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ replace: mockReplace, back: mockBack, canGoBack: mockCanGoBack }),
+  useRouter: () => ({
+    replace: mockReplace,
+    dismissTo: mockDismissTo,
+    back: mockBack,
+    canGoBack: mockCanGoBack,
+  }),
   Stack: { Screen: () => null },
 }));
 
@@ -134,7 +140,7 @@ describe("RecipeEditor（作成）", () => {
       },
     ]);
     expect(body.steps).toEqual([{ body: "切って煮る" }]);
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)/recipes/r-new"));
+    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/(app)/recipes/r-new"));
   });
 
   it("必須未入力だと保存をブロックする", async () => {

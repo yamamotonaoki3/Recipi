@@ -1,21 +1,29 @@
 /**
  * Appium + WebdriverIO（Android エミュレータ）の E2E テスト設定（Issue #36）。
  *
- * Maestro は Web 版で入力欄のフォーカス取りこぼしが再現性100%で起き、
- * Android 版でも特定の欄間（秘密の質問→答え）で同系統の不具合が再現した。
- * 4種類の回避策（待機延長・DOM安定待ち・入力経路のウォームアップ・
- * 連続tapOn）を試しても解消しなかったため、Android 版の E2E も Appium +
- * WebdriverIO に置き換えた（Detox は Expo SDK 57 に対応する config-plugin
- * が無く、SDK 互換性リスクがあるため見送った）。詳細は
+ * Maestro は Web 版で入力欄のフォーカス取りこぼしが再現性100%で起きたため、
+ * Web を Playwright、Android を Appium + WebdriverIO に置き換えた
+ * （Detox は Expo SDK 57 対応の config-plugin が無く見送り）。詳細は
  * docs/lessons-learned.md の該当エントリ参照。
  *
  * Appium は「ブラックボックス」型（ビルド済み .apk を UiAutomator2
  * 経由で OS レベルから操作する）ため、Expo / React Native のバージョンに
  * 依存しない。
  *
- * CI（.github/workflows/e2e.yml）では reactivecircus/android-emulator-runner
- * で起動したエミュレータに対して実行する。EXPO_PUBLIC_API_BASE_URL は
- * ビルド時（gradle タスク実行時）に埋め込まれる。
+ * CI（.github/workflows/e2e-android.yml）では
+ * reactivecircus/android-emulator-runner で起動したエミュレータに対して
+ * 実行する。EXPO_PUBLIC_API_BASE_URL はビルド時（gradle タスク実行時）に
+ * 埋め込まれる。
+ *
+ * 【`appium:disableIdLocatorAutocompletion` について（Issue #57）】
+ * React Native の New Architecture は `testID` を Android の `resource-id`
+ * に「パッケージ接頭辞なし」（`signup-email` のように値そのまま）で流す。
+ * 一方 Appium の `id` ロケータ戦略は既定で「補完」が働き、`signup-email`
+ * → `com.recipi.app:id/signup-email` に変換してから探すため、素の
+ * resource-id にマッチせず即 404 になる（`getPageSource` では見えるのに
+ * `findElement` が失敗する、という症状の正体。当初は「ドライバの深い
+ * 不具合」と誤診断していた）。この補完を切ると `id=signup-email` が
+ * 素の resource-id を正しく引く。
  */
 // `autoCompileOpts` は @wdio/cli 側の設定型拡張であり、
 // @wdio/types の Options.Testrunner には含まれないため、型注釈は付けない
@@ -47,8 +55,25 @@ export const config = {
       "appium:app": "./android/app/build/outputs/apk/release/app-release.apk",
       "appium:appPackage": "com.recipi.app",
       "appium:appWaitActivity": "*",
+      // `noReset: false` = 「リセットする」。spec ファイルごとに別の Appium
+      // セッションが張られ、その開始時に `adb shell pm clear` でアプリの
+      // データ（＝ログイン状態やセキュアストレージ）が消える。
+      // これにより spec 間は独立する（`maxInstances: 1` は同時実行数の制限で
+      // あって、セッションを共有するという意味ではない）。
+      // 実測: CI の 1 回の実行で Session ID が 2 つ作られ、`pm clear` も
+      // 実行されている。`recipe-crud` が認証済みの状態で途中失敗した直後に
+      // `signup-login-logout` が問題なく pass したことでも裏付けられている。
       "appium:noReset": false,
       "appium:newCommandTimeout": 240,
+      // RN の testID は resource-id に接頭辞なしで入る（上のコメント参照）。
+      // `id` ロケータのパッケージ名補完を切って素の resource-id を引かせる。
+      //
+      // これは capability として渡して実際に効いている（`appium:settings` に
+      // 移す必要はない）。Appium サーバーログで確認済み:
+      //   POST /element {"using":"id","value":"editor-save"}
+      //     → proxy {"strategy":"id","selector":"editor-save"} → status 200
+      // 追加前は同じリクエストが 44ms で 404 を返していた。
+      "appium:disableIdLocatorAutocompletion": true,
     },
   ],
 
@@ -69,9 +94,7 @@ export const config = {
   },
 
   // 失敗時に画面構造（page source）とスクリーンショットを残す。
-  // signup-email 等が resource-id で見つからない不具合の原因切り分け用
-  // （React Native の New Architecture 下では testID が resource-id に
-  // 期待通り反映されない可能性がある。docs/lessons-learned.md 参照）。
+  // ロケータの取り違え・遷移待ちの失敗などを CI のログだけで切り分ける用。
   afterTest: async function (_test: unknown, _context: unknown, result: { passed: boolean }) {
     if (result.passed) return;
     const fs = await import("node:fs/promises");

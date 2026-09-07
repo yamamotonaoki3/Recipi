@@ -29,6 +29,15 @@ module.exports = [
     },
   },
   {
+    // jest のセットアップファイルは jest のグローバル（`jest.mock` 等）を使う。
+    // 通常のアプリコードには jest グローバルを持ち込みたくないので、
+    // このファイルだけに限定して宣言する。
+    files: ["jest.setup.js"],
+    languageOptions: {
+      globals: { jest: "readonly" },
+    },
+  },
+  {
     ignores: [
       "dist/*",
       "coverage/*",
