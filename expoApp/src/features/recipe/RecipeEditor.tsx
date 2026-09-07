@@ -128,22 +128,20 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
   const unitOptions = units.data?.units ?? [];
 
   return (
-    <View className="flex-1 bg-white">
+    // 画面ルートでステータスバーの inset を確保する（Issue #57 / #58）。
+    // ヘッダー側の `py-3` を上書きしないよう、パディングはここで足す。
+    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
       {/* 未保存の変更があるあいだは iOS モーダルのスワイプ down を無効化する
           （スワイプで閉じると requestClose を通らず確認ダイアログが出ないため。
           Android のハードウェアバックは useUnsavedChangesGuard が横取りする）。 */}
       <Stack.Screen options={{ gestureEnabled: !dirty }} />
 
       {/* アプリバー: × / タイトル / 保存。
-          `paddingTop` にステータスバーの inset を足す（Issue #57 / #58）。
-          Android 15 以降は edge-to-edge が強制で、これが無いとヘッダーが
-          ステータスバーの下に潜り込み、見た目が崩れるうえに
-          アクセシビリティツリーからも剪定されて TalkBack / E2E から
-          `editor-save` に到達できなくなる。 */}
-      <View
-        style={{ paddingTop: insets.top }}
-        className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3"
-      >
+          Android 15 以降は edge-to-edge が強制で、画面ルートで inset を
+          確保しないとこのヘッダーがステータスバーの下に潜り込み、
+          見た目が崩れるうえにアクセシビリティツリーからも剪定されて
+          TalkBack / E2E から `editor-save` に到達できなくなる。 */}
+      <View className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3">
         <Pressable testID="editor-close" onPress={guard.requestClose} accessibilityRole="button">
           <Text className="text-neutral-500">×</Text>
         </Pressable>

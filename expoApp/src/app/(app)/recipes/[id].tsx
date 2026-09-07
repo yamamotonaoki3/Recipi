@@ -60,13 +60,11 @@ export default function RecipeDetailScreen() {
   const isOwner = currentUserId != null && recipe.author.id === currentUserId;
 
   return (
-    <View className="flex-1 bg-white">
-      {/* アプリバー。`paddingTop` にステータスバーの inset を足す
-          （Issue #57 / #58。理由は RecipeEditor.tsx の同じ箇所のコメント参照）。 */}
-      <View
-        style={{ paddingTop: insets.top }}
-        className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3"
-      >
+    // 画面ルートでステータスバーの inset を確保する
+    // （Issue #57 / #58。理由は RecipeEditor.tsx の同じ箇所のコメント参照）。
+    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
+      {/* アプリバー */}
+      <View className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3">
         <Pressable testID="recipe-detail-header-back" onPress={() => router.back()}>
           <Text className="text-neutral-500">← 戻る</Text>
         </Pressable>

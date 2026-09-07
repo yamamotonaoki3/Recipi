@@ -55,6 +55,14 @@ export const config = {
       "appium:app": "./android/app/build/outputs/apk/release/app-release.apk",
       "appium:appPackage": "com.recipi.app",
       "appium:appWaitActivity": "*",
+      // `noReset: false` = 「リセットする」。spec ファイルごとに別の Appium
+      // セッションが張られ、その開始時に `adb shell pm clear` でアプリの
+      // データ（＝ログイン状態やセキュアストレージ）が消える。
+      // これにより spec 間は独立する（`maxInstances: 1` は同時実行数の制限で
+      // あって、セッションを共有するという意味ではない）。
+      // 実測: CI の 1 回の実行で Session ID が 2 つ作られ、`pm clear` も
+      // 実行されている。`recipe-crud` が認証済みの状態で途中失敗した直後に
+      // `signup-login-logout` が問題なく pass したことでも裏付けられている。
       "appium:noReset": false,
       "appium:newCommandTimeout": 240,
       // RN の testID は resource-id に接頭辞なしで入る（上のコメント参照）。
