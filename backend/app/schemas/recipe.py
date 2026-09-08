@@ -42,6 +42,19 @@ def _reject_blank(value: str) -> str:
     return value
 
 
+def _blank_to_none(value: object) -> object:
+    """画像キーの空文字・空白だけの入力を「未指定」にそろえる。
+
+    画像キーは、文字列が入っているときだけ Upload の存在確認と消費処理を
+    行う値。空文字をそのまま残すと「キーが無い」のに DB には文字列が保存され、
+    表示も削除もできない行になってしまうため、DB に渡す前に None へ正規化する。
+    `mode="before"` で文字列以外はそのまま後段の型チェックへ渡す。
+    """
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
 # --- 上限値（todo #37・#9 の確定分） ---------------------------------------
 MAX_INGREDIENT_GROUPS = 20
 MAX_INGREDIENTS_PER_GROUP = 50
@@ -93,6 +106,8 @@ class StepInput(CamelModel):
     body: str = Field(max_length=STEP_BODY_MAX)
     image_key: str | None = None
 
+    _normalize_blank_image_key = field_validator("image_key", mode="before")(_blank_to_none)
+
 
 class RecipeWriteRequest(CamelModel):
     """`POST /recipes` と `PUT /recipes/{id}` 共通のリクエスト body。
@@ -114,6 +129,7 @@ class RecipeWriteRequest(CamelModel):
     steps: list[StepInput] = Field(min_length=1, max_length=MAX_STEPS)
 
     _reject_blank_title = field_validator("title")(_reject_blank)
+    _normalize_blank_thumbnail_key = field_validator("thumbnail_key", mode="before")(_blank_to_none)
 
 
 # --- レスポンス --------------------------------------------------------

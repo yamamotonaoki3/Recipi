@@ -24,9 +24,9 @@ target-version = "py314"
 select = ["E", "W", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.flake8-bugbear]
-# FastAPI の `Depends(...)` はデフォルト引数として書くのが公式の書き方
-# （呼び出しごとの評価ではなく DI の仕組みで解決される）。B008 の誤検知を防ぐ。
-extend-immutable-calls = ["fastapi.Depends", "fastapi.security.HTTPBearer"]
+# FastAPI の `Depends(...)` / `File(...)` はデフォルト引数として書くのが公式の
+# 書き方（呼び出しごとの評価ではなく DI の仕組みで解決される）。B008 の誤検知を防ぐ。
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.security.HTTPBearer"]
 
 # ---------------------------------------------------------------------------
 # mypy — 静的型チェック（型ヒントの矛盾を実行前に見つける）
@@ -42,6 +42,14 @@ exclude = ["^\\.venv/", "^alembic/versions/"]
 # alembic が生成するファイルは型チェックの対象外にする
 module = ["alembic.*"]
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+# boto3 / botocore は型スタブを同梱していない（py.typed が無い）。
+# 別途 `boto3-stubs[s3]` を入れる手もあるが、依存を増やしてまで得るものは
+# 少ないと判断し、この 2 つだけ「型が無い」ことを許容する。
+# S3 クライアントを触るのは app/storage.py に閉じ込めてあるので影響範囲は狭い。
+module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # テストコードは strict を少しゆるめる（毎回 `-> None` を書かなくてよい）。

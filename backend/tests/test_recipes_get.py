@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.helpers import auth_headers, recipe_payload
+from tests.helpers import auth_headers, recipe_payload, upload_image
 
 pytestmark = pytest.mark.integration
 
@@ -49,16 +49,17 @@ def test_image_keys_only_returned_to_owner(client: TestClient) -> None:
     """サムネ / 手順画像のオブジェクトキーは投稿者本人にだけ返す（内部識別子）。"""
     owner = auth_headers(client)
     other = auth_headers(client)
+    thumb = upload_image(client, owner)
     res = client.post(
         RECIPES_URL,
-        json=recipe_payload(isPublic=True, thumbnailKey="uploads/thumb-1"),
+        json=recipe_payload(isPublic=True, thumbnailKey=thumb),
         headers=owner,
     )
     assert res.status_code == 201
     recipe_id = res.json()["id"]
 
     as_owner = client.get(f"{RECIPES_URL}/{recipe_id}", headers=owner).json()
-    assert as_owner["thumbnailKey"] == "uploads/thumb-1"
+    assert as_owner["thumbnailKey"] == thumb
 
     as_other = client.get(f"{RECIPES_URL}/{recipe_id}", headers=other).json()
     assert as_other["thumbnailKey"] is None

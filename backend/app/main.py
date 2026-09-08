@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -24,7 +26,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
+from app import storage
 from app.api.auth import router as auth_router
+from app.api.images import router as images_router
 from app.api.recipes import router as recipes_router
 from app.api.units import router as units_router
 from app.api.users import router as users_router
@@ -37,11 +41,25 @@ from app.middleware import RequestIdMiddleware
 configure_logging(level=settings.LOG_LEVEL, fmt=settings.LOG_FORMAT)
 logger = logging.getLogger("app")
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """アプリ起動時に、ローカル / テスト用ストレージを初期化する。"""
+    try:
+        storage.ensure_bucket()
+    except Exception:
+        # 本番の S3 ではバケットをインフラ側で作成済みで、アプリに作成権限が
+        # 無い構成が普通なので、初期化失敗だけで API 全体を起動不能にしない。
+        logger.warning("ストレージのバケット初期化に失敗しました", exc_info=True)
+    yield
+
+
 app = FastAPI(
     title="Recipi API",
     version="0.1.0",
     # OpenAPI のパスは /api/v1 配下（api.md）。scaffold では docs だけ用意。
     openapi_url="/api/v1/openapi.json",
+    lifespan=lifespan,
 )
 app.add_middleware(RequestIdMiddleware)
 
@@ -93,6 +111,7 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(recipes_router)
 app.include_router(units_router)
+app.include_router(images_router)
 
 
 def _custom_openapi() -> dict[str, Any]:

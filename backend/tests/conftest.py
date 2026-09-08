@@ -96,6 +96,27 @@ def _reset_password_reset_attempts(request: pytest.FixtureRequest):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _ensure_storage_bucket(request: pytest.FixtureRequest) -> None:
+    """結合テストの前に、テスト用バケットが存在することを保証する。
+
+    MinIO は起動直後バケットが 1 つも無く、作ったバケットは既定で非公開。
+    `ensure_bucket()` は「作る ＋ `uploads/` を公開読み取りにする」を冪等に
+    行うので、毎回呼んでも安全（`.env.test` の `S3_BUCKET` は開発用とは
+    別の `recipi-images-test` を指しているので、開発データは汚さない）。
+
+    `_reset_password_reset_attempts` と同じ理由で `integration` マーカーが
+    付いたテストだけに絞る。ストレージを使わない単体テストは、MinIO が
+    起動していない環境でも `pytest -m 'not integration'` で動く必要がある。
+    """
+    if request.node.get_closest_marker("integration") is None:
+        return
+
+    from app.storage import ensure_bucket
+
+    ensure_bucket()
+
+
 @pytest.fixture
 def unique_email() -> str:
     """テストごとに衝突しないメールアドレスを作る。

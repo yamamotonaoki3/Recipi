@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import select
 
-from tests.helpers import auth_headers, recipe_payload
+from app.models.recipe import Recipe
+from app.models.step import Step
+from tests.helpers import auth_headers, recipe_payload, upload_image
 
 pytestmark = pytest.mark.integration
 
@@ -224,17 +227,19 @@ def test_put_missing_recipe_returns_404(client: TestClient) -> None:
 
 def test_put_thumbnail_omitted_keeps_current(client: TestClient) -> None:
     headers = auth_headers(client)
-    recipe_id = _create(client, headers, thumbnailKey="uploads/original")
+    original = upload_image(client, headers)
+    recipe_id = _create(client, headers, thumbnailKey=original)
     body = recipe_payload()  # thumbnailKey を含めない
     res = client.put(f"{RECIPES_URL}/{recipe_id}", json=body, headers=headers)
     assert res.status_code == 200
     assert res.json()["thumbnailUrl"] is not None
-    assert res.json()["thumbnailUrl"].endswith("uploads/original")
+    assert res.json()["thumbnailUrl"].endswith(original)
 
 
 def test_put_thumbnail_null_deletes(client: TestClient) -> None:
     headers = auth_headers(client)
-    recipe_id = _create(client, headers, thumbnailKey="uploads/original")
+    original = upload_image(client, headers)
+    recipe_id = _create(client, headers, thumbnailKey=original)
     body = recipe_payload(thumbnailKey=None)
     res = client.put(f"{RECIPES_URL}/{recipe_id}", json=body, headers=headers)
     assert res.status_code == 200
@@ -243,11 +248,74 @@ def test_put_thumbnail_null_deletes(client: TestClient) -> None:
 
 def test_put_thumbnail_new_key_replaces(client: TestClient) -> None:
     headers = auth_headers(client)
-    recipe_id = _create(client, headers, thumbnailKey="uploads/original")
-    body = recipe_payload(thumbnailKey="uploads/new")
+    original = upload_image(client, headers)
+    replacement = upload_image(client, headers)
+    recipe_id = _create(client, headers, thumbnailKey=original)
+    body = recipe_payload(thumbnailKey=replacement)
     res = client.put(f"{RECIPES_URL}/{recipe_id}", json=body, headers=headers)
     assert res.status_code == 200
-    assert res.json()["thumbnailUrl"].endswith("uploads/new")
+    assert res.json()["thumbnailUrl"].endswith(replacement)
+
+
+@pytest.mark.parametrize("blank_key", ["", "   ", "　　"])
+def test_create_blank_thumbnail_key_is_saved_as_null(
+    client: TestClient, db_session, blank_key: str
+) -> None:
+    """画像キーの空入力は、DB に空文字ではなく NULL として保存する。"""
+    headers = auth_headers(client)
+    res = client.post(
+        RECIPES_URL,
+        json=recipe_payload(thumbnailKey=blank_key),
+        headers=headers,
+    )
+    assert res.status_code == 201, res.text
+
+    recipe = db_session.get(Recipe, res.json()["id"])
+    assert recipe is not None
+    assert recipe.thumbnail_key is None
+    assert res.json()["thumbnailKey"] is None
+
+
+@pytest.mark.parametrize("blank_key", ["", "   ", "　　"])
+def test_create_blank_step_image_key_is_saved_as_null(
+    client: TestClient, db_session, blank_key: str
+) -> None:
+    """手順画像キーの空入力も、DB に空文字ではなく NULL として保存する。"""
+    headers = auth_headers(client)
+    res = client.post(
+        RECIPES_URL,
+        json=recipe_payload(steps=[{"position": 1, "body": "材料を切る", "imageKey": blank_key}]),
+        headers=headers,
+    )
+    assert res.status_code == 201, res.text
+
+    recipe_id = res.json()["id"]
+    step = db_session.exec(select(Step).where(Step.recipe_id == recipe_id)).one()
+    assert step.image_key is None
+    assert res.json()["steps"][0]["imageKey"] is None
+
+
+@pytest.mark.parametrize("blank_key", ["", "   ", "　　"])
+def test_put_blank_thumbnail_key_deletes_current_thumbnail(
+    client: TestClient, db_session, blank_key: str
+) -> None:
+    """PUT の空画像キーは省略ではなく、明示的なサムネイル削除として扱う。"""
+    headers = auth_headers(client)
+    original = upload_image(client, headers)
+    recipe_id = _create(client, headers, thumbnailKey=original)
+
+    res = client.put(
+        f"{RECIPES_URL}/{recipe_id}",
+        json=recipe_payload(thumbnailKey=blank_key),
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["thumbnailKey"] is None
+    assert res.json()["thumbnailUrl"] is None
+
+    recipe = db_session.get(Recipe, recipe_id)
+    assert recipe is not None
+    assert recipe.thumbnail_key is None
 
 
 # --- 削除（DELETE） -------------------------------------------------

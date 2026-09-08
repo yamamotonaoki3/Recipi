@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import io
 import uuid
 from typing import Any
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 SIGNUP_URL = "/api/v1/auth/signup"
 PASSWORD = "TestPass123!"
@@ -58,3 +60,25 @@ def recipe_payload(**overrides: Any) -> dict[str, Any]:
     }
     payload.update(overrides)
     return payload
+
+
+def upload_image(
+    client: TestClient, headers: dict[str, str], *, size: tuple[int, int] = (40, 30)
+) -> str:
+    """画像を 1 枚アップロードして、そのオブジェクトキーを返す（Issue #39）。
+
+    レシピの `thumbnailKey` / `steps[].imageKey` には「本人所有かつ未使用」の
+    実在するキーしか指定できない（features/image.md §3）。テストで適当な
+    文字列を渡すと 400 になるので、必ずここで実際にアップロードして得た
+    キーを使う。
+    """
+    buf = io.BytesIO()
+    Image.new("RGB", size, (40, 150, 90)).save(buf, "PNG")
+    res = client.post(
+        "/api/v1/images",
+        headers=headers,
+        files={"file": ("photo.png", buf.getvalue(), "image/png")},
+    )
+    assert res.status_code == 201, res.text
+    key: str = res.json()["key"]
+    return key
