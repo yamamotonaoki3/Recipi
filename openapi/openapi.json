@@ -23,6 +23,21 @@
         "title": "AuthTokenResponse",
         "type": "object"
       },
+      "Body_upload_image_api_v1_images_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JPEG / PNG / WebP の画像 1 枚",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_image_api_v1_images_post",
+        "type": "object"
+      },
       "ErrorDetail": {
         "properties": {
           "code": {
@@ -91,6 +106,27 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImageUploadResponse": {
+        "description": "一時アップロードの結果。\n\n`key` はレシピ保存時に `thumbnailKey` / `steps[].imageKey` として送り返す\nためのもの。`url` はアップロード直後のプレビュー表示に使う。",
+        "properties": {
+          "key": {
+            "description": "オブジェクトキー。レシピ保存時にこの値を送る",
+            "title": "Key",
+            "type": "string"
+          },
+          "url": {
+            "description": "表示用 URL（プレビュー用）",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "url"
+        ],
+        "title": "ImageUploadResponse",
         "type": "object"
       },
       "IngredientGroupInput": {
@@ -1233,6 +1269,72 @@
         "summary": "Signup",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/images": {
+      "post": {
+        "operationId": "upload_image_api_v1_images_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_image_api_v1_images_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Image",
+        "tags": [
+          "images"
         ]
       }
     },

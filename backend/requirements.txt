@@ -15,3 +15,7 @@ python-json-logger==4.2.0    # 標準 logging を JSON 形式で出力するフ�
 argon2-cffi==25.1.0          # パスワード・秘密の質問の回答を Argon2id でハッシュ化
 pyjwt==2.13.0                # アクセストークン（JWT）の署名・検証
 email-validator==2.3.0       # pydantic の EmailStr（メールアドレスの形式検証）に必要
+boto3==1.43.89               # S3 互換ストレージのクライアント（#39）。ローカルは MinIO、
+                             # 本番は R2 / S3 等へ endpoint_url の差し替えだけで移行できる
+pillow==12.3.0               # 画像の検証 / EXIF 回転の正規化 / 縮小 / 再エンコード（#39）
+python-multipart==0.0.32     # FastAPI が multipart/form-data（UploadFile）を受けるのに必要

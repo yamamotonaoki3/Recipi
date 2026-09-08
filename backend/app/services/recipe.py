@@ -22,13 +22,13 @@ from datetime import UTC, datetime
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, delete, select
 
-from app.config import settings
 from app.errors import validation_error
 from app.models.ingredient import Ingredient
 from app.models.ingredient_group import IngredientGroup
 from app.models.recipe import Recipe
 from app.models.step import Step
 from app.models.unit import Unit
+from app.models.upload import Upload
 from app.models.user import User
 from app.schemas.recipe import (
     MAX_SEARCH_TERM_LENGTH,
@@ -44,6 +44,7 @@ from app.schemas.recipe import (
     StepInput,
     StepOutput,
 )
+from app.services.image import build_image_url, enqueue_object_deletion
 from app.text_normalize import normalize_search_text, split_search_terms
 
 
@@ -52,15 +53,17 @@ def _utcnow() -> datetime:
 
 
 def image_url(key: str | None) -> str | None:
-    """オブジェクトキーから表示用 URL を組み立てる。
+    """オブジェクトキーから表示用 URL を組み立てる（キーが無ければ null）。
 
-    Phase 3（画像アップロード / 署名付き URL）で本実装する。現時点では
-    公開バケットの URL ベース（S3_PUBLIC_URL_BASE）に連結するだけ。
-    キーが無ければ null（クライアントがプレースホルダを出す）。
+    実体は `app/services/image.py` の `build_image_url`。URL の作り方を
+    1 か所に集約しておくことで、将来「公開バケット → 署名付き URL」に
+    移行するときの変更箇所をそこだけに閉じ込められる。
+    キーが null のときに null を返すのは、クライアントにプレースホルダを
+    出させるため（features/image.md §7）。
     """
     if not key:
         return None
-    return f"{settings.S3_PUBLIC_URL_BASE.rstrip('/')}/{key.lstrip('/')}"
+    return build_image_url(key)
 
 
 # --- 単位の自動 upsert -------------------------------------------------
@@ -170,6 +173,7 @@ def _rebuild_children(
     recipe: Recipe,
     body: RecipeWriteRequest,
     ref_titles: dict[uuid.UUID, str],
+    cleaned_steps: list[StepInput],
 ) -> None:
     """材料グループ / 材料 / 手順を、送られた配列で作り直す。
 
@@ -208,7 +212,7 @@ def _rebuild_children(
                 )
             )
 
-    for step_pos, step_in in enumerate(_clean_steps(body.steps), start=1):
+    for step_pos, step_in in enumerate(cleaned_steps, start=1):
         session.add(
             Step(
                 recipe_id=recipe.id,
@@ -217,6 +221,101 @@ def _rebuild_children(
                 image_key=step_in.image_key,
             )
         )
+
+
+# --- 画像キーの消費と削除キュー ------------------------------------
+#
+# 画像は「レシピ保存より前」に `POST /images` でアップロードされ、その時点では
+# まだ誰からも参照されていない（`uploads.status = 'stored'`）。レシピ保存で
+# 初めて本参照になるので、ここで次の 2 つをレシピ本体と**同じトランザクション**
+# で行う（processing-model.md §6「レシピ POST / PUT」）:
+#
+#   1. 参照する側になったキーを `consumed` にする（GC に消されないように）
+#   2. 参照から外れた旧キーを削除キューに積む（あとで実削除される）
+#
+# 同一トランザクションにするのが重要で、レシピの保存が成功したのに 1 の更新が
+# 漏れると GC が使用中の画像を消してしまうし、2 が漏れると孤児が残り続ける。
+
+
+def _consume_upload_keys(
+    session: Session,
+    user: User,
+    keys: list[str],
+) -> None:
+    """本参照されるキーを検証し、`stored` → `consumed` に進める。
+
+    次のいずれかなら 400（features/image.md §3・§7）:
+    - 存在しないキー
+    - 他人がアップロードしたキー
+    - すでに別のリソースに紐付いている（＝ `consumed` 済みの）キー
+
+    `with_for_update()`（SELECT ... FOR UPDATE）で行をロックしてから状態を
+    見るのは、GC や別リクエストが同じ行を同時に触るのを直列化するため。
+    ロックせずに「読んでから書く」と、その間に GC が消してしまう競合が起きうる
+    （processing-model.md §9）。
+    """
+    # 複数の行を入力された順にロックすると、リクエスト 1 が [A, B]、リクエスト 2
+    # が [B, A] のときに、お互いが相手のロックを待ち続けるデッドロックになる。
+    # 常に同じ順序でロックすれば、一方は最初のロック取得で待つため、先に進んだ
+    # リクエストがキーを consumed にした後、待っていた側は「使用済み」と判定できる。
+    # ソートするのはロックを取る順序だけで、エラー表示と状態変更は入力順を保つ。
+    uploads_by_key: dict[str, Upload | None] = {}
+    for key in sorted(keys):
+        uploads_by_key[key] = session.exec(
+            select(Upload).where(Upload.key == key).with_for_update()
+        ).first()
+
+    for key in keys:
+        upload = uploads_by_key[key]
+        if upload is None or upload.user_id != user.id or upload.status != "stored":
+            raise validation_error(
+                "指定された画像は使用できません（存在しない / 他のユーザーのもの / 既に使用済み）",
+                {"imageKey": key},
+            )
+        upload.status = "consumed"
+        session.add(upload)
+
+
+def _new_image_keys(
+    *,
+    thumbnail_key: str | None,
+    cleaned_steps: list[StepInput],
+) -> list[str]:
+    """保存後に参照されることになる画像キーを列挙する（重複は 400）。
+
+    同じキーを 2 か所（例: サムネイルと手順 1）に指定すると、片方を消したときに
+    もう片方がまだ使っている画像を削除キューに積んでしまう。1 キー = 1 参照を
+    崩さないよう、ここで弾く。
+
+    `cleaned_steps` は `_clean_steps` 通過後の配列を受け取る。空白だけの手順は
+    保存されないため、その手順に付いたキーまで消費すると、レシピから参照されない
+    画像が `consumed` のまま GC 対象外になる。
+    """
+    keys: list[str] = []
+    if thumbnail_key:
+        keys.append(thumbnail_key)
+    keys.extend(s.image_key for s in cleaned_steps if s.image_key)
+
+    seen: set[str] = set()
+    for key in keys:
+        if key in seen:
+            raise validation_error(
+                "同じ画像を複数の場所に指定することはできません",
+                {"imageKey": key},
+            )
+        seen.add(key)
+    return keys
+
+
+def _existing_step_image_keys(session: Session, recipe: Recipe) -> list[str]:
+    """このレシピの現在の手順画像キーを取り出す（PUT の差分計算用）。
+
+    手順は PUT で全入れ替えされ安定 ID を持たないため、「どの画像が残り、
+    どれが外れたか」は入れ替え前後のキー集合の差で判断する
+    （features/image.md §3）。
+    """
+    steps = session.exec(select(Step).where(Step.recipe_id == recipe.id)).all()
+    return [s.image_key for s in steps if s.image_key]
 
 
 def _collect_unit_values(body: RecipeWriteRequest) -> list[str]:
@@ -233,7 +332,17 @@ def _collect_unit_values(body: RecipeWriteRequest) -> list[str]:
 
 def create_recipe(session: Session, user: User, body: RecipeWriteRequest) -> Recipe:
     ref_titles = _validate_ref_recipes(session, user, body, current_recipe_id=None)
-    _clean_steps(body.steps)  # 早期に「手順 0 件」を弾く
+    cleaned_steps = _clean_steps(body.steps)  # 早期に「手順 0 件」を弾く
+
+    # 新規作成なので既存の参照は無い。指定された画像キーはすべて新規消費。
+    _consume_upload_keys(
+        session,
+        user,
+        _new_image_keys(
+            thumbnail_key=body.thumbnail_key,
+            cleaned_steps=cleaned_steps,
+        ),
+    )
 
     now = _utcnow()
     recipe = Recipe(
@@ -251,7 +360,7 @@ def create_recipe(session: Session, user: User, body: RecipeWriteRequest) -> Rec
     session.flush()  # recipe.id を確定
 
     upsert_units(session, _collect_unit_values(body))
-    _rebuild_children(session, recipe, body, ref_titles)
+    _rebuild_children(session, recipe, body, ref_titles, cleaned_steps)
     return recipe
 
 
@@ -269,8 +378,39 @@ def replace_recipe(
     サムネイルを現状維持する。True のときは `body.thumbnail_key`（None = 削除）で
     上書きする（features/recipe.md §5）。
     """
+    # 同じレシピへの PUT が同時に来たとき、子行を読む前に親の Recipe 行をロックする。
+    # 子行（手順など）は PUT の途中で全削除して作り直すため、子行だけをロックしても
+    # 「現在の画像キーを読む」という処理全体を代表できない。常に存在する親の 1 行を
+    # 共通の待ち合わせ場所にすると、同じレシピの更新が順番に old_keys を読める。
+    # API 層が先に取得した recipe は既にセッションのキャッシュに載っているため、
+    # refresh(..., with_for_update=True) で SELECT ... FOR UPDATE と最新値の読み直しを
+    # 同時に行う。単純に select し直すだけでは、古い Python オブジェクトが返りうる。
+    session.refresh(recipe, with_for_update=True)
+
     ref_titles = _validate_ref_recipes(session, user, body, current_recipe_id=recipe.id)
-    _clean_steps(body.steps)
+    cleaned_steps = _clean_steps(body.steps)
+
+    # --- 画像キーの差分計算（子行を作り直す前に現在の状態を控える） -------
+    # サムネイルは `thumbnailKey` 省略なら現状維持なので、その場合の
+    # 「保存後のサムネ」は今の値になる（features/recipe.md §5）。
+    old_thumbnail_key = recipe.thumbnail_key
+    old_keys = set(_existing_step_image_keys(session, recipe))
+    if old_thumbnail_key:
+        old_keys.add(old_thumbnail_key)
+
+    next_thumbnail_key = body.thumbnail_key if update_thumbnail else old_thumbnail_key
+    new_keys = _new_image_keys(
+        thumbnail_key=next_thumbnail_key,
+        cleaned_steps=cleaned_steps,
+    )
+
+    # 既にこのレシピが持っているキーの再送は「維持」なので再検証しない
+    # （既に consumed なので、検証に回すと 400 になってしまう）。
+    _consume_upload_keys(session, user, [k for k in new_keys if k not in old_keys])
+
+    # 逆に、今回の body に出てこなくなった旧キーは参照から外れる。
+    for orphan in old_keys - set(new_keys):
+        enqueue_object_deletion(session, orphan, "recipe_updated")
 
     recipe.title = body.title.strip()
     recipe.title_normalized = normalize_search_text(body.title)
@@ -283,7 +423,7 @@ def replace_recipe(
     session.add(recipe)
 
     upsert_units(session, _collect_unit_values(body))
-    _rebuild_children(session, recipe, body, ref_titles)
+    _rebuild_children(session, recipe, body, ref_titles, cleaned_steps)
     return recipe
 
 
@@ -294,8 +434,21 @@ def delete_recipe(session: Session, recipe: Recipe) -> None:
     - このレシピを `ref_recipe_id` で参照している材料（＝投稿者本人の他レシピの
       材料）は、FK の ON DELETE SET NULL で `ref_recipe_id` だけ NULL になり、
       材料行と `ref_recipe_title`（スナップショット）は残る（features/recipe.md §3）。
-    - サムネ / 手順画像のストレージ削除エンキューは Phase 3。
+    - サムネ / 手順画像は **CASCADE で行が消える前に**キーを集めて削除キューに
+      積む。行が消えた後ではキーを取り出せないため、順序が重要
+      （processing-model.md §9）。感想画像の分は Phase 7 で足す。
     """
+    # キーを読む前に親の Recipe 行をロックし、PUT と DELETE を同じレシピ単位で直列化する。
+    # 先に古いキーを読んでからロックすると、PUT の完了を待った後に CASCADE で消える
+    # 新しいキーを削除キューへ積めず、使用中の Upload がストレージに残り続けるため。
+    # API 層が先に取得した recipe はセッションのキャッシュに載っているので、refresh で
+    # ロック取得と最新値の読み直しを同時に行う（PUT と同じ書き方にそろえる）。
+    session.refresh(recipe, with_for_update=True)
+
+    for key in _existing_step_image_keys(session, recipe):
+        enqueue_object_deletion(session, key, "recipe_deleted")
+    enqueue_object_deletion(session, recipe.thumbnail_key, "recipe_deleted")
+
     session.delete(recipe)
 
 

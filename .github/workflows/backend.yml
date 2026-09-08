@@ -27,7 +27,9 @@ jobs:
 
     services:
       # 結合テスト用の使い捨て PostgreSQL。ジョブが終われば破棄される。
-      # MinIO（ストレージ）は画像機能を作る Phase 3（#39）で追加する。
+      # MinIO（ストレージ）は `services:` では起動できないので下のステップで
+      # docker run する（`services:` はコンテナの command を上書きできず、
+      # MinIO は `server /data` の引数が必須のため。lessons-learned 2026-09-04 #7）。
       postgres:
         image: postgres:18
         env:
@@ -61,11 +63,36 @@ jobs:
           {
             echo "DATABASE_URL=postgresql+psycopg://recipi_test:recipi_test@localhost:5432/recipi_test"
             echo "JWT_SECRET_KEY=ci-only-not-a-real-secret"
-            echo "S3_ACCESS_KEY_ID=ci-test"
-            echo "S3_SECRET_ACCESS_KEY=ci-test"
+            # 下で起動する MinIO のルート資格情報と必ず一致させること。
+            # ずれると PutObject が InvalidAccessKeyId で落ちる。
+            echo "S3_ACCESS_KEY_ID=ci-minio-user"
+            echo "S3_SECRET_ACCESS_KEY=ci-only-not-a-real-secret"
             echo "AI_PROVIDER=stub"
             echo "LOG_LEVEL=WARNING"
           } >> ../.env.test
+
+      # 画像アップロードの結合テスト用ストレージ（Issue #39）。
+      # `services:` ではなく docker run にしている理由は上のコメント参照。
+      # バケットの作成と公開設定はテスト側（conftest の ensure_bucket）が行う。
+      - name: MinIO を起動（結合テストのストレージ）
+        run: |
+          # MinIO のイメージには mc クライアントが入っていないため、HTTP エンドポイントで確認する。
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=ci-minio-user \
+            -e MINIO_ROOT_PASSWORD=ci-only-not-a-real-secret \
+            --health-cmd "curl -fsS http://localhost:9000/minio/health/live" \
+            --health-interval 5s \
+            --health-timeout 5s \
+            --health-retries 20 \
+            minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' minio)" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "MinIO did not become healthy in time" >&2
+          docker logs minio
+          exit 1
 
       - name: 品質チェック（ruff lint）
         run: ruff check .

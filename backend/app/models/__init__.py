@@ -11,19 +11,23 @@ from __future__ import annotations
 from app.models.ingredient import Ingredient
 from app.models.ingredient_group import IngredientGroup
 from app.models.password_reset_attempt import PasswordResetAttempt
+from app.models.pending_storage_deletion import PendingStorageDeletion
 from app.models.recipe import Recipe
 from app.models.refresh_token import RefreshToken
 from app.models.step import Step
 from app.models.unit import Unit
+from app.models.upload import Upload
 from app.models.user import User
 
 __all__ = [
     "Ingredient",
     "IngredientGroup",
     "PasswordResetAttempt",
+    "PendingStorageDeletion",
     "Recipe",
     "RefreshToken",
     "Step",
     "Unit",
+    "Upload",
     "User",
 ]

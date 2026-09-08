@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Image */
+        post: operations["upload_image_api_v1_images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes": {
         parameters: {
             query?: never;
@@ -245,6 +262,14 @@ export interface components {
             refreshToken: string;
             user: components["schemas"]["UserPublic"];
         };
+        /** Body_upload_image_api_v1_images_post */
+        Body_upload_image_api_v1_images_post: {
+            /**
+             * File
+             * @description JPEG / PNG / WebP の画像 1 枚
+             */
+            file: string;
+        };
         /** ErrorDetail */
         ErrorDetail: {
             /** Code */
@@ -267,6 +292,25 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * ImageUploadResponse
+         * @description 一時アップロードの結果。
+         *
+         *     `key` はレシピ保存時に `thumbnailKey` / `steps[].imageKey` として送り返す
+         *     ためのもの。`url` はアップロード直後のプレビュー表示に使う。
+         */
+        ImageUploadResponse: {
+            /**
+             * Key
+             * @description オブジェクトキー。レシピ保存時にこの値を送る
+             */
+            key: string;
+            /**
+             * Url
+             * @description 表示用 URL（プレビュー用）
+             */
+            url: string;
         };
         /** IngredientGroupInput */
         IngredientGroupInput: {
@@ -823,6 +867,57 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    upload_image_api_v1_images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_image_api_v1_images_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageUploadResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
