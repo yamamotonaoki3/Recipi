@@ -317,11 +317,51 @@ describe("RecipeEditor（作成）", () => {
     });
   });
 
-  it("必須未入力だと保存をブロックする", async () => {
-    const { getByTestId, findByText } = await render(<RecipeEditor mode="create" />, { wrapper });
+  it("必須未入力だと保存をブロックし、エラーをポップアップでも知らせる", async () => {
+    const { getByTestId, findByTestId, getAllByText } = await render(
+      <RecipeEditor mode="create" />,
+      {
+        wrapper,
+      },
+    );
     await fireEvent.press(getByTestId("editor-save"));
-    expect(await findByText("タイトルを入力してください")).toBeTruthy();
+
+    // 保存ボタンは固定ヘッダーにあり、下までスクロールした状態でも押せる。
+    // インライン表示だけだとエラーが画面外になりうるので、ポップアップも出す（#63）。
+    expect(await findByTestId("editor-error-dialog")).toBeTruthy();
+    // 欄の直下とポップアップの両方に出る。
+    expect(getAllByText("タイトルを入力してください").length).toBeGreaterThanOrEqual(2);
     expect(mockCreateRecipe).not.toHaveBeenCalled();
+  });
+
+  it("エラーのポップアップは「閉じる」で消える（インライン表示は残る）", async () => {
+    const { getByTestId, findByTestId, queryByTestId, getAllByText } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
+    await fireEvent.press(getByTestId("editor-save"));
+    await findByTestId("editor-error-dialog");
+
+    await fireEvent.press(getByTestId("editor-error-dialog-close"));
+
+    await waitFor(() => expect(queryByTestId("editor-error-dialog")).toBeNull());
+    // 閉じたあとも欄の下の手掛かりは残す。
+    expect(getAllByText("タイトルを入力してください").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("欄に紐づかない失敗もポップアップで知らせる", async () => {
+    mockCreateRecipe.mockRejectedValue(new Error("network down"));
+    const { getByTestId, findByTestId, queryByTestId, getAllByText } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
+    await fillMinimalRecipe(getByTestId);
+    await fireEvent.press(getByTestId("editor-save"));
+
+    expect(await findByTestId("editor-error-dialog")).toBeTruthy();
+    expect(getAllByText("保存に失敗しました").length).toBeGreaterThanOrEqual(1);
+    // 欄が特定できない失敗なので「最初のエラーへ移動」は出さない。
+    expect(queryByTestId("editor-error-dialog-jump")).toBeNull();
   });
 
   it("サーバー 400 を受けるとエラー表示する", async () => {
@@ -330,10 +370,16 @@ describe("RecipeEditor（作成）", () => {
         errors: [{ loc: ["body", "title"], msg: "too long", type: "value_error" }],
       }),
     );
-    const { getByTestId, findByText } = await render(<RecipeEditor mode="create" />, { wrapper });
+    const { getByTestId, findByText, findByTestId, getAllByText } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
     await fillMinimalRecipe(getByTestId);
     await fireEvent.press(getByTestId("editor-save"));
     expect(await findByText("入力内容を確認してください")).toBeTruthy();
+    // サーバー 400 もクライアント検証と同じ形に翻訳されるので、同じポップアップに載る。
+    expect(await findByTestId("editor-error-dialog")).toBeTruthy();
+    expect(getAllByText("too long").length).toBeGreaterThanOrEqual(2);
   });
 
   it("未入力のまま「×」なら確認なしで閉じる", async () => {

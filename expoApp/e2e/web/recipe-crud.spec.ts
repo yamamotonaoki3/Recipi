@@ -150,3 +150,46 @@ test("サムネイルと手順画像を付けて保存 → 詳細に表示され
     timeout: 15_000,
   });
 });
+
+/**
+ * 保存エラーのポップアップ（Issue #63）。
+ *
+ * 保存ボタンは固定ヘッダーにあるので画面のどこからでも押せるが、エラーの
+ * 表示先は各欄の直下と ScrollView の先頭しかない。下の方までスクロールして
+ * 保存すると、エラーが画面外になって「押しても何も起きない」ように見えた。
+ * ここでは**実際に下までスクロールした状態で保存**し、ポップアップが出て
+ * 「最初のエラーへ移動」でその欄まで戻れることを確認する。
+ */
+test("必須未入力のまま保存するとエラーがポップアップで出る", async ({ page }) => {
+  const email = `e2euser_error_${Date.now()}@example.com`;
+
+  await page.goto("/login");
+  await page.getByText("新規登録").click();
+  await page.getByTestId("signup-email").fill(email);
+  await page.getByTestId("signup-password").fill("TestPass123!");
+  await page.getByTestId("signup-password-confirm").fill("TestPass123!");
+  await page.getByTestId("signup-display-name").fill("E2E Error User");
+  await page.getByTestId("signup-security-question").fill("好きな食べ物は？");
+  await page.getByTestId("signup-security-answer").fill("ラーメン");
+  await page.getByTestId("signup-submit").click();
+  await expect(page.getByText("ようこそ、E2E Error User さん")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByTestId("home-link-new-recipe").click();
+  await expect(page.getByTestId("editor-title")).toBeVisible();
+
+  // タイトルを空のまま、画面の一番下まで運んでから保存する
+  //（＝エラーの出る欄がビューポートの外にある状態を作る）。
+  await page.getByTestId("editor-add-step").last().scrollIntoViewIfNeeded();
+  await page.getByTestId("editor-save").last().click();
+
+  // ポップアップにエラーの「場所」と「理由」が並ぶ。
+  const dialog = page.getByTestId("editor-error-dialog").last();
+  await expect(dialog).toBeVisible({ timeout: 10_000 });
+  await expect(dialog.getByText("タイトル", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("タイトルを入力してください")).toBeVisible();
+
+  // 「最初のエラーへ移動」でタイトル欄まで戻る。
+  await page.getByTestId("editor-error-dialog-jump").last().click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("editor-title").last()).toBeInViewport({ timeout: 10_000 });
+});

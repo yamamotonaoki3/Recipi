@@ -13,6 +13,8 @@
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Keyboard,
+  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -25,8 +27,16 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { extractValidationErrors, type RecipeResponse } from "./api";
+import {
+  collectFormErrors,
+  groupAnchorKey,
+  ingredientAnchorKey,
+  stepAnchorKey,
+  type FormErrorEntry,
+} from "./collectFormErrors";
 import { formatQuantity, type Placement } from "./formatQuantity";
 import { useSaveRecipe, useUnits } from "./hooks";
+import { RecipeErrorDialog } from "./RecipeErrorDialog";
 import { RefRecipePicker } from "./RefRecipePicker";
 import type { GroupRow, IngredientRow, StepRow } from "./recipeForm";
 import { buildSubmission } from "./recipeForm";
@@ -47,6 +57,12 @@ type RecipeEditorProps =
 
 const emptyErrors: RecipeFormErrors = { groups: {}, ingredients: {}, steps: {} };
 
+/** 「最初のエラーへ移動」でスクロールしたとき、対象の上に残す余白（px）。 */
+const SCROLL_MARGIN = 16;
+
+/** エラー箇所の View を `anchorKey` で登録するための関数。 */
+export type RegisterAnchor = (anchorKey: string, node: View | null) => void;
+
 export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -57,6 +73,11 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
   const [errors, setErrors] = useState<RecipeFormErrors>(emptyErrors);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pickerForIngredient, setPickerForIngredient] = useState<string | null>(null);
+  // 保存に失敗したことを知らせるポップアップ。null = 出していない。
+  const [errorDialog, setErrorDialog] = useState<{
+    entries: FormErrorEntry[];
+    message: string | null;
+  } | null>(null);
   const [uploadingImageIds, setUploadingImageIds] = useState<Set<string>>(new Set());
 
   const handleImageUploadingChange = useCallback((imageId: string, uploading: boolean) => {
@@ -109,11 +130,115 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
     }
   }, [state.lastAddedRowId, dispatch]);
 
+  // --- エラー箇所へのスクロール（Issue #63） -------------------------
+  //
+  // 保存ボタンは固定ヘッダーにあるので画面のどこからでも押せる一方、エラーの
+  // 表示先は各欄の直下と ScrollView の先頭しかない。下の方で保存を押すと
+  // エラーが画面外になり「押しても何も起きない」ように見えるため、
+  // ポップアップから該当欄まで運べるようにする。
+  const scrollRef = useRef<ScrollView>(null);
+  // スクロール内容の原点。これ自身もスクロールに合わせて動くので、
+  // 「対象のウィンドウ座標 − これのウィンドウ座標」がそのまま
+  // スクロール内容の中での位置になる。
+  const contentRef = useRef<View>(null);
+  // anchorKey -> その欄を包む View。エラー一覧の anchorKey で引く。
+  const anchorNodes = useRef(new Map<string, View>());
+  const registerAnchor = useCallback<RegisterAnchor>((anchorKey, node) => {
+    if (node) anchorNodes.current.set(anchorKey, node);
+    else anchorNodes.current.delete(anchorKey);
+  }, []);
+
+  // 固定の 4 か所は ref コールバックを個別に固定しておく。描画のたびに新しい
+  // 関数を渡すと React が解除 → 再登録を繰り返すため。
+  //（動的に増減する材料 / 手順の行は、行側で `registerAnchor` を呼ぶ。）
+  const formAnchorRef = useCallback(
+    (node: View | null) => registerAnchor("form", node),
+    [registerAnchor],
+  );
+  const titleAnchorRef = useCallback(
+    (node: View | null) => registerAnchor("title", node),
+    [registerAnchor],
+  );
+  const descriptionAnchorRef = useCallback(
+    (node: View | null) => registerAnchor("description", node),
+    [registerAnchor],
+  );
+  const servingsAnchorRef = useCallback(
+    (node: View | null) => registerAnchor("servings", node),
+    [registerAnchor],
+  );
+
+  function jumpToFirstError() {
+    const first = errorDialog?.entries[0];
+    setErrorDialog(null);
+    if (!first) return;
+
+    const node = anchorNodes.current.get(first.anchorKey);
+    const scroll = scrollRef.current;
+    if (!node || !scroll) return;
+
+    const content = contentRef.current;
+    if (!content) return;
+
+    // 測るのは**ダイアログが実際に閉じてから**。上の setErrorDialog はまだ
+    // 反映されておらず、モーダルの解除中に測ると過渡的なレイアウトを読んで
+    // 見当違いの位置へ飛ぶことがある（実測で確認）。1 フレーム待つ。
+    // 測るのはダイアログが実際に閉じてから。上の setErrorDialog はまだ反映されて
+    // おらず、モーダルの解除中に測ると過渡的なレイアウトを読んでしまう。
+    requestAnimationFrame(() => {
+      // スマホではキーボードを下げる（移動先が隠れないように）。
+      Keyboard.dismiss();
+
+      // 位置は**ウィンドウ座標だけ**で求める。`measureLayout` の相対計算は
+      // 親の offsetParent 連鎖とスクロール量の相殺に依存していて、内容が縦に
+      // 長いときに実際と食い違うことがあった（Issue #63 の実測）。
+      // 「対象 − 内容の原点」なら座標系が 1 つで済み、その差がそのまま
+      // スクロール位置になる。
+      //
+      // スクロールはあくまで補助なので、環境差（jest / 将来のプラットフォーム）で
+      // 測定できなくても保存フローを壊さないよう握りつぶす。
+      try {
+        content.measureInWindow((_contentX, contentY) => {
+          node.measureInWindow((_nodeX, nodeY) => {
+            const y = nodeY - contentY - SCROLL_MARGIN;
+            // `animated: true` にしない。滑らかスクロールは、ダイアログが閉じて
+            // 欄下にエラー文が入る（＝レイアウトが動く）ところで中断され、
+            // 途中で止まってしまうのを実測した。ここは確実に着くことが大事なので
+            // 一気に移動する。
+            scroll.scrollTo({ y: Math.max(0, y), animated: false });
+          });
+        });
+      } catch {
+        // 位置が測れないときはスクロールを諦める（ダイアログは閉じたまま）。
+      }
+    });
+  }
+
+  /**
+   * エラーのポップアップを出す。**出す前に入力欄のフォーカスを外す**のが要点。
+   *
+   * モーダルは「開く直前にフォーカスされていた要素」を覚えていて、閉じるときに
+   * そこへフォーカスを戻す。ところがこの復帰は数百ミリ秒遅れて来るため、
+   * ブラウザが戻り先の欄を画面内へスクロールし、「最初のエラーへ移動」で移った
+   * 位置が後から打ち消される（実測: 移動 → 218ms 後にフォーカス復帰 → 元の欄へ
+   * 引き戻し）。先に外しておけば戻す相手がいなくなり、この競合が起きない。
+   */
+  function showErrorDialog(payload: { entries: FormErrorEntry[]; message: string | null }) {
+    if (Platform.OS === "web") {
+      const active = globalThis.document?.activeElement;
+      if (active instanceof globalThis.HTMLElement) active.blur();
+    }
+    setErrorDialog(payload);
+  }
+
   function handleSave() {
     setSubmitError(null);
     const found = validateRecipeForm(state);
     setErrors(found);
-    if (hasAnyError(found)) return;
+    if (hasAnyError(found)) {
+      showErrorDialog({ entries: collectFormErrors(state, found), message: null });
+      return;
+    }
 
     const submission = buildSubmission(state, { mode });
     save.mutate(
@@ -140,14 +265,20 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
             const serverErrors = extractValidationErrors(error);
             if (serverErrors.length > 0) {
               // Pydantic のフィールド別エラーを該当行の下に載せる。
-              setErrors(mapServerErrors(serverErrors, submission));
+              const mapped = mapServerErrors(serverErrors, submission);
+              setErrors(mapped);
               setSubmitError("入力内容を確認してください");
+              // クライアント検証と同じ形なので、ポップアップも同じ部品で出せる。
+              showErrorDialog({ entries: collectFormErrors(state, mapped), message: null });
             } else {
               // details を持たない 400（refRecipeId 検証など）はメッセージをそのまま。
               setSubmitError(error.message);
+              showErrorDialog({ entries: [], message: error.message });
             }
           } else {
             setSubmitError("保存に失敗しました");
+            // 通信エラーなど欄に紐づかない失敗も、画面外に埋もれないよう通知する。
+            showErrorDialog({ entries: [], message: "保存に失敗しました" });
           }
         },
       },
@@ -194,158 +325,169 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
       {/* 保存リクエスト中はフォーム全体を操作不可にする（送信後に入力すると、
           その変更は body に含まれないまま成功遷移で失われるため。recipe-editor.md §4）。 */}
       <ScrollView
-        contentContainerClassName="gap-4 p-4"
+        ref={scrollRef}
+        contentContainerClassName="p-4"
         pointerEvents={save.isPending ? "none" : "auto"}
         style={save.isPending ? { opacity: 0.6 } : undefined}
       >
-        {submitError && <Text className="text-sm text-red-600">{submitError}</Text>}
-        {errors.form && <Text className="text-sm text-red-600">{errors.form}</Text>}
+        {/* 位置測定の原点。`gap-4` はここへ移す（contentContainer に付けたままだと
+            この 1 枚しか子が無いので欄と欄の間隔が消える）。 */}
+        <View ref={contentRef} className="gap-4">
+          <View ref={formAnchorRef}>
+            {submitError && <Text className="text-sm text-red-600">{submitError}</Text>}
+            {errors.form && <Text className="text-sm text-red-600">{errors.form}</Text>}
+          </View>
 
-        {/* サムネイル（1 レシピに 1 枚・任意。features/image.md §2） */}
-        <ImagePickerField
-          testID="editor-thumbnail"
-          label="サムネイル"
-          variant="thumbnail"
-          imageKey={state.thumbnailKey}
-          imageUrl={state.thumbnailUrl}
-          onChange={(key, url) => dispatch({ type: "setThumbnailKey", key, url })}
-          onUploadingChange={handleThumbnailUploadingChange}
-        />
-
-        {/* タイトル */}
-        <View>
-          <Text className="mb-1 text-xs text-neutral-500">タイトル</Text>
-          <TextInput
-            testID="editor-title"
-            value={state.title}
-            onChangeText={(v) => dispatch({ type: "setField", field: "title", value: v })}
-            placeholder="例: 肉じゃが"
-            className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
+          {/* サムネイル（1 レシピに 1 枚・任意。features/image.md §2） */}
+          <ImagePickerField
+            testID="editor-thumbnail"
+            label="サムネイル"
+            variant="thumbnail"
+            imageKey={state.thumbnailKey}
+            imageUrl={state.thumbnailUrl}
+            onChange={(key, url) => dispatch({ type: "setThumbnailKey", key, url })}
+            onUploadingChange={handleThumbnailUploadingChange}
           />
-          {errors.title && <Text className="mt-1 text-sm text-red-600">{errors.title}</Text>}
-        </View>
 
-        {/* 説明 */}
-        <View>
-          <Text className="mb-1 text-xs text-neutral-500">説明</Text>
-          <TextInput
-            testID="editor-description"
-            value={state.description}
-            onChangeText={(v) => dispatch({ type: "setField", field: "description", value: v })}
-            placeholder="どんなレシピか（任意）"
-            multiline
-            className="min-h-[72px] rounded-lg border border-neutral-300 px-3 py-2 text-base"
-          />
-          {errors.description && (
-            <Text className="mt-1 text-sm text-red-600">{errors.description}</Text>
-          )}
-        </View>
-
-        {/* 何人分 */}
-        <View>
-          <Text className="mb-1 text-xs text-neutral-500">何人分</Text>
-          <View className="flex-row items-center gap-3">
-            <Pressable
-              testID="editor-servings-minus"
-              onPress={() =>
-                dispatch({
-                  type: "setField",
-                  field: "servings",
-                  value: String(Math.max(1, (Number(state.servings) || 1) - 1)),
-                })
-              }
-              accessibilityRole="button"
-              className="h-9 w-9 items-center justify-center rounded-lg border border-neutral-300"
-            >
-              <Text className="text-lg text-neutral-700">−</Text>
-            </Pressable>
+          {/* タイトル */}
+          <View ref={titleAnchorRef}>
+            <Text className="mb-1 text-xs text-neutral-500">タイトル</Text>
             <TextInput
-              testID="editor-servings"
-              value={state.servings}
-              onChangeText={(v) =>
-                dispatch({ type: "setField", field: "servings", value: v.replace(/[^0-9]/g, "") })
-              }
-              keyboardType="number-pad"
-              className="w-16 rounded-lg border border-neutral-300 px-3 py-2 text-center text-base"
+              testID="editor-title"
+              value={state.title}
+              onChangeText={(v) => dispatch({ type: "setField", field: "title", value: v })}
+              placeholder="例: 肉じゃが"
+              className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
             />
+            {errors.title && <Text className="mt-1 text-sm text-red-600">{errors.title}</Text>}
+          </View>
+
+          {/* 説明 */}
+          <View ref={descriptionAnchorRef}>
+            <Text className="mb-1 text-xs text-neutral-500">説明</Text>
+            <TextInput
+              testID="editor-description"
+              value={state.description}
+              onChangeText={(v) => dispatch({ type: "setField", field: "description", value: v })}
+              placeholder="どんなレシピか（任意）"
+              multiline
+              className="min-h-[72px] rounded-lg border border-neutral-300 px-3 py-2 text-base"
+            />
+            {errors.description && (
+              <Text className="mt-1 text-sm text-red-600">{errors.description}</Text>
+            )}
+          </View>
+
+          {/* 何人分 */}
+          <View ref={servingsAnchorRef}>
+            <Text className="mb-1 text-xs text-neutral-500">何人分</Text>
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                testID="editor-servings-minus"
+                onPress={() =>
+                  dispatch({
+                    type: "setField",
+                    field: "servings",
+                    value: String(Math.max(1, (Number(state.servings) || 1) - 1)),
+                  })
+                }
+                accessibilityRole="button"
+                className="h-9 w-9 items-center justify-center rounded-lg border border-neutral-300"
+              >
+                <Text className="text-lg text-neutral-700">−</Text>
+              </Pressable>
+              <TextInput
+                testID="editor-servings"
+                value={state.servings}
+                onChangeText={(v) =>
+                  dispatch({ type: "setField", field: "servings", value: v.replace(/[^0-9]/g, "") })
+                }
+                keyboardType="number-pad"
+                className="w-16 rounded-lg border border-neutral-300 px-3 py-2 text-center text-base"
+              />
+              <Pressable
+                testID="editor-servings-plus"
+                onPress={() =>
+                  dispatch({
+                    type: "setField",
+                    field: "servings",
+                    value: String(Math.min(99, (Number(state.servings) || 0) + 1)),
+                  })
+                }
+                accessibilityRole="button"
+                className="h-9 w-9 items-center justify-center rounded-lg border border-neutral-300"
+              >
+                <Text className="text-lg text-neutral-700">＋</Text>
+              </Pressable>
+            </View>
+            {errors.servings && (
+              <Text className="mt-1 text-sm text-red-600">{errors.servings}</Text>
+            )}
+          </View>
+
+          {/* 材料セクション */}
+          <View className="gap-3">
+            <Text className="text-sm font-bold text-neutral-900">材料</Text>
+            {state.groups.map((group, groupIndex) => (
+              <GroupEditor
+                key={group.localId}
+                group={group}
+                groupIndex={groupIndex}
+                groupCount={state.groups.length}
+                otherGroups={state.groups.filter((g) => g.localId !== group.localId)}
+                lastAddedRowId={state.lastAddedRowId}
+                unitOptions={unitOptions}
+                errors={errors}
+                dispatch={dispatch}
+                onOpenPicker={setPickerForIngredient}
+                registerAnchor={registerAnchor}
+              />
+            ))}
             <Pressable
-              testID="editor-servings-plus"
-              onPress={() =>
-                dispatch({
-                  type: "setField",
-                  field: "servings",
-                  value: String(Math.min(99, (Number(state.servings) || 0) + 1)),
-                })
-              }
+              testID="editor-add-group"
+              onPress={() => dispatch({ type: "addGroup" })}
               accessibilityRole="button"
-              className="h-9 w-9 items-center justify-center rounded-lg border border-neutral-300"
+              className="self-start rounded-lg border border-neutral-300 px-3 py-2"
             >
-              <Text className="text-lg text-neutral-700">＋</Text>
+              <Text className="text-sm text-neutral-700">グループを追加</Text>
             </Pressable>
           </View>
-          {errors.servings && <Text className="mt-1 text-sm text-red-600">{errors.servings}</Text>}
-        </View>
 
-        {/* 材料セクション */}
-        <View className="gap-3">
-          <Text className="text-sm font-bold text-neutral-900">材料</Text>
-          {state.groups.map((group, groupIndex) => (
-            <GroupEditor
-              key={group.localId}
-              group={group}
-              groupIndex={groupIndex}
-              groupCount={state.groups.length}
-              otherGroups={state.groups.filter((g) => g.localId !== group.localId)}
-              lastAddedRowId={state.lastAddedRowId}
-              unitOptions={unitOptions}
-              errors={errors}
-              dispatch={dispatch}
-              onOpenPicker={setPickerForIngredient}
+          {/* 手順セクション */}
+          <View className="gap-2">
+            <Text className="text-sm font-bold text-neutral-900">手順</Text>
+            {state.steps.map((step, index) => (
+              <StepEditor
+                key={step.localId}
+                step={step}
+                index={index}
+                stepCount={state.steps.length}
+                lastAddedRowId={state.lastAddedRowId}
+                error={errors.steps[step.localId]}
+                dispatch={dispatch}
+                onImageUploadingChange={handleImageUploadingChange}
+                registerAnchor={registerAnchor}
+              />
+            ))}
+            <Pressable
+              testID="editor-add-step"
+              onPress={() => dispatch({ type: "addStep" })}
+              accessibilityRole="button"
+              className="self-start rounded-lg border border-neutral-300 px-3 py-2"
+            >
+              <Text className="text-sm text-neutral-700">手順を追加</Text>
+            </Pressable>
+          </View>
+
+          {/* 公開フラグ */}
+          <View className="flex-row items-center justify-between">
+            <Text className="text-sm text-neutral-900">公開する</Text>
+            <Switch
+              testID="editor-is-public"
+              value={state.isPublic}
+              onValueChange={(v) => dispatch({ type: "setIsPublic", value: v })}
             />
-          ))}
-          <Pressable
-            testID="editor-add-group"
-            onPress={() => dispatch({ type: "addGroup" })}
-            accessibilityRole="button"
-            className="self-start rounded-lg border border-neutral-300 px-3 py-2"
-          >
-            <Text className="text-sm text-neutral-700">グループを追加</Text>
-          </Pressable>
-        </View>
-
-        {/* 手順セクション */}
-        <View className="gap-2">
-          <Text className="text-sm font-bold text-neutral-900">手順</Text>
-          {state.steps.map((step, index) => (
-            <StepEditor
-              key={step.localId}
-              step={step}
-              index={index}
-              stepCount={state.steps.length}
-              lastAddedRowId={state.lastAddedRowId}
-              error={errors.steps[step.localId]}
-              dispatch={dispatch}
-              onImageUploadingChange={handleImageUploadingChange}
-            />
-          ))}
-          <Pressable
-            testID="editor-add-step"
-            onPress={() => dispatch({ type: "addStep" })}
-            accessibilityRole="button"
-            className="self-start rounded-lg border border-neutral-300 px-3 py-2"
-          >
-            <Text className="text-sm text-neutral-700">手順を追加</Text>
-          </Pressable>
-        </View>
-
-        {/* 公開フラグ */}
-        <View className="flex-row items-center justify-between">
-          <Text className="text-sm text-neutral-900">公開する</Text>
-          <Switch
-            testID="editor-is-public"
-            value={state.isPublic}
-            onValueChange={(v) => dispatch({ type: "setIsPublic", value: v })}
-          />
+          </View>
         </View>
       </ScrollView>
 
@@ -366,6 +508,17 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
           onClose={() => setPickerForIngredient(null)}
         />
       )}
+
+      {/* 保存の失敗は必ずポップアップでも知らせる（Issue #63）。各欄のインライン
+          表示は、閉じたあとの手掛かりとしてそのまま残す。 */}
+      <RecipeErrorDialog
+        visible={errorDialog !== null}
+        testID="editor-error-dialog"
+        entries={errorDialog?.entries ?? []}
+        message={errorDialog?.message ?? null}
+        onClose={() => setErrorDialog(null)}
+        onJumpToFirst={jumpToFirstError}
+      />
 
       <ConfirmDialog
         visible={guard.confirmVisible}
@@ -394,6 +547,7 @@ function GroupEditor({
   errors,
   dispatch,
   onOpenPicker,
+  registerAnchor,
 }: {
   group: GroupRow;
   groupIndex: number;
@@ -404,9 +558,13 @@ function GroupEditor({
   errors: RecipeFormErrors;
   dispatch: Dispatch;
   onOpenPicker: (ingredientId: string) => void;
+  registerAnchor: RegisterAnchor;
 }) {
   return (
-    <View className="gap-2 rounded-lg border border-neutral-200 p-3">
+    <View
+      ref={(node) => registerAnchor(groupAnchorKey(group.localId), node)}
+      className="gap-2 rounded-lg border border-neutral-200 p-3"
+    >
       <View className="flex-row items-center gap-2">
         <TextInput
           testID={`group-name-${groupIndex}`}
@@ -481,6 +639,7 @@ function GroupEditor({
           }
           onOpenPicker={() => onOpenPicker(ing.localId)}
           onUnlink={() => dispatch({ type: "unlinkRefRecipe", ingredientId: ing.localId })}
+          registerAnchor={registerAnchor}
         />
       ))}
 
@@ -514,6 +673,7 @@ function IngredientEditor({
   onMoveToGroup,
   onOpenPicker,
   onUnlink,
+  registerAnchor,
 }: {
   ingredient: IngredientRow;
   testIDBase: string;
@@ -530,6 +690,7 @@ function IngredientEditor({
   onMoveToGroup: (toGroupId: string) => void;
   onOpenPicker: () => void;
   onUnlink: () => void;
+  registerAnchor: RegisterAnchor;
 }) {
   const nameRef = useRef<RNTextInput>(null);
   const [showUnitList, setShowUnitList] = useState(false);
@@ -579,7 +740,10 @@ function IngredientEditor({
   }
 
   return (
-    <View className="gap-1 rounded-lg bg-neutral-50 p-2">
+    <View
+      ref={(node) => registerAnchor(ingredientAnchorKey(ingredient.localId), node)}
+      className="gap-1 rounded-lg bg-neutral-50 p-2"
+    >
       <View className="flex-row items-center gap-1">
         <TextInput
           ref={nameRef}
@@ -781,6 +945,7 @@ function StepEditor({
   error,
   dispatch,
   onImageUploadingChange,
+  registerAnchor,
 }: {
   step: StepRow;
   index: number;
@@ -789,6 +954,7 @@ function StepEditor({
   error?: string;
   dispatch: Dispatch;
   onImageUploadingChange: (imageId: string, uploading: boolean) => void;
+  registerAnchor: RegisterAnchor;
 }) {
   const ref = useRef<RNTextInput>(null);
   const autoFocus = step.localId === lastAddedRowId;
@@ -802,7 +968,10 @@ function StepEditor({
   }, [autoFocus]);
 
   return (
-    <View className="gap-1 rounded-lg bg-neutral-50 p-2">
+    <View
+      ref={(node) => registerAnchor(stepAnchorKey(step.localId), node)}
+      className="gap-1 rounded-lg bg-neutral-50 p-2"
+    >
       <View className="flex-row items-start gap-2">
         <Text className="pt-2 text-sm font-bold text-neutral-500">{index + 1}.</Text>
         <TextInput
