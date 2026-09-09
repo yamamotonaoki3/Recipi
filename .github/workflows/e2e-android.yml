@@ -55,6 +55,9 @@ jobs:
             echo "S3_SECRET_ACCESS_KEY=ci-only-not-a-real-secret"
             # Android エミュレータからホストへは 10.0.2.2 で到達する（environment.md）。
             echo "CORS_ALLOW_ORIGINS=http://10.0.2.2:8081"
+            # エミュレータ内の localhost はエミュレータ自身を指すため、ホスト上の
+            # MinIO が返す画像 URL も、ホストを指す特別なアドレス 10.0.2.2 にする。
+            echo "S3_PUBLIC_URL_BASE=http://10.0.2.2:9000/recipi-images"
           } >> .env.development
 
       - name: バックエンド一式を起動（postgres + minio）

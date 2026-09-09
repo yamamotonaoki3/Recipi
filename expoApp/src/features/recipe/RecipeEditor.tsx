@@ -7,10 +7,11 @@
  * - 単位欄は GET /units の候補を前方一致で絞るオートコンプリート ＋
  *   formatQuantity のプレビュー。
  * - 未保存で閉じようとしたら確認ダイアログ（useUnsavedChangesGuard）。
- * - 画像入力は Phase 3（#40）で追加するので、この画面には無い。
+ * - 画像はサムネイル 1 枚と手順ごとに 1 枚（ImagePickerField）。選んだ時点で
+ *   `POST /images` に上げてキーだけ受け取り、保存時にレシピへ紐付ける（#40）。
  */
 import { Stack, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -39,6 +40,7 @@ import {
 } from "./validation";
 import { ApiError } from "@/features/auth/api";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ImagePickerField } from "@/components/ImagePickerField";
 
 type RecipeEditorProps =
   { mode: "create"; recipe?: undefined } | { mode: "edit"; recipe: RecipeResponse };
@@ -55,6 +57,33 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
   const [errors, setErrors] = useState<RecipeFormErrors>(emptyErrors);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pickerForIngredient, setPickerForIngredient] = useState<string | null>(null);
+  const [uploadingImageIds, setUploadingImageIds] = useState<Set<string>>(new Set());
+
+  const handleImageUploadingChange = useCallback((imageId: string, uploading: boolean) => {
+    setUploadingImageIds((current) => {
+      // ImagePickerField の再描画で同じ通知が届くことがあるため、状態が変わらない
+      // ときは同じ Set を返す。これで不要な再描画と二重カウントを防ぐ。
+      if (current.has(imageId) === uploading) return current;
+
+      const next = new Set(current);
+      if (uploading) {
+        next.add(imageId);
+      } else {
+        next.delete(imageId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleThumbnailUploadingChange = useCallback(
+    (uploading: boolean) => handleImageUploadingChange("thumbnail", uploading),
+    [handleImageUploadingChange],
+  );
+  // 画像を選んでいる最中も、まだ reducer に新しいキーが入っていないため
+  // dirty にはならない。ここで離脱すると選択結果が画面ごと失われるので、
+  // 選択中とアップロード中のどちらも「未保存の作業」として扱う。
+  const hasImageProcessing = uploadingImageIds.size > 0;
+  const hasUnsavedWork = dirty || hasImageProcessing;
 
   // この画面を閉じるときの遷移先。通常はモーダルを閉じて元の画面へ戻るだけだが、
   // 編集 URL を直接開いた（＝スタックの下に画面が無い）場合は戻り先が無く
@@ -70,7 +99,7 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
     }
   }
 
-  const guard = useUnsavedChangesGuard(dirty, leaveEditor);
+  const guard = useUnsavedChangesGuard(hasUnsavedWork, leaveEditor);
 
   // 「+」で追加した行へフォーカスを移したら、フォーカス済みフラグを下ろす。
   useEffect(() => {
@@ -86,7 +115,7 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
     setErrors(found);
     if (hasAnyError(found)) return;
 
-    const submission = buildSubmission(state);
+    const submission = buildSubmission(state, { mode });
     save.mutate(
       mode === "edit"
         ? { mode: "edit", recipeId: recipe.id, body: submission.body }
@@ -131,10 +160,10 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
     // 画面ルートでステータスバーの inset を確保する（Issue #57 / #58）。
     // ヘッダー側の `py-3` を上書きしないよう、パディングはここで足す。
     <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
-      {/* 未保存の変更があるあいだは iOS モーダルのスワイプ down を無効化する
+      {/* 未保存の変更または画像処理中は iOS モーダルのスワイプ down を無効化する
           （スワイプで閉じると requestClose を通らず確認ダイアログが出ないため。
           Android のハードウェアバックは useUnsavedChangesGuard が横取りする）。 */}
-      <Stack.Screen options={{ gestureEnabled: !dirty }} />
+      <Stack.Screen options={{ gestureEnabled: !hasUnsavedWork }} />
 
       {/* アプリバー: × / タイトル / 保存。
           Android 15 以降は edge-to-edge が強制で、画面ルートで inset を
@@ -148,14 +177,16 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
         <Text className="text-base font-bold text-neutral-900">
           {mode === "edit" ? "レシピを編集" : "レシピを作成"}
         </Text>
+        {/* 選択中も含めて画像処理が終わる前は保存しない。まだキーがフォームに
+            入っていない状態で遷移すると ImagePickerField が外れ、画像だけ失われるため。 */}
         <Pressable
           testID="editor-save"
           onPress={handleSave}
-          disabled={save.isPending}
+          disabled={save.isPending || hasImageProcessing}
           accessibilityRole="button"
         >
           <Text className="font-semibold text-orange-600">
-            {save.isPending ? "保存中…" : "保存"}
+            {save.isPending ? "保存中…" : hasImageProcessing ? "画像のアップロード中です" : "保存"}
           </Text>
         </Pressable>
       </View>
@@ -169,6 +200,17 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
       >
         {submitError && <Text className="text-sm text-red-600">{submitError}</Text>}
         {errors.form && <Text className="text-sm text-red-600">{errors.form}</Text>}
+
+        {/* サムネイル（1 レシピに 1 枚・任意。features/image.md §2） */}
+        <ImagePickerField
+          testID="editor-thumbnail"
+          label="サムネイル"
+          variant="thumbnail"
+          imageKey={state.thumbnailKey}
+          imageUrl={state.thumbnailUrl}
+          onChange={(key, url) => dispatch({ type: "setThumbnailKey", key, url })}
+          onUploadingChange={handleThumbnailUploadingChange}
+        />
 
         {/* タイトル */}
         <View>
@@ -283,6 +325,7 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
               lastAddedRowId={state.lastAddedRowId}
               error={errors.steps[step.localId]}
               dispatch={dispatch}
+              onImageUploadingChange={handleImageUploadingChange}
             />
           ))}
           <Pressable
@@ -328,7 +371,7 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
         visible={guard.confirmVisible}
         testID="editor-discard-dialog"
         title="編集内容を破棄しますか？"
-        message="保存していない変更は失われます。"
+        message="保存していない変更や処理中の画像は失われます。"
         confirmLabel="破棄する"
         onConfirm={guard.confirmLeave}
         onCancel={guard.cancelLeave}
@@ -503,10 +546,37 @@ function IngredientEditor({
     unit: ingredient.unit,
     placement,
   });
+  // 入力中は前方一致で絞り込む（features/unit.md §2）。空なら全件。
   const filteredUnits =
     ingredient.unit.trim() === ""
       ? unitOptions
       : unitOptions.filter((u) => u.value.startsWith(ingredient.unit.trim()));
+
+  // 「▼ や候補を押した」ことを記録し、その直後に来る入力欄の blur では
+  // 候補を閉じないようにする。ref にするのは、blur と押下の間で再描画を
+  // 挟まずに読み書きしたいため。
+  const pressingUnitControl = useRef(false);
+  // 実ブラウザのポインタ操作は `pressIn → pressOut → press` の順で来る。
+  // `pressOut` まで来た押下だけを `press` と対にして、`pressIn` での反転を
+  // 二重に行わない。時間を使わないので、長押しでも同じ操作として扱える。
+  // `pressIn` だけで途切れた場合は記録を「対になる press」とみなさず、次の
+  // `press` で消費して反転する。キーボード / スクリーンリーダー操作の press
+  // だけは記録がないので、そのまま反転する。
+  const unitTogglePressPhase = useRef<"idle" | "pressedIn" | "pressedOut">("idle");
+
+  function handleUnitBlur() {
+    if (pressingUnitControl.current) {
+      pressingUnitControl.current = false;
+      return; // 自分の候補 UI を押しただけなので閉じない
+    }
+    setShowUnitList(false);
+  }
+
+  function selectUnit(value: string) {
+    pressingUnitControl.current = false;
+    onChangeField("unit", value);
+    setShowUnitList(false);
+  }
 
   return (
     <View className="gap-1 rounded-lg bg-neutral-50 p-2">
@@ -528,35 +598,108 @@ function IngredientEditor({
           keyboardType="decimal-pad"
           className="w-16 rounded border border-neutral-200 bg-white px-2 py-1.5 text-sm"
         />
-        <TextInput
-          testID={`${testIDBase}-unit`}
-          value={ingredient.unit}
-          onChangeText={(v) => {
-            onChangeField("unit", v);
-            setShowUnitList(true);
-          }}
-          onFocus={() => setShowUnitList(true)}
-          onBlur={() => setShowUnitList(false)}
-          placeholder="単位"
-          className="w-16 rounded border border-neutral-200 bg-white px-2 py-1.5 text-sm"
-        />
+        {/* 単位は「自由入力 ＋ 候補から選ぶ」の両方ができる（features/unit.md §2）。
+            右の「▼」で候補一覧を開閉する。ボタン経由なら入力欄にフォーカスが
+            移らないので、スマホでキーボードを出さずに一覧から選べる。 */}
+        <View className="flex-row items-center">
+          <TextInput
+            testID={`${testIDBase}-unit`}
+            value={ingredient.unit}
+            onChangeText={(v) => {
+              onChangeField("unit", v);
+              setShowUnitList(true);
+            }}
+            onFocus={() => {
+              // フォーカスのたびに状態をまっさらにする（取りこぼした ref が
+              // 次の blur を食べてしまわないように）。
+              pressingUnitControl.current = false;
+              setShowUnitList(true);
+            }}
+            onBlur={handleUnitBlur}
+            placeholder="単位"
+            className="w-14 rounded-l border border-r-0 border-neutral-200 bg-white px-2 py-1.5 text-sm"
+          />
+          <Pressable
+            testID={`${testIDBase}-unit-toggle`}
+            // ## この 2 つの指定はセットで必要（実測で確認済み）
+            //
+            // **`onPressIn` で開閉する**理由:
+            // react-native-web の responder は `blur` を capture phase で拾って
+            // 進行中の押下を打ち切る（ResponderSystem.js の documentEventsCapturePhase）。
+            // 入力欄にフォーカスがある状態で押すと `onPress`（押し切り）は届かない。
+            // `onPressIn` は mousedown の時点で走るので blur より先に発火する。
+            //
+            // **`onPress` 側でも分岐する**理由:
+            // 押し始めの通知は既定で 50ms 遅延される（DEFAULT_PRESS_DELAY_MS）。
+            // 素早いクリックはその前に指が離れるので「遅延中に離された」経路に入るが、
+            // キーボードやスクリーンリーダーから実行すると onPressIn が来ない
+            // 経路があるため、その場合は onPress で開閉する必要がある。
+            // ポインタ操作では両方が来るので、pressOut の記録で対になる press か確認する。
+            onPressIn={() => {
+              unitTogglePressPhase.current = "pressedIn";
+              pressingUnitControl.current = true;
+              setShowUnitList((open) => !open);
+            }}
+            onPressOut={() => {
+              if (unitTogglePressPhase.current === "pressedIn") {
+                unitTogglePressPhase.current = "pressedOut";
+              }
+            }}
+            onPress={() => {
+              const pressPhase = unitTogglePressPhase.current;
+              unitTogglePressPhase.current = "idle";
+              if (pressPhase !== "pressedOut") setShowUnitList((open) => !open);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="単位の候補を開閉"
+            className="rounded-r border border-neutral-200 bg-neutral-100 px-1.5 py-1.5"
+          >
+            <Text className="text-xs text-neutral-600">▼</Text>
+          </Pressable>
+        </View>
       </View>
 
+      {/* 候補一覧（プルダウン）。選ぶと単位欄に入る。
+          件数が多い（初期シードで 20 件以上）ので高さを抑えてスクロールさせる。
+          `nestedScrollEnabled` は Android で外側の ScrollView に指を取られて
+          内側がスクロールしないのを防ぐために必要。 */}
       {showUnitList && filteredUnits.length > 0 && (
-        <View className="flex-row flex-wrap gap-1">
-          {filteredUnits.slice(0, 8).map((u) => (
-            <Pressable
-              key={u.value}
-              testID={`${testIDBase}-unit-option-${u.value}`}
-              onPress={() => {
-                onChangeField("unit", u.value);
-                setShowUnitList(false);
-              }}
-              className="rounded bg-neutral-200 px-2 py-0.5"
-            >
-              <Text className="text-xs text-neutral-700">{u.value}</Text>
-            </Pressable>
-          ))}
+        <View
+          testID={`${testIDBase}-unit-list`}
+          className="overflow-hidden rounded border border-neutral-300 bg-white"
+        >
+          <ScrollView
+            style={{ maxHeight: 176 }}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="always"
+          >
+            {filteredUnits.map((u, i) => (
+              <Pressable
+                key={u.value}
+                testID={`${testIDBase}-unit-option-${u.value}`}
+                // ▼ と同じ理由で `onPressIn`。押すと入力欄の blur が走って候補が
+                // 画面から消えるため、`onPress`（押し切り）では届かない。
+                // 下の `onPress` は「素早いクリックでも onPressIn を配送させる」ために
+                // 必要（▼ のコメント参照）。値を入れるだけなので両方走っても同じ結果。
+                onPressIn={() => {
+                  pressingUnitControl.current = true;
+                  selectUnit(u.value);
+                }}
+                // キーボード操作（Enter）では onPressIn が発火しないので併記する。
+                // 同じ値を入れるだけなので、両方走っても結果は変わらない。
+                onPress={() => selectUnit(u.value)}
+                className={`px-3 py-2 ${i > 0 ? "border-t border-neutral-100" : ""}`}
+              >
+                <Text className="text-sm text-neutral-800">
+                  {u.value}
+                  {/* 大さじ・小さじは数量より前に置く単位なので、選ぶ前に分かるようにする。 */}
+                  {u.placement === "prefix" && (
+                    <Text className="text-xs text-neutral-400">　例: {u.value} 2</Text>
+                  )}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
       )}
 
@@ -637,6 +780,7 @@ function StepEditor({
   lastAddedRowId,
   error,
   dispatch,
+  onImageUploadingChange,
 }: {
   step: StepRow;
   index: number;
@@ -644,9 +788,14 @@ function StepEditor({
   lastAddedRowId: string | null;
   error?: string;
   dispatch: Dispatch;
+  onImageUploadingChange: (imageId: string, uploading: boolean) => void;
 }) {
   const ref = useRef<RNTextInput>(null);
   const autoFocus = step.localId === lastAddedRowId;
+  const handleUploadingChange = useCallback(
+    (uploading: boolean) => onImageUploadingChange(step.localId, uploading),
+    [onImageUploadingChange, step.localId],
+  );
 
   useEffect(() => {
     if (autoFocus) ref.current?.focus();
@@ -667,6 +816,21 @@ function StepEditor({
           className="flex-1 rounded border border-neutral-200 bg-white px-2 py-1.5 text-sm"
         />
       </View>
+
+      {/* 手順画像（1 手順に 1 枚・任意）。本文の下に置く（screens/recipe-editor.md §5）。 */}
+      <View className="pl-6">
+        <ImagePickerField
+          testID={`step-${index}-image`}
+          variant="step"
+          imageKey={step.imageKey}
+          imageUrl={step.imageUrl}
+          onChange={(key, url) =>
+            dispatch({ type: "setStepImageKey", stepId: step.localId, key, url })
+          }
+          onUploadingChange={handleUploadingChange}
+        />
+      </View>
+
       <View className="flex-row items-center gap-2 pl-6">
         <MoveButtons
           testIDPrefix={`step-${index}`}

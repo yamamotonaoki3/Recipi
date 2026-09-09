@@ -52,6 +52,11 @@ npm run build:web               # dist/ に Web ビルド（Tauri の中身）
 npm run tauri:build             # デスクトップの配布パッケージ（未署名）
 ```
 
+## 画像権限
+
+`app.json` の `microphonePermission: false` は、アプリが静止画だけを扱い録音しないため、
+`expo-image-picker` が不要なマイク権限（Android の録音権限や iOS のマイク説明文）を追加しないようにする設定です。
+
 ## テストの方針（[`../docs/requirements/testing.md`](../docs/requirements/testing.md)）
 
 - **BB（仕様ベース）**: 画面 / hook が仕様どおり振る舞うか。

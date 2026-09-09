@@ -48,11 +48,15 @@ export type StepRow = {
    * PUT で再送する（recipe.md §5: `imageKey` を省略 / null で送るとその手順は
    * 画像なしになる。`fromRecipeResponse` が `RecipeResponse.steps[].imageKey`
    * から復元し、`buildSubmission` が再送する）。
-   *
-   * 画像の**選択・差し替え UI** は Phase 3（#40）で追加する。#38 の範囲では
-   * この値は既存キーの通し（維持）にだけ使われる。
    */
   imageKey: string | null;
+  /**
+   * 表示用 URL。既存画像はレシピ取得時の `imageUrl`、新しく選んだ画像は
+   * `POST /images` のレスポンスの `url` が入る。`imageKey` と必ずセットで
+   * 更新する（URL はサーバー側の設定から作られる派生値で、クライアントでは
+   * キーから組み立てられない）。
+   */
+  imageUrl: string | null;
 };
 
 export type RecipeFormState = {
@@ -61,6 +65,10 @@ export type RecipeFormState = {
   /** 数値ステッパー。文字列で保持し、送信時に数値へ変換（検証は validation.ts）。 */
   servings: string;
   isPublic: boolean;
+  /** サムネイルのオブジェクトキー。null = 画像なし。 */
+  thumbnailKey: string | null;
+  /** サムネイルの表示用 URL（既存画像のときだけ。StepRow.imageUrl と同じ扱い）。 */
+  thumbnailUrl: string | null;
   groups: GroupRow[];
   steps: StepRow[];
   /** 直近に「+」で追加した行の localId。その行の入力欄へフォーカスを移すのに使う。 */
@@ -87,8 +95,10 @@ export function initialFormState(): RecipeFormState {
     description: "",
     servings: "2",
     isPublic: false,
+    thumbnailKey: null,
+    thumbnailUrl: null,
     groups: [{ localId: makeLocalId(), name: "", ingredients: [emptyIngredient()] }],
-    steps: [{ localId: makeLocalId(), body: "", imageKey: null }],
+    steps: [{ localId: makeLocalId(), body: "", imageKey: null, imageUrl: null }],
     lastAddedRowId: null,
   };
 }
@@ -100,6 +110,10 @@ export function fromRecipeResponse(recipe: RecipeResponse): RecipeFormState {
     description: recipe.description,
     servings: String(recipe.servings),
     isPublic: recipe.isPublic,
+    // `thumbnailKey` はレシピの所有者にだけ返る（backend の
+    // `include_image_keys=is_owner`）。編集画面は所有者しか開けないので必ず入る。
+    thumbnailKey: recipe.thumbnailKey ?? null,
+    thumbnailUrl: recipe.thumbnailUrl ?? null,
     groups: recipe.ingredientGroups.map((g) => ({
       localId: makeLocalId(),
       name: g.name ?? "",
@@ -118,6 +132,7 @@ export function fromRecipeResponse(recipe: RecipeResponse): RecipeFormState {
       localId: makeLocalId(),
       body: s.body,
       imageKey: s.imageKey ?? null,
+      imageUrl: s.imageUrl ?? null,
     })),
     lastAddedRowId: null,
   };
@@ -145,9 +160,11 @@ export type RecipeFormAction =
   | { type: "moveIngredientToGroup"; ingredientId: string; toGroupId: string }
   | { type: "linkRefRecipe"; ingredientId: string; recipeId: string; title: string }
   | { type: "unlinkRefRecipe"; ingredientId: string }
+  | { type: "setThumbnailKey"; key: string | null; url: string | null }
   | { type: "addStep" }
   | { type: "removeStep"; stepId: string }
   | { type: "setStepBody"; stepId: string; value: string }
+  | { type: "setStepImageKey"; stepId: string; key: string | null; url: string | null }
   | { type: "moveStep"; stepId: string; direction: "up" | "down" }
   | { type: "clearLastAdded" }
   | { type: "hydrate"; state: RecipeFormState };
@@ -206,6 +223,13 @@ export function recipeFormReducer(
 
     case "setIsPublic":
       return { ...state, isPublic: action.value };
+
+    // --- サムネイル ---
+    case "setThumbnailKey":
+      // キーと表示 URL は必ずセットで入れ替える。URL は `POST /images` の
+      // レスポンスに含まれる（クライアントではキーから組み立てられない）。
+      // 片方だけ更新すると、古い画像が表示されたままになる。
+      return { ...state, thumbnailKey: action.key, thumbnailUrl: action.url };
 
     // --- グループ ---
     case "addGroup": {
@@ -307,7 +331,7 @@ export function recipeFormReducer(
 
     // --- 手順 ---
     case "addStep": {
-      const step: StepRow = { localId: makeLocalId(), body: "", imageKey: null };
+      const step: StepRow = { localId: makeLocalId(), body: "", imageKey: null, imageUrl: null };
       return { ...state, steps: [...state.steps, step], lastAddedRowId: step.localId };
     }
     case "removeStep":
@@ -318,6 +342,14 @@ export function recipeFormReducer(
         ...state,
         steps: state.steps.map((s) =>
           s.localId === action.stepId ? { ...s, body: action.value } : s,
+        ),
+      };
+    case "setStepImageKey":
+      // サムネイルと同じく、キーと表示 URL はセットで入れ替える。
+      return {
+        ...state,
+        steps: state.steps.map((s) =>
+          s.localId === action.stepId ? { ...s, imageKey: action.key, imageUrl: action.url } : s,
         ),
       };
     case "moveStep": {
@@ -363,9 +395,24 @@ export type RecipeSubmission = {
  * - 本文が空 / 空白のみの手順行を除外
  * - 完全に空の材料行を除外し、その結果 0 件になったグループを除外
  * - `position` はサーバーが配列順から振るので送らない
- * - `thumbnailKey` は Phase 3（#40）まで扱わないので省略（= 変更なし / 無し）
+ *
+ * ## `thumbnailKey` の送り方が作成と編集で違う理由
+ *
+ * サーバーは PUT の `thumbnailKey` を「**省略 = 現状維持 / null = 削除 /
+ * キー = そのキーにする**」と解釈する（features/image.md §3）。
+ *
+ * - **作成（POST）**: まだ何も無いので「維持」に意味が無い。値があるときだけ送る
+ * - **編集（PUT）**: **必ず送る**（値または null）。省略すると「サーバーが今
+ *   持っている値のまま」になり、利用者が画面で削除したのに消えない、といった
+ *   食い違いが起きる。画面に見えている状態をそのまま送るのが安全
+ *
+ * 同じキーを送り直すのは仕様上「維持」として正しく扱われる（サーバーは
+ * 「このレシピに既に紐付いているキー」を再検証せず通す）。
  */
-export function buildSubmission(state: RecipeFormState): RecipeSubmission {
+export function buildSubmission(
+  state: RecipeFormState,
+  { mode }: { mode: "create" | "edit" },
+): RecipeSubmission {
   const groupIds: string[] = [];
   const ingredientIds: string[][] = [];
 
@@ -404,24 +451,29 @@ export function buildSubmission(state: RecipeFormState): RecipeSubmission {
     steps.push(s.imageKey ? { body: trimmed, imageKey: s.imageKey } : { body: trimmed });
   }
 
-  return {
-    body: {
-      title: state.title.trim(),
-      description: state.description,
-      servings: Number(state.servings),
-      isPublic: state.isPublic,
-      ingredientGroups: groups.map((g) => g.payload),
-      steps,
-    },
-    groupIds,
-    ingredientIds,
-    stepIds,
+  const body: RecipeWriteRequest = {
+    title: state.title.trim(),
+    description: state.description,
+    servings: Number(state.servings),
+    isPublic: state.isPublic,
+    ingredientGroups: groups.map((g) => g.payload),
+    steps,
   };
+
+  // 上のコメントのとおり、編集は必ず送り、作成は値があるときだけ送る。
+  if (mode === "edit" || state.thumbnailKey !== null) {
+    body.thumbnailKey = state.thumbnailKey;
+  }
+
+  return { body, groupIds, ingredientIds, stepIds };
 }
 
 /** 送信 body だけが欲しいとき（対応表が不要なテスト等）。 */
-export function toWriteRequest(state: RecipeFormState): RecipeWriteRequest {
-  return buildSubmission(state).body;
+export function toWriteRequest(
+  state: RecipeFormState,
+  options: { mode: "create" | "edit" } = { mode: "create" },
+): RecipeWriteRequest {
+  return buildSubmission(state, options).body;
 }
 
 // --- 未保存判定（dirty） -----------------------------------------
@@ -429,6 +481,12 @@ export function toWriteRequest(state: RecipeFormState): RecipeWriteRequest {
 /**
  * `current` が `baseline` から実質的に変化しているか。
  * `localId` / `lastAddedRowId` は表示・操作のための一時値なので比較対象から外す。
+ *
+ * 画像は **`imageKey` を比較対象に含める**。ここに含めないと、画像だけ
+ * 差し替えて閉じたときに「未保存の変更あり」と判定されず、確認ダイアログが
+ * 出ないまま編集内容が失われる（#40 で修正）。
+ * 一方 `imageUrl` は含めない。キーが同じなら同じ画像を指しており、URL は
+ * サーバーが組み立てる派生値にすぎないため。
  */
 export function isDirty(current: RecipeFormState, baseline: RecipeFormState): boolean {
   const strip = (s: RecipeFormState) => ({
@@ -436,6 +494,7 @@ export function isDirty(current: RecipeFormState, baseline: RecipeFormState): bo
     description: s.description,
     servings: s.servings,
     isPublic: s.isPublic,
+    thumbnailKey: s.thumbnailKey,
     groups: s.groups.map((g) => ({
       name: g.name,
       ingredients: g.ingredients.map((i) => ({
@@ -445,7 +504,7 @@ export function isDirty(current: RecipeFormState, baseline: RecipeFormState): bo
         refRecipeId: i.refRecipeId,
       })),
     })),
-    steps: s.steps.map((st) => ({ body: st.body })),
+    steps: s.steps.map((st) => ({ body: st.body, imageKey: st.imageKey })),
   });
   return JSON.stringify(strip(current)) !== JSON.stringify(strip(baseline));
 }

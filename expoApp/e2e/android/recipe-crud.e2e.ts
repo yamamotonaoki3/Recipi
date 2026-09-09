@@ -53,12 +53,17 @@ describe("recipe-crud", () => {
     await waitFor(`android=new UiSelector().textContains("ようこそ、${testDisplayName} さん")`, 30_000);
 
     // レシピ作成。
+    // #40 で画面上部にサムネイル欄（192dp）が入り、フォーム全体が下へ押し
+    // 下がった。CI のエミュレータは既定プロファイルの 320x640 dp と小さく、
+    // UiAutomator2 は ScrollView の画面外の子をツリーに出さないため、
+    // 各入力欄はスクロールして可視領域へ入れてから触る。
     await $(id("home-link-new-recipe")).click();
-    await waitFor(id("editor-title"));
-    await $(id("editor-title")).setValue("Androidテストレシピ");
-    await $(id("g0-i0-name")).setValue("じゃがいも");
-    await $(id("g0-i0-quantity")).setValue("2");
-    await $(id("g0-i0-unit")).setValue("個");
+    await waitFor(id("editor-thumbnail"));
+    await scrollToId("editor-title").setValue("Androidテストレシピ");
+    await hideKeyboard();
+    await scrollToId("g0-i0-name").setValue("じゃがいも");
+    await scrollToId("g0-i0-quantity").setValue("2");
+    await scrollToId("g0-i0-unit").setValue("個");
     // 単位欄の入力で候補ドロップダウンが開くので、キーボードごと閉じてから次へ。
     await hideKeyboard();
     // 手順欄はフォームの下の方にあり、CI のエミュレータ（既定プロファイルは
@@ -68,6 +73,8 @@ describe("recipe-crud", () => {
     await hideKeyboard();
     // 最後の TextInput の onChangeText が JS 側の reducer に反映されるまで待つ。
     await browser.pause(500);
+    // `editor-save` は ScrollView の外の固定ヘッダーにあるので常に可視。
+    // ここで scrollToId を使うと UiScrollable が見つけられず失敗する。
     await $(id("editor-save")).click();
 
     // 編集画面のタイトルも同じ文字列を持つため、タイトル文字列だけでは保存成功を
@@ -84,8 +91,8 @@ describe("recipe-crud", () => {
     await $('android=new UiSelector().textContains("Androidテストレシピ")').click();
     await waitFor(id("recipe-detail-edit"));
     await $(id("recipe-detail-edit")).click();
-    await waitFor(id("editor-title"));
-    await $(id("editor-title")).setValue("Androidテストレシピ（改）");
+    await waitFor(id("editor-thumbnail"));
+    await scrollToId("editor-title").setValue("Androidテストレシピ（改）");
     await hideKeyboard();
     await $(id("editor-save")).click();
 

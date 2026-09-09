@@ -30,6 +30,14 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "レシピの写真を選ぶために写真ライブラリへのアクセスを求めています。",
+          "cameraPermission": "レシピの写真をその場で撮影するためにカメラへのアクセスを求めています。",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

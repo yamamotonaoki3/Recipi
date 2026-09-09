@@ -3,11 +3,13 @@
  * API 層はモックする。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
+import * as ImagePicker from "expo-image-picker";
 
 import * as recipeApi from "../api";
 import { ApiError } from "@/features/auth/api";
+import * as imageApi from "@/features/image/api";
 import { RecipeEditor } from "../RecipeEditor";
 
 const mockReplace = jest.fn();
@@ -36,8 +38,12 @@ jest.mock("../api", () => {
   };
 });
 
+jest.mock("@/features/image/api", () => ({ uploadImage: jest.fn() }));
+
 const mockGetUnits = recipeApi.getUnits as jest.Mock;
 const mockCreateRecipe = recipeApi.createRecipe as jest.Mock;
+const mockUploadImage = imageApi.uploadImage as jest.Mock;
+const mockLaunchLibrary = ImagePicker.launchImageLibraryAsync as jest.Mock;
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -55,6 +61,7 @@ beforeEach(() => {
     ],
   });
   (recipeApi.listMyRecipes as jest.Mock).mockResolvedValue({ items: [], nextCursor: null });
+  mockLaunchLibrary.mockResolvedValue({ canceled: true, assets: null });
 });
 
 async function fillMinimalRecipe(getByTestId: (id: string) => { props: unknown }) {
@@ -109,19 +116,127 @@ describe("RecipeEditor（作成）", () => {
     );
   });
 
-  it("単位を選ぶとプレビューが単位ルールどおりに出る", async () => {
-    const { getByTestId, findByTestId } = await render(<RecipeEditor mode="create" />, {
-      wrapper,
-    });
+  it("▼ で候補一覧を開閉でき、選ぶと単位欄に入ってプレビューに反映される", async () => {
+    const { getByTestId, findByTestId, queryByTestId } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
     await fireEvent.changeText(getByTestId("g0-i0-name"), "しょうゆ");
     await fireEvent.changeText(getByTestId("g0-i0-quantity"), "2");
-    await fireEvent(getByTestId("g0-i0-unit"), "focus");
-    await fireEvent.press(await findByTestId("g0-i0-unit-option-大さじ"));
+
+    // 入力欄には触れずに ▼ だけで開ける（スマホでキーボードを出さずに選べる）。
+    expect(queryByTestId("g0-i0-unit-list")).toBeNull();
+    await fireEvent(getByTestId("g0-i0-unit-toggle"), "pressIn");
+    expect(await findByTestId("g0-i0-unit-list")).toBeTruthy();
+
+    // もう一度押すと閉じる（トグル）。
+    await fireEvent(getByTestId("g0-i0-unit-toggle"), "pressIn");
+    expect(queryByTestId("g0-i0-unit-list")).toBeNull();
+
+    // 開いて候補を選ぶと値が入り、一覧は閉じる。
+    await fireEvent(getByTestId("g0-i0-unit-toggle"), "pressIn");
+    await fireEvent(await findByTestId("g0-i0-unit-option-大さじ"), "pressIn");
+    expect(getByTestId("g0-i0-unit").props.value).toBe("大さじ");
+    expect(queryByTestId("g0-i0-unit-list")).toBeNull();
     await waitFor(() =>
       expect(
         (getByTestId("g0-i0-preview").props as { children: unknown[] }).children.join(""),
       ).toContain("大さじ 2"),
     );
+  });
+
+  // react-native-web の responder は `blur` を capture phase で拾って進行中の
+  // 押下を打ち切る（ResponderSystem.js）。そのため入力欄にフォーカスがある状態で
+  // ▼ を押すと `onPress` は届かない。`onPressIn` は mousedown の時点で走るので
+  // blur より先に発火する、という前提を守る。
+  it("入力欄にフォーカスがある状態で ▼ を押しても開閉できる", async () => {
+    const { getByTestId, queryByTestId, findByTestId } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
+
+    await fireEvent(getByTestId("g0-i0-unit"), "focus");
+    expect(await findByTestId("g0-i0-unit-list")).toBeTruthy();
+
+    // 実ブラウザでは pressIn の直後に入力欄の blur が入る。
+    await fireEvent(getByTestId("g0-i0-unit-toggle"), "pressIn");
+    await fireEvent(getByTestId("g0-i0-unit"), "blur");
+
+    // blur では閉じず、pressIn の反転だけが効く（開 → 閉）。
+    expect(queryByTestId("g0-i0-unit-list")).toBeNull();
+  });
+
+  it("▼ の pressIn → pressOut → press でも候補一覧を 1 回だけ反転する", async () => {
+    const { getByTestId, findByTestId } = await render(<RecipeEditor mode="create" />, { wrapper });
+
+    jest.useFakeTimers();
+    try {
+      await fireEvent(getByTestId("g0-i0-unit-toggle"), "pressIn");
+      // 押している時間の長さではなく、pressOut が来たかどうかだけで同じ操作と判定する。
+      jest.advanceTimersByTime(5_000);
+      await fireEvent(getByTestId("g0-i0-unit-toggle"), "pressOut");
+      await fireEvent(getByTestId("g0-i0-unit-toggle"), "press");
+
+      // 2 回反転していれば閉じてしまうため、開いたままなら 1 回だけ反転できている。
+      expect(await findByTestId("g0-i0-unit-list")).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("press だけでも単位候補を開閉できる", async () => {
+    const { getByTestId, findByTestId, queryByTestId } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
+
+    await fireEvent(getByTestId("g0-i0-unit-toggle"), "press");
+    expect(await findByTestId("g0-i0-unit-list")).toBeTruthy();
+
+    await fireEvent(getByTestId("g0-i0-unit-toggle"), "press");
+    expect(queryByTestId("g0-i0-unit-list")).toBeNull();
+  });
+
+  it("pressIn の後に press が来なくても、次の press は新しい操作として扱う", async () => {
+    const { getByTestId, findByTestId, queryByTestId } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
+
+    // blur などで press が届かず、pressIn の記録だけが残った状況を再現する。
+    await fireEvent(getByTestId("g0-i0-unit-toggle"), "pressIn");
+    expect(await findByTestId("g0-i0-unit-list")).toBeTruthy();
+
+    // pressOut も press も来なかった後の、キーボード操作相当の press として閉じる。
+    await fireEvent(getByTestId("g0-i0-unit-toggle"), "press");
+    expect(queryByTestId("g0-i0-unit-list")).toBeNull();
+  });
+
+  it("候補を押した直後に入力欄の blur が来ても、単位が入る", async () => {
+    const { getByTestId, findByTestId } = await render(<RecipeEditor mode="create" />, { wrapper });
+    await fireEvent(getByTestId("g0-i0-unit"), "focus");
+
+    await fireEvent(await findByTestId("g0-i0-unit-option-大さじ"), "pressIn");
+    await fireEvent(getByTestId("g0-i0-unit"), "blur");
+
+    expect(getByTestId("g0-i0-unit").props.value).toBe("大さじ");
+  });
+
+  it("入力すると候補が前方一致で絞り込まれる", async () => {
+    const { getByTestId, findByTestId, queryByTestId } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
+    await fireEvent.changeText(getByTestId("g0-i0-unit"), "大");
+
+    expect(await findByTestId("g0-i0-unit-option-大さじ")).toBeTruthy();
+    expect(queryByTestId("g0-i0-unit-option-g")).toBeNull();
+  });
+
+  it("候補に無い単位は自由入力できる（features/unit.md §2）", async () => {
+    const { getByTestId } = await render(<RecipeEditor mode="create" />, { wrapper });
+    await fireEvent.changeText(getByTestId("g0-i0-unit"), "つまみ");
+    expect(getByTestId("g0-i0-unit").props.value).toBe("つまみ");
   });
 
   it("保存すると createRecipe が正規化済み body で呼ばれ、詳細へ遷移する", async () => {
@@ -141,6 +256,65 @@ describe("RecipeEditor（作成）", () => {
     ]);
     expect(body.steps).toEqual([{ body: "切って煮る" }]);
     await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/(app)/recipes/r-new"));
+  });
+
+  it("画像のアップロード中は保存できず、完了すると保存できる", async () => {
+    mockLaunchLibrary.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: "file:///tmp/editor.jpg", width: 800, height: 600 }],
+    });
+    let resolveUpload!: (value: { key: string; url: string }) => void;
+    mockUploadImage.mockReturnValue(
+      new Promise<{ key: string; url: string }>((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+
+    const { getByTestId, findByText, queryByTestId } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
+    await act(async () => {
+      void fireEvent.press(getByTestId("editor-thumbnail-pick"));
+    });
+
+    await waitFor(() => expect(getByTestId("editor-thumbnail-spinner")).toBeTruthy());
+    expect(getByTestId("editor-save").props.accessibilityState?.disabled).toBe(true);
+    expect(await findByText("画像のアップロード中です")).toBeTruthy();
+
+    await act(async () => {
+      resolveUpload({ key: "uploads/editor.jpg", url: "https://x/editor.jpg" });
+    });
+    await waitFor(() => expect(queryByTestId("editor-thumbnail-spinner")).toBeNull());
+    expect(getByTestId("editor-save").props.accessibilityState?.disabled).toBeFalsy();
+  });
+
+  it("画像のアップロード中に「×」を押すと破棄確認ダイアログが出る", async () => {
+    mockLaunchLibrary.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: "file:///tmp/editor.jpg", width: 800, height: 600 }],
+    });
+    let resolveUpload!: (value: { key: string; url: string }) => void;
+    mockUploadImage.mockReturnValue(
+      new Promise<{ key: string; url: string }>((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+
+    const { getByTestId, findByTestId } = await render(<RecipeEditor mode="create" />, { wrapper });
+    await act(async () => {
+      void fireEvent.press(getByTestId("editor-thumbnail-pick"));
+    });
+    await waitFor(() => expect(getByTestId("editor-thumbnail-spinner")).toBeTruthy());
+
+    await fireEvent.press(getByTestId("editor-close"));
+    expect(await findByTestId("editor-discard-dialog")).toBeTruthy();
+    expect(mockBack).not.toHaveBeenCalled();
+
+    await fireEvent.press(getByTestId("editor-discard-dialog-cancel"));
+    await act(async () => {
+      resolveUpload({ key: "uploads/editor.jpg", url: "https://x/editor.jpg" });
+    });
   });
 
   it("必須未入力だと保存をブロックする", async () => {
