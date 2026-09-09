@@ -130,7 +130,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Feed
+         * @description ホームフィード / 検索（features/home-feed.md・search.md）。
+         *
+         *     MVP で受け付ける `feed` は `all` のみ。`following` / `followers` / `favorites`
+         *     は Phase 5・6 で有効化するので、それらを含む `all` 以外の値は 400 にする
+         *     （home-feed.md §6「不正値は 400」）。
+         */
+        get: operations["list_feed_api_v1_recipes_get"];
         put?: never;
         /** Create Recipe */
         post: operations["create_recipe_api_v1_recipes_post"];
@@ -154,6 +162,29 @@ export interface paths {
         post?: never;
         /** Delete Recipe */
         delete: operations["delete_recipe_api_v1_recipes__recipe_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Recipe View
+         * @description レシピ詳細を開いた記録を残す（features/view-history.md §3）。
+         *
+         *     クライアントは `GET /recipes/{id}` 成功後に非同期で 1 回だけ呼ぶ。
+         *     見えないレシピは 404、成功は 204（body なし）。書き込みなので commit を明示する。
+         */
+        post: operations["record_recipe_view_api_v1_recipes__recipe_id__view_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -191,6 +222,32 @@ export interface paths {
         head?: never;
         /** Update Me */
         patch: operations["update_me_api_v1_users_me_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/me/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My History
+         * @description 最近見たレシピ一覧（features/view-history.md §5）。読み取りのみ。
+         */
+        get: operations["get_my_history_api_v1_users_me_history_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete My History
+         * @description 閲覧履歴を全消去する（features/view-history.md §5）。
+         *
+         *     書き込みなので、レスポンスを返す前に明示的に commit する（ファイル冒頭コメント）。
+         */
+        delete: operations["delete_my_history_api_v1_users_me_history_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/users/me/recipes": {
@@ -292,6 +349,36 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HistoryItem
+         * @description 閲覧履歴の 1 件。フィードのカード形状 ＋ 「最後に見た時刻」（view-history.md §5）。
+         */
+        HistoryItem: {
+            author: components["schemas"]["RecipeAuthor"];
+            /** Favoritecount */
+            favoriteCount: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Thumbnailurl */
+            thumbnailUrl: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Viewedat
+             * Format: date-time
+             */
+            viewedAt: string;
+        };
+        /** HistoryResponse */
+        HistoryResponse: {
+            /** Items */
+            items: components["schemas"]["HistoryItem"][];
+            /** Nextcursor */
+            nextCursor: string | null;
         };
         /**
          * ImageUploadResponse
@@ -405,6 +492,36 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /**
+         * RecipeFeedItem
+         * @description ホームフィードのレシピカード 1 枚分（features/home-feed.md §5）。
+         *
+         *     自分のレシピ一覧（`RecipeSummary`）と違い、他人のレシピも並ぶので
+         *     投稿者情報（`author`）を含める。`is_public` は公開レシピしか出さないため
+         *     持たせない。`favorite_count` は `recipes.favorite_count`（カウント列
+         *     キャッシュ）をそのまま返す（Phase 6 でお気に入り機能が入るまでは 0）。
+         */
+        RecipeFeedItem: {
+            author: components["schemas"]["RecipeAuthor"];
+            /** Favoritecount */
+            favoriteCount: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Thumbnailurl */
+            thumbnailUrl: string | null;
+            /** Title */
+            title: string;
+        };
+        /** RecipeFeedResponse */
+        RecipeFeedResponse: {
+            /** Items */
+            items: components["schemas"]["RecipeFeedItem"][];
+            /** Nextcursor */
+            nextCursor: string | null;
         };
         /** RecipeListResponse */
         RecipeListResponse: {
@@ -927,6 +1044,49 @@ export interface operations {
             };
         };
     };
+    list_feed_api_v1_recipes_get: {
+        parameters: {
+            query?: {
+                feed?: string;
+                q?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeFeedResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     create_recipe_api_v1_recipes_post: {
         parameters: {
             query?: never;
@@ -1136,6 +1296,53 @@ export interface operations {
             };
         };
     };
+    record_recipe_view_api_v1_recipes__recipe_id__view_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_units_api_v1_units_get: {
         parameters: {
             query?: never;
@@ -1186,6 +1393,74 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_my_history_api_v1_users_me_history_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_my_history_api_v1_users_me_history_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

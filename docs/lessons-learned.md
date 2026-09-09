@@ -28,8 +28,27 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-08 画像アップロード（Issue #39）で backend のストレージ・GC・削除キューを書くとき](#2026-09-08-画像アップロードissue-39でbackendのストレージgc削除キューを書くとき)
 - [2026-09-09 画像 UI（Issue #40）で frontend-ts のピッカー・押下イベントを扱うとき](#2026-09-09-画像-uiissue-40でfrontend-tsのピッカー押下イベントを扱うとき)
 - [2026-09-09 保存エラーのポップアップ（Issue #63）でスクロール移動を実装するとき](#2026-09-09-保存エラーのポップアップissue-63でスクロール移動を実装するとき)
+- [2026-09-09 ホームフィード・検索・閲覧履歴（Issue #41）で backend の一覧 API・upsert・マイグレーションを書くとき](#2026-09-09-ホームフィード検索閲覧履歴issue-41でbackendの一覧-apiupsertマイグレーションを書くとき)
 
 ---
+
+## 2026-09-09 ホームフィード・検索・閲覧履歴（Issue #41）で backend の一覧 API・upsert・マイグレーションを書くとき
+
+**きっかけ**: Issue #41（`GET /recipes?feed=all` ＋ 検索 ＋ `recipe_views` テーブル ＋ 履歴 3 API）。Codex レビュー 4 巡・指摘 4 件（P1×1・P2×3）で収束。
+
+1. **共有テスト DB で「全レコード横断」の一覧をテストするときは、最後までページングして絞り込む**（Codex #41 P1）。`GET /recipes?feed=all` は全公開レシピが対象で、先行する CRUD 系テストが 20 件以上残すため「1 ページ目に自分の投稿分が全部入っている」前提は崩れる。`nextCursor` を最後までたどり、レスポンスの `author.displayName`（テストごとに一意な名前で signup）でこのテストの投稿分だけ拾うヘルパーを用意する。**`created_at` を未来日時に書き換えて「フィード先頭に来させる」のは NG** — 使い捨て DB でも 1 pytest セッション内で他テストに影響し、再実行のたびに未来レシピが累積してページ 1 を埋める。同 `created_at` のタイブレークを検証したいときは「そのバッチ内の最大 `created_at`」にそろえる（位置は変えない）。
+
+2. **upsert の「最終更新時刻」は Python 時刻でも `now()` でもなく `GREATEST(既存値, clock_timestamp())`**（Codex #41 P2 ×2）。`recipe_views` の再閲覧は `viewed_at` を更新するが、(a) Python の `datetime.now()` はワーカー間の時計ずれがそのまま順序に出る、(b) `now()` はトランザクション開始時刻なので、同じ行に並行更新が来て「先に開始したトランザクションが行ロック解放を待って後から実行」されると、古い開始時刻で新しい閲覧を上書きし履歴順が逆転する。`func.greatest(RecipeView.viewed_at, func.clock_timestamp())` で単調更新にすると絶対に巻き戻らない。`on_conflict_do_update` の `set_` で `RecipeView.viewed_at` を書くと「既存行の値」を指す（挿入予定値は `stmt.excluded.viewed_at`）。
+
+3. **PostgreSQL は FK 列を自動 index しない。ON DELETE CASCADE で親から引く列に index を明示する**（Codex #41 P2）。`recipe_views` は PK `(user_id, recipe_id)` だが `recipe_id` 単独の index が無いと 1 レシピ削除ごとに `recipe_views` 全体をスキャンする（表は閲覧のたびに増える）。junction テーブルは PK 第 2 カラム側にも index を張る（`favorites` は `index(recipe_id)` あり、`recipe_views` は data-model.md の記載漏れ → 実装で追加し doc も更新した）。
+
+4. **backend CI は `ruff check` と `ruff format --check` の両方を回す**。`ruff check`（lint）だけ通しても `ruff format --check`（black 相当）で落ちる。着手時から両方かける。
+
+5. **`alembic check` はこのプロジェクトでは合否判定に使えない**。全モデルが autogenerate と食い違う（`TIMESTAMP(timezone=True)` vs `DateTime()`、index 名の付き方など、既存の全テーブルで出る既知のノイズ）。CI は `alembic upgrade head` のみ。datetime 列の `timezone=True` はマイグレーション側だけで宣言する既存方針に合わせる（モデルの `Field` には付けない）。
+
+6. **マイグレーションの `downgrade` の `drop_index` は `if_exists=True`**。同じリビジョンを「index 追加前」に適用済みの DB があると、後から index 行を足したリビジョンの downgrade がその DB で失敗する（`d4e5f6a7b8c9` が既に同じ対策をしている）。レビュー中に index を足したら、ローカルの test / development 両 DB を手で作り直す（`DROP TABLE ... CASCADE` ＋ `alembic_version` を親リビジョンに戻す ＋ `alembic upgrade head`）。
+
+7. **検索・カーソルの実装は既存の `list_my_recipes` から共通ヘルパーに切り出して両方から呼ぶ**。`GET /recipes?feed=all` の中身は `GET /users/me/recipes` とほぼ同じ（LIKE エスケープ・`(created_at, id)` 複合カーソル・`limit+1` で `has_more`）。`apply_search_terms` / `resolve_authors`（N+1 回避の一括 author 取得）に分離した。フィード（`(created_at, id)`）と履歴（`(viewed_at, recipe_id)`）でカーソルのキーが違うので、エンコード関数はモジュールを分けて取り違えを防ぐ。
 
 ## 2026-09-09 画像 UI（Issue #40）で frontend-ts のピッカー・押下イベントを扱うとき
 

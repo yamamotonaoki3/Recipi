@@ -21,10 +21,16 @@ from sqlmodel import Session
 
 from app.db import get_session
 from app.dependencies import get_current_user, get_current_user_optional
-from app.errors import ErrorEnvelope, forbidden, not_found
+from app.errors import ErrorEnvelope, forbidden, not_found, validation_error
 from app.models.recipe import Recipe
 from app.models.user import User
-from app.schemas.recipe import RecipeListResponse, RecipeResponse, RecipeWriteRequest
+from app.schemas.recipe import (
+    RecipeFeedResponse,
+    RecipeListResponse,
+    RecipeResponse,
+    RecipeWriteRequest,
+)
+from app.services import history as history_service
 from app.services import recipe as recipe_service
 
 router = APIRouter(prefix="/api/v1", tags=["recipes"])
@@ -59,6 +65,26 @@ def create_recipe(
     session.commit()
     session.refresh(recipe)
     return recipe_service.serialize_recipe(session, recipe, current_user, include_image_keys=True)
+
+
+@router.get("/recipes", responses=_error_responses(400, 401))
+def list_feed(
+    feed: str = Query(default="all"),
+    q: str | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> RecipeFeedResponse:
+    """ホームフィード / 検索（features/home-feed.md・search.md）。
+
+    MVP で受け付ける `feed` は `all` のみ。`following` / `followers` / `favorites`
+    は Phase 5・6 で有効化するので、それらを含む `all` 以外の値は 400 にする
+    （home-feed.md §6「不正値は 400」）。
+    """
+    if feed != "all":
+        raise validation_error("feed は現在 all のみ対応しています", {"feed": feed})
+    return recipe_service.list_feed(session, q=q, cursor=cursor, limit=limit)
 
 
 @router.get(
@@ -118,6 +144,26 @@ def delete_recipe(
 ) -> None:
     recipe = _load_for_write(session, current_user, recipe_id)
     recipe_service.delete_recipe(session, recipe)
+    session.commit()
+    return None
+
+
+@router.post(
+    "/recipes/{recipe_id}/view",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_error_responses(401, 404),
+)
+def record_recipe_view(
+    recipe_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """レシピ詳細を開いた記録を残す（features/view-history.md §3）。
+
+    クライアントは `GET /recipes/{id}` 成功後に非同期で 1 回だけ呼ぶ。
+    見えないレシピは 404、成功は 204（body なし）。書き込みなので commit を明示する。
+    """
+    history_service.record_view(session, current_user, recipe_id)
     session.commit()
     return None
 

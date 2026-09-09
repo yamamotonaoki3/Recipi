@@ -32,7 +32,8 @@
 - `user_id` FK → `users.id`（ON DELETE CASCADE）、`recipe_id` FK → `recipes.id`（ON DELETE CASCADE）。
 - `viewed_at` timestamptz NOT NULL。
 - index `(user_id, viewed_at DESC)`（一覧クエリ用）。
-- 再閲覧は `INSERT ... ON CONFLICT (user_id, recipe_id) DO UPDATE SET viewed_at = now()`。
+- index `(recipe_id)`（レシピ削除時の ON DELETE CASCADE 用。FK 列は自動 index されない）。
+- 再閲覧は `INSERT ... ON CONFLICT (user_id, recipe_id) DO UPDATE SET viewed_at = GREATEST(viewed_at, clock_timestamp())`。`GREATEST` で単調更新にして、同じレシピへの並行閲覧でロック待ちが起きても `viewed_at` が過去に巻き戻らないようにする（履歴の並びが逆転しない）。
 - カウント列キャッシュには関与しない。
 
 ## 5. API

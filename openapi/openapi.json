@@ -108,6 +108,81 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HistoryItem": {
+        "description": "閲覧履歴の 1 件。フィードのカード形状 ＋ 「最後に見た時刻」（view-history.md §5）。",
+        "properties": {
+          "author": {
+            "$ref": "#/components/schemas/RecipeAuthor"
+          },
+          "favoriteCount": {
+            "title": "Favoritecount",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnailurl"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "viewedAt": {
+            "format": "date-time",
+            "title": "Viewedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "thumbnailUrl",
+          "author",
+          "favoriteCount",
+          "viewedAt"
+        ],
+        "title": "HistoryItem",
+        "type": "object"
+      },
+      "HistoryResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "title": "HistoryResponse",
+        "type": "object"
+      },
       "ImageUploadResponse": {
         "description": "一時アップロードの結果。\n\n`key` はレシピ保存時に `thumbnailKey` / `steps[].imageKey` として送り返す\nためのもの。`url` はアップロード直後のプレビュー表示に使う。",
         "properties": {
@@ -415,6 +490,75 @@
           "displayName"
         ],
         "title": "RecipeAuthor",
+        "type": "object"
+      },
+      "RecipeFeedItem": {
+        "description": "ホームフィードのレシピカード 1 枚分（features/home-feed.md §5）。\n\n自分のレシピ一覧（`RecipeSummary`）と違い、他人のレシピも並ぶので\n投稿者情報（`author`）を含める。`is_public` は公開レシピしか出さないため\n持たせない。`favorite_count` は `recipes.favorite_count`（カウント列\nキャッシュ）をそのまま返す（Phase 6 でお気に入り機能が入るまでは 0）。",
+        "properties": {
+          "author": {
+            "$ref": "#/components/schemas/RecipeAuthor"
+          },
+          "favoriteCount": {
+            "title": "Favoritecount",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnailurl"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "thumbnailUrl",
+          "author",
+          "favoriteCount"
+        ],
+        "title": "RecipeFeedItem",
+        "type": "object"
+      },
+      "RecipeFeedResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeFeedItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "title": "RecipeFeedResponse",
         "type": "object"
       },
       "RecipeListResponse": {
@@ -1339,6 +1483,107 @@
       }
     },
     "/api/v1/recipes": {
+      "get": {
+        "description": "ホームフィード / 検索（features/home-feed.md・search.md）。\n\nMVP で受け付ける `feed` は `all` のみ。`following` / `followers` / `favorites`\nは Phase 5・6 で有効化するので、それらを含む `all` 以外の値は 400 にする\n（home-feed.md §6「不正値は 400」）。",
+        "operationId": "list_feed_api_v1_recipes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "feed",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "title": "Feed",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeFeedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Feed",
+        "tags": [
+          "recipes"
+        ]
+      },
       "post": {
         "operationId": "create_recipe_api_v1_recipes_post",
         "requestBody": {
@@ -1621,6 +1866,68 @@
         ]
       }
     },
+    "/api/v1/recipes/{recipe_id}/view": {
+      "post": {
+        "description": "レシピ詳細を開いた記録を残す（features/view-history.md §3）。\n\nクライアントは `GET /recipes/{id}` 成功後に非同期で 1 回だけ呼ぶ。\n見えないレシピは 404、成功は 204（body なし）。書き込みなので commit を明示する。",
+        "operationId": "record_recipe_view_api_v1_recipes__recipe_id__view_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipe_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipe Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Recipe View",
+        "tags": [
+          "recipes"
+        ]
+      }
+    },
     "/api/v1/units": {
       "get": {
         "operationId": "list_units_api_v1_units_get",
@@ -1693,6 +2000,111 @@
           }
         ],
         "summary": "Update Me",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/history": {
+      "delete": {
+        "description": "閲覧履歴を全消去する（features/view-history.md §5）。\n\n書き込みなので、レスポンスを返す前に明示的に commit する（ファイル冒頭コメント）。",
+        "operationId": "delete_my_history_api_v1_users_me_history_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete My History",
+        "tags": [
+          "users"
+        ]
+      },
+      "get": {
+        "description": "最近見たレシピ一覧（features/view-history.md §5）。読み取りのみ。",
+        "operationId": "get_my_history_api_v1_users_me_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My History",
         "tags": [
           "users"
         ]
