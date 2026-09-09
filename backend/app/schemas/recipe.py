@@ -205,3 +205,40 @@ class RecipeListResponse(CamelModel):
     items: list[RecipeSummary]
     # カーソルページング（(created_at DESC, id DESC)）。次ページが無ければ null。
     next_cursor: str | None
+
+
+# --- ホームフィード / 閲覧履歴（Issue #41） --------------------------------
+
+
+class RecipeFeedItem(CamelModel):
+    """ホームフィードのレシピカード 1 枚分（features/home-feed.md §5）。
+
+    自分のレシピ一覧（`RecipeSummary`）と違い、他人のレシピも並ぶので
+    投稿者情報（`author`）を含める。`is_public` は公開レシピしか出さないため
+    持たせない。`favorite_count` は `recipes.favorite_count`（カウント列
+    キャッシュ）をそのまま返す（Phase 6 でお気に入り機能が入るまでは 0）。
+    """
+
+    id: uuid.UUID
+    title: str
+    thumbnail_url: str | None
+    author: RecipeAuthor
+    favorite_count: int
+
+
+class RecipeFeedResponse(CamelModel):
+    items: list[RecipeFeedItem]
+    # カーソルページング（(created_at DESC, id DESC)）。次ページが無ければ null。
+    next_cursor: str | None
+
+
+class HistoryItem(RecipeFeedItem):
+    """閲覧履歴の 1 件。フィードのカード形状 ＋ 「最後に見た時刻」（view-history.md §5）。"""
+
+    viewed_at: datetime
+
+
+class HistoryResponse(CamelModel):
+    items: list[HistoryItem]
+    # カーソルページング（(viewed_at DESC, recipe_id DESC)）。次ページが無ければ null。
+    next_cursor: str | None

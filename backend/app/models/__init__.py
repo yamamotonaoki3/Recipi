@@ -13,6 +13,7 @@ from app.models.ingredient_group import IngredientGroup
 from app.models.password_reset_attempt import PasswordResetAttempt
 from app.models.pending_storage_deletion import PendingStorageDeletion
 from app.models.recipe import Recipe
+from app.models.recipe_view import RecipeView
 from app.models.refresh_token import RefreshToken
 from app.models.step import Step
 from app.models.unit import Unit
@@ -25,6 +26,7 @@ __all__ = [
     "PasswordResetAttempt",
     "PendingStorageDeletion",
     "Recipe",
+    "RecipeView",
     "RefreshToken",
     "Step",
     "Unit",

@@ -36,6 +36,8 @@ from app.schemas.recipe import (
     IngredientGroupOutput,
     IngredientOutput,
     RecipeAuthor,
+    RecipeFeedItem,
+    RecipeFeedResponse,
     RecipeListResponse,
     RecipeResponse,
     RecipeSummary,
@@ -551,6 +553,61 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         raise validation_error("ページングカーソルが不正です") from exc
 
 
+def apply_search_terms(stmt, q: str | None):  # type: ignore[no-untyped-def]
+    """`q`（検索窓の入力）で `stmt` に「タイトル or 材料名」の AND 絞り込みを足す。
+
+    features/search.md §3 の手順どおり「**まず空白で語に分割** → 各語を正規化 →
+    各語について title_normalized ILIKE OR 材料名 ILIKE → 語どうしは AND」。
+
+    自分のレシピ一覧（`list_my_recipes`）とホームフィード（`list_feed`）で
+    同じマッチ規則を使うので、1 か所にまとめて両方から呼ぶ。`q` が None なら
+    何もしない。語数 / 語長オーバーは `split_search_terms` が `ValueError` を
+    投げるので、ここで 400（`validation_error`）に変換する。
+    """
+    if q is None:
+        return stmt
+
+    try:
+        terms = split_search_terms(
+            q, max_terms=MAX_SEARCH_TERMS, max_term_length=MAX_SEARCH_TERM_LENGTH
+        )
+    except ValueError as exc:
+        raise validation_error(str(exc)) from exc
+
+    for term in terms:
+        # 検索語に含まれる LIKE のワイルドカード（% _ \）はリテラルとして
+        # 扱う。エスケープしないと `q=%` が全件ヒットするなど、部分一致の
+        # 意味が崩れる（Codex #37 レビュー指摘）。
+        escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
+        ingredient_match = (
+            select(Ingredient.id)
+            .where(
+                Ingredient.recipe_id == Recipe.id,
+                Ingredient.name_normalized.ilike(pattern, escape="\\"),  # type: ignore[attr-defined]
+            )
+            .exists()
+        )
+        stmt = stmt.where(
+            Recipe.title_normalized.ilike(pattern, escape="\\") | ingredient_match  # type: ignore[attr-defined]
+        )
+    return stmt
+
+
+def resolve_authors(session: Session, recipes: list[Recipe]) -> dict[uuid.UUID, User]:
+    """レシピ群の投稿者を id → User の対応表で返す（N+1 回避）。
+
+    フィード / 履歴は他人のレシピが並ぶため、各カードに投稿者名を載せる。
+    レシピ 1 件ずつ `session.get(User, ...)` すると件数ぶんクエリが飛ぶので、
+    user_id をまとめて 1 回の `IN` で引く（non-functional.md「N+1 を避ける」）。
+    """
+    user_ids = {r.user_id for r in recipes}
+    if not user_ids:
+        return {}
+    rows = session.exec(select(User).where(User.id.in_(user_ids))).all()  # type: ignore[attr-defined]
+    return {u.id: u for u in rows}
+
+
 def list_my_recipes(
     session: Session,
     user: User,
@@ -565,33 +622,7 @@ def list_my_recipes(
     新着順（created_at DESC, id DESC）・カーソルページング。
     """
     stmt = select(Recipe).where(Recipe.user_id == user.id)
-
-    if q is not None:
-        # まず空白で語に分割 → 各語を正規化（features/search.md §3 の順序）。
-        # 語数 / 語長の上限超過は ValueError で返ってくるので 400 に変換する。
-        try:
-            terms = split_search_terms(
-                q, max_terms=MAX_SEARCH_TERMS, max_term_length=MAX_SEARCH_TERM_LENGTH
-            )
-        except ValueError as exc:
-            raise validation_error(str(exc)) from exc
-        for term in terms:
-            # 検索語に含まれる LIKE のワイルドカード（% _ \）はリテラルとして
-            # 扱う。エスケープしないと `q=%` が全件ヒットするなど、部分一致の
-            # 意味が崩れる（Codex #37 レビュー指摘）。
-            escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            pattern = f"%{escaped}%"
-            ingredient_match = (
-                select(Ingredient.id)
-                .where(
-                    Ingredient.recipe_id == Recipe.id,
-                    Ingredient.name_normalized.ilike(pattern, escape="\\"),  # type: ignore[attr-defined]
-                )
-                .exists()
-            )
-            stmt = stmt.where(
-                Recipe.title_normalized.ilike(pattern, escape="\\") | ingredient_match  # type: ignore[attr-defined]
-            )
+    stmt = apply_search_terms(stmt, q)
 
     if cursor is not None:
         c_created, c_id = _decode_cursor(cursor)
@@ -613,6 +644,57 @@ def list_my_recipes(
                 thumbnail_url=image_url(r.thumbnail_key),
                 is_public=r.is_public,
                 created_at=r.created_at,
+            )
+            for r in page
+        ],
+        next_cursor=_encode_cursor(page[-1]) if has_more and page else None,
+    )
+
+
+def list_feed(
+    session: Session,
+    *,
+    q: str | None,
+    cursor: str | None,
+    limit: int,
+) -> RecipeFeedResponse:
+    """ホーム「全体」フィード（features/home-feed.md §5「GET /recipes?feed=all」）。
+
+    MVP では `feed=all` のみ。**公開レシピだけ**を新着順（created_at DESC, id DESC）で
+    返す。`q` を渡すとタイトル + 材料名で AND 絞り込み（`list_my_recipes` と同じ
+    `apply_search_terms`）。ページングの仕組み（(created_at, id) の複合カーソルで
+    同時刻レコードも重複・抜けなくたどる）も自分のレシピ一覧と共通。
+    """
+    stmt = select(Recipe).where(Recipe.is_public.is_(True))  # type: ignore[attr-defined]
+    stmt = apply_search_terms(stmt, q)
+
+    if cursor is not None:
+        # カーソルは「前ページ最後の (created_at, id)」。created_at が新しいものから
+        # 並べているので、「それより古い」または「同時刻ならより小さい id」を次に返す。
+        c_created, c_id = _decode_cursor(cursor)
+        stmt = stmt.where(
+            (Recipe.created_at < c_created)
+            | ((Recipe.created_at == c_created) & (Recipe.id < c_id))
+        )
+
+    stmt = stmt.order_by(Recipe.created_at.desc(), Recipe.id.desc()).limit(limit + 1)  # type: ignore[attr-defined]
+    rows = session.exec(stmt).all()
+
+    # limit + 1 件取り、余分に取れたら「次ページあり」。余分の 1 件は返さない。
+    has_more = len(rows) > limit
+    page = rows[:limit]
+    authors = resolve_authors(session, page)
+    return RecipeFeedResponse(
+        items=[
+            RecipeFeedItem(
+                id=r.id,
+                title=r.title,
+                thumbnail_url=image_url(r.thumbnail_key),
+                author=RecipeAuthor(
+                    id=authors[r.user_id].id,
+                    display_name=authors[r.user_id].display_name,
+                ),
+                favorite_count=r.favorite_count,
             )
             for r in page
         ],

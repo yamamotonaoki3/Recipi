@@ -11,14 +11,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
 from app.db import get_session
 from app.dependencies import get_current_user
 from app.errors import ErrorEnvelope
 from app.models.user import User
+from app.schemas.recipe import HistoryResponse
 from app.schemas.user import UpdateMeRequest, UserMeResponse
+from app.services import history as history_service
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -38,3 +40,32 @@ def update_me(
         email=current_user.email,
         display_name=current_user.display_name,
     )
+
+
+@router.get("/me/history", responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}})
+def get_my_history(
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> HistoryResponse:
+    """最近見たレシピ一覧（features/view-history.md §5）。読み取りのみ。"""
+    return history_service.list_history(session, current_user, cursor=cursor, limit=limit)
+
+
+@router.delete(
+    "/me/history",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={401: {"model": ErrorEnvelope}},
+)
+def delete_my_history(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """閲覧履歴を全消去する（features/view-history.md §5）。
+
+    書き込みなので、レスポンスを返す前に明示的に commit する（ファイル冒頭コメント）。
+    """
+    history_service.clear_history(session, current_user)
+    session.commit()
+    return None
