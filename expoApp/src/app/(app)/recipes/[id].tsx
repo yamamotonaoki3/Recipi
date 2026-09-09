@@ -1,7 +1,7 @@
 /**
  * レシピ詳細（screens/recipe-detail.md）。
  *
- * Issue #38 の範囲: サムネ(プレースホルダ) / タイトル / メタ / 説明 /
+ * Issue #38 の範囲: サムネ / タイトル / メタ / 説明 /
  * グループ別材料（名前なしはフラット） / 番号付き手順 / 参照材料リンク /
  * 本人なら編集・削除。♡・フォロー・感想は Phase 5〜7 なのでレイアウトのみ。
  */
@@ -89,16 +89,24 @@ export default function RecipeDetailScreen() {
       </View>
 
       <ScrollView contentContainerClassName="gap-4 p-4">
-        {/* サムネイル（画像は #40。当面プレースホルダ） */}
-        <View className="h-48 items-center justify-center rounded-xl bg-neutral-100">
+        {/* サムネイル（無ければプレースホルダ。features/image.md §2）。
+            枠は 4:3 = スマホ標準カメラの比率。高さ固定にすると幅の広い画面で
+            写真の上下が大きく切れてしまう（作成画面の ImagePickerField と同じ考え方）。 */}
+        <View
+          className="w-full items-center justify-center overflow-hidden rounded-xl bg-neutral-100"
+          style={{ aspectRatio: 4 / 3 }}
+        >
           {recipe.thumbnailUrl ? (
             <Image
+              testID="recipe-detail-thumbnail"
               source={{ uri: recipe.thumbnailUrl }}
-              style={{ width: "100%", height: 192, borderRadius: 12 }}
+              style={{ width: "100%", height: "100%" }}
               contentFit="cover"
             />
           ) : (
-            <Text className="text-neutral-400">No Image</Text>
+            <Text testID="recipe-detail-thumbnail-placeholder" className="text-neutral-400">
+              No Image
+            </Text>
           )}
         </View>
 
@@ -184,8 +192,9 @@ export default function RecipeDetailScreen() {
                 <Text className="text-base text-neutral-800">{step.body}</Text>
                 {step.imageUrl && (
                   <Image
+                    testID={`detail-step-${si}-image`}
                     source={{ uri: step.imageUrl }}
-                    style={{ width: "100%", height: 160, borderRadius: 8 }}
+                    style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 8 }}
                     contentFit="cover"
                   />
                 )}

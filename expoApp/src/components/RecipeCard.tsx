@@ -4,7 +4,7 @@
  * Issue #38 の「自分のレシピ一覧」で使う版。`GET /users/me/recipes` の
  * `RecipeSummary` は id / title / thumbnailUrl / isPublic / createdAt しか
  * 持たないため、投稿者・お気に入り数は出さない（フィード用のフルカードは
- * Phase 4 / #42 で拡張する）。画像は Phase 3（#40）まで常にプレースホルダ。
+ * Phase 4 / #42 で拡張する）。サムネイルが無いレシピはプレースホルダ。
  */
 import { Image } from "expo-image";
 import { Pressable, Text, View } from "react-native";
@@ -34,6 +34,7 @@ export function RecipeCard({ recipe, onPress, testID }: RecipeCardProps) {
       <View className="h-16 w-16 items-center justify-center rounded-lg bg-neutral-100">
         {recipe.thumbnailUrl ? (
           <Image
+            testID={testID ? `${testID}-thumbnail` : undefined}
             source={{ uri: recipe.thumbnailUrl }}
             style={{ width: 64, height: 64, borderRadius: 8 }}
             contentFit="cover"

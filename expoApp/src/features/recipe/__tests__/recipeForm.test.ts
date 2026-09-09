@@ -314,4 +314,99 @@ describe("isDirty", () => {
     const touched = recipeFormReducer(base, { type: "clearLastAdded" });
     expect(isDirty(touched, base)).toBe(false);
   });
+
+  // 画像だけ差し替えたときに dirty にならないと、閉じるときの確認ダイアログが
+  // 出ずに編集内容が失われる（#40 で修正した不具合の回帰テスト）。
+  it("サムネイルを設定すると dirty になる", () => {
+    const base = initialFormState();
+    const changed = recipeFormReducer(base, {
+      type: "setThumbnailKey",
+      key: "uploads/a.jpg",
+      url: "https://x/a.jpg",
+    });
+    expect(isDirty(changed, base)).toBe(true);
+  });
+
+  it("手順画像だけ差し替えても dirty になる", () => {
+    const base = initialFormState();
+    const changed = recipeFormReducer(base, {
+      type: "setStepImageKey",
+      stepId: base.steps[0].localId,
+      key: "uploads/step.jpg",
+      url: "https://x/step.jpg",
+    });
+    expect(isDirty(changed, base)).toBe(true);
+  });
+});
+
+// --- 画像キー（Issue #40） -------------------------------------------
+
+describe("画像キーの保持と送信", () => {
+  const withThumbnail: RecipeFormState = {
+    ...initialFormState(),
+    title: "肉じゃが",
+    thumbnailKey: "uploads/thumb.jpg",
+    thumbnailUrl: "https://x/thumb.jpg",
+  };
+
+  function withBody(state: RecipeFormState): RecipeFormState {
+    return {
+      ...state,
+      steps: state.steps.map((s) => ({ ...s, body: s.body || "切る" })),
+    };
+  }
+
+  it("キーと表示 URL はセットで入れ替わる（古い画像が残らない）", () => {
+    const next = recipeFormReducer(withThumbnail, {
+      type: "setThumbnailKey",
+      key: "uploads/new.jpg",
+      url: "https://x/new.jpg",
+    });
+    expect(next.thumbnailKey).toBe("uploads/new.jpg");
+    expect(next.thumbnailUrl).toBe("https://x/new.jpg");
+  });
+
+  // features/image.md §3 の 4 分岐。
+  it("作成: サムネイルが無ければ thumbnailKey を送らない", () => {
+    const body = toWriteRequest(withBody(initialFormState()), { mode: "create" });
+    expect("thumbnailKey" in body).toBe(false);
+  });
+
+  it("作成: サムネイルがあれば新しいキーを送る", () => {
+    const body = toWriteRequest(withBody(withThumbnail), { mode: "create" });
+    expect(body.thumbnailKey).toBe("uploads/thumb.jpg");
+  });
+
+  it("編集: 変更していなければ同じキーを再送する（＝維持）", () => {
+    const body = toWriteRequest(withBody(withThumbnail), { mode: "edit" });
+    expect(body.thumbnailKey).toBe("uploads/thumb.jpg");
+  });
+
+  it("編集: 削除したら null を明示的に送る（省略＝現状維持と区別するため）", () => {
+    const removed = recipeFormReducer(withBody(withThumbnail), {
+      type: "setThumbnailKey",
+      key: null,
+      url: null,
+    });
+    const body = toWriteRequest(removed, { mode: "edit" });
+    expect("thumbnailKey" in body).toBe(true);
+    expect(body.thumbnailKey).toBeNull();
+  });
+
+  it("手順画像を消した手順は imageKey を送らない（＝画像なし）", () => {
+    const base = withBody({
+      ...initialFormState(),
+      steps: [
+        { localId: "s1", body: "切る", imageKey: "uploads/s1.jpg", imageUrl: "https://x/s1.jpg" },
+      ],
+    });
+    const removed = recipeFormReducer(base, {
+      type: "setStepImageKey",
+      stepId: "s1",
+      key: null,
+      url: null,
+    });
+    const body = toWriteRequest(removed, { mode: "edit" });
+    expect(body.steps).toEqual([{ body: "切る" }]);
+  });
 });

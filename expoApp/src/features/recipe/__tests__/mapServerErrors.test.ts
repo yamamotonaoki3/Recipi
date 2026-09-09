@@ -35,7 +35,7 @@ function twoGroupState(): RecipeFormState {
 
 describe("mapServerErrors", () => {
   it("title / servings のエラーをフィールドに割り当てる", () => {
-    const submission = buildSubmission(twoGroupState());
+    const submission = buildSubmission(twoGroupState(), { mode: "create" });
     const mapped = mapServerErrors(
       [
         { loc: ["body", "title"], msg: "長すぎます", type: "string_too_long" },
@@ -49,7 +49,7 @@ describe("mapServerErrors", () => {
 
   it("ingredientGroups[i].ingredients[j] のエラーを、その材料行の localId に割り当てる", () => {
     const state = twoGroupState();
-    const submission = buildSubmission(state);
+    const submission = buildSubmission(state, { mode: "create" });
     // 2 番目のグループ（index 1）の 1 番目の材料（index 0）
     const targetIngredientId = submission.ingredientIds[1][0];
     const mapped = mapServerErrors(
@@ -66,7 +66,7 @@ describe("mapServerErrors", () => {
   });
 
   it("steps[i] のエラーを手順行の localId に割り当てる", () => {
-    const submission = buildSubmission(twoGroupState());
+    const submission = buildSubmission(twoGroupState(), { mode: "create" });
     const stepId = submission.stepIds[0];
     const mapped = mapServerErrors(
       [{ loc: ["body", "steps", 0, "body"], msg: "手順が長すぎます", type: "string_too_long" }],
@@ -76,7 +76,7 @@ describe("mapServerErrors", () => {
   });
 
   it("対応が取れないエラーは form に集約する", () => {
-    const submission = buildSubmission(twoGroupState());
+    const submission = buildSubmission(twoGroupState(), { mode: "create" });
     const mapped = mapServerErrors(
       [{ loc: ["body", "unknownField"], msg: "謎のエラー", type: "value_error" }],
       submission,

@@ -14,6 +14,36 @@
 //
 // inset は全て 0（＝セーフエリア無し）にして、テストの期待値が
 // 端末ごとの inset に左右されないようにする。
+// 画像ピッカーと画像加工はネイティブモジュールなので、jest（Node 上の
+// テスト環境）には実装が無い。既定では「キャンセルされた」を返すモックにし、
+// 選択を伴うテストだけが `mockResolvedValue` で上書きする。
+// 権限は常に許可（granted）にして、テストが権限ダイアログに依存しないようにする。
+jest.mock("expo-image-picker", () => ({
+  launchImageLibraryAsync: jest.fn(async () => ({ canceled: true, assets: null })),
+  launchCameraAsync: jest.fn(async () => ({ canceled: true, assets: null })),
+  requestMediaLibraryPermissionsAsync: jest.fn(async () => ({ granted: true, status: "granted" })),
+  requestCameraPermissionsAsync: jest.fn(async () => ({ granted: true, status: "granted" })),
+}));
+
+jest.mock("expo-image-manipulator", () => ({
+  SaveFormat: { JPEG: "jpeg", PNG: "png", WEBP: "webp" },
+  // `manipulate(uri).resize(...)` → `renderAsync()` → `saveAsync()` の
+  // チェーンを、加工せず元の uri を返すだけの形で再現する。
+  ImageManipulator: {
+    manipulate: jest.fn((uri) => {
+      const context = {
+        resize: jest.fn(() => context),
+        renderAsync: jest.fn(async () => ({
+          saveAsync: jest.fn(async () => ({ uri, width: 100, height: 100 })),
+          release: jest.fn(),
+        })),
+        release: jest.fn(),
+      };
+      return context;
+    }),
+  },
+}));
+
 jest.mock("react-native-safe-area-context", () => {
   const insets = { top: 0, right: 0, bottom: 0, left: 0 };
   const frame = { x: 0, y: 0, width: 320, height: 640 };

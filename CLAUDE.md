@@ -100,10 +100,27 @@
 
 このマシンには Codex CLI（ログイン済み）が導入されている。`codex review --base main` でブランチ差分を、`codex review --uncommitted` でコミット前の変更をレビューできる。Claude のセルフレビューに加え、別モデルの第二の視点として毎回活用する（恒久ルール）。
 
-1. `codex review --uncommitted`（または `--base main`）でレビューを実行する。
+1. `codex review --uncommitted`（または `--base main`）でレビューを実行する。**出力はファイルにリダイレクトし、必ず進捗監視を付ける**（次項「実行時の必須事項」）。
 2. 指摘があれば、指摘内容と対象ファイルを踏まえた修正指示を添えて `codex exec "<修正指示>"` を実行し、**Codex 自身にコードを修正させる**。Claude が直接修正するのは、Codex の応答が得られない等の代替手段とする。
 3. Codex の修正後、Claude が動作確認（手順4）で検証する。
 4. 指摘ゼロになるまで `codex review` の再実行 → `codex exec` による修正を繰り返す。
+
+#### 実行時の必須事項（進捗を必ず見えるようにする）
+
+`codex review` / `codex exec` は完了まで十数分かかるうえ、**失敗しても静かに終わることがある**（バックグラウンド実行で stdin が null になり、プロンプトが渡らないまま終了コード 0 で終わる等）。「動いていない」と「時間がかかっている」を区別できないまま待つことがないよう、次を必ず守る。
+
+1. **標準入力を明示的に閉じる**: `codex review --uncommitted < /dev/null > <ログ> 2>&1`
+2. **進捗監視を必ず併走させる**: codex の PID を渡して `scripts/watch-codex-review.sh <ログ> <レビューPID>` を Monitor で起動する。実行中のコマンド・検出した指摘・停滞・失敗が随時通知される。
+3. **出力が極端に小さいときは成功と見なさない**。`Reading additional input from stdin` の 1 行だけ（数十バイト）で終わっていたら空振り。必ず `git diff` で実際の変更を確認する。
+
+```bash
+codex review --uncommitted < /dev/null > /tmp/codex-review.txt 2>&1 &
+review_pid=$!
+# 別途 Monitor で、review_pid を渡す:
+bash scripts/watch-codex-review.sh /tmp/codex-review.txt "$review_pid"
+```
+
+**監視スクリプトの誤検知に注意**: codex が実行した個々のコマンドの失敗（Windows で `rg .env*` が `os error 123` になる等）は、codex 自身がやり方を変えて続行するため**失敗として扱わない**。判定に使うのは codex 本体が続行不能になった兆候だけにする。
 
 **レビュー回数の上限（恒久ルール）**: `codex review` は**最大5回**まで繰り返す。5回を超えても指摘が続く場合は、それ以上のレビューを打ち切り、残った指摘を一覧化してユーザーに提示し、判断を仰ぐ。ただし以下は上限を適用せず、指摘ゼロになるまで繰り返す:
 - **重大なバグ**（データ破損・認証バイパス・本番相当の情報漏えいなど、実際に事故につながる不具合）の指摘
