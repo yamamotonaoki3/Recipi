@@ -29,7 +29,7 @@
 | 23 | いいね（お気に入りと別の反応）、感想への返信、タグ / カテゴリ、通報 / NG ワードの優先順位 | MVP 完了後 | [overview.md](overview.md) |
 | 24 | 学習用引き渡し資料（React Native / Expo / FastAPI / SQLModel / Alembic、随時トラック用に Compose Multiplatform）を `learning-handover` で作成（後日学習用、非ブロッキング） | 実装着手前に別タスク | [tech-stack.md](tech-stack.md) |
 | 25 | ブラウザ（Web）単体配信の採否と時期（TS トラックの RN Web ビルド／将来の Compose for Web / Wasm） | MVP 完了後 | [tech-stack.md](tech-stack.md) |
-| 26 | デスクトップの最小 OS バージョン、ウィンドウ最小サイズ、ボトムバー ⇔ ナビゲーションレールの切替ブレークポイント、レスポンシブ / 2 ペイン表示（一覧＋詳細の横並び） | Phase 0 / 各フェーズ | [screens/navigation.md](screens/navigation.md) |
+| 26 | デスクトップの最小 OS バージョン、ウィンドウ最小サイズ、レスポンシブ / 2 ペイン表示（一覧＋詳細の横並び）。**切替ブレークポイントは確定（Issue #42）**: ボトムバー ⇔ ナビゲーションレールは **600px**（Material 3 の Window size class で compact の上限が 600dp）。frontend-ts は `expoApp/src/components/AppNavBar.tsx` の `NAV_RAIL_MIN_WIDTH` | Phase 0 / 各フェーズ | [screens/navigation.md](screens/navigation.md) |
 | 27 | プラットフォーム固有機能の洗い出し（画像ピッカー、カメラ、セキュアストレージ、共有 等）。**TS トラック**は Expo モジュール ＋ Tauri プラグインで吸収（`expect`/`actual` は使わない）。**Kotlin トラック**は `expect`/`actual` で Desktop 実装 | Phase 0 | [architecture.md](architecture.md), [tech-stack.md](tech-stack.md) |
 | 28 | Desktop のセキュアストレージ（リフレッシュトークン永続化。OS クレデンシャルストアが使えない場合の暗号化方式） | Phase 1 | [non-functional.md](non-functional.md) |
 | 29 | `prefix` 単位をユーザーが増やせるようにするか、`カップ` の配置（`1 カップ` / `カップ 1`）、単位と数量の間のスペース有無 | Phase 2 | [features/unit.md](features/unit.md) |
@@ -38,6 +38,8 @@
 | 32 | ~~一時アップロード画像の管理テーブルと削除キューの物理スキーマ~~ **確定（Issue #39）**: `uploads`（`id` / `user_id` / `key` UNIQUE / `status` = pending / stored / consumed ＋ CHECK / `content_type` / `size_bytes` / `expires_at` / `created_at`、GC 用に `(status, expires_at)` と `(status, created_at)` の 2 本の索引 = 「期限切れ pending」「猶予超過 stored」の各枝を引くため）と `pending_storage_deletions`（`key`（**UNIQUE にしない** = 重複登録を許す冪等設計）/ `reason` / `enqueued_at` / `attempts` / `last_error`）。GC・削除ジョブは `app/jobs/`。感想画像の分は Phase 7、アバターは Phase 5 で同じ仕組みに載せる | 完了 | [data-model.md](data-model.md), [processing-model.md](processing-model.md), [features/image.md](features/image.md) |
 | 33 | 外部ディープリンク（URL スキーム / ユニバーサルリンク）の採否 | MVP 完了後 | [screens/navigation.md](screens/navigation.md) |
 | 34 | 通知バッジの更新方式（他 destination 滞在中に `unread-count` をポーリングするか、間隔） | Phase 8 | [screens/notifications.md](screens/notifications.md) |
+| 35 | 選択中の destination の再タップ: **「スタックをルートまで戻す」は実装済み**（Issue #42。expo-router の `TabTrigger` は選択中だと何もしないので、`onPress` で `router.dismissTo` する）。**残**: 「先頭がリストなら最上部へスクロール」「ホームは検索窓もクリア」。ナビバーから各画面へ通知する仕組みが要るため MVP では見送り | MVP 後 | [screens/navigation.md](screens/navigation.md), [screens/home.md](screens/home.md) |
+| 36 | **ホームのサブタブの横スワイプ切替が未実装**（Issue #42 で見送り）: 仕様は「サブタブはスワイプでも切替」。MVP は 4 タブ中 3 タブが「準備中」でスワイプの価値が小さく、縦スクロールする `FlatList` との競合設計も要るため、タップ切替のみにした | MVP 後 | [screens/home.md](screens/home.md) |
 | 35 | レシピ作成画面をデスクトップでフルスクリーンダイアログにするか、大きめダイアログにするか → **Issue #38 では全プラットフォームでフルスクリーンモーダル（Expo Router `presentation: "modal"`）で実装**。デスクトップ向けの「大きめダイアログ」化は Phase 10（仕上げ）で判断 | Phase 2（暫定）/ Phase 10 | [screens/recipe-editor.md](screens/recipe-editor.md) |
 | 36 | 破壊的操作の取り消し（Undo スナックバー）を入れるか | MVP 完了後 | [screens/components.md](screens/components.md) |
 | 37 | 材料グループ: ~~グループ数・グループあたり材料数の上限~~（**Issue #37 で確定**: グループ 1〜20 / グループあたり材料 1〜50 / 手順 1〜100。API 層バリデーションで担保）、名前なしグループが複数あるときの詳細表示（見出しなしで連結 / 区切り線）は未確定のまま | Phase 2 | [features/recipe.md](features/recipe.md) |
@@ -65,6 +67,7 @@
 | 50 | **処理方式の実行基盤**（[processing-model.md](processing-model.md)）: 即時後処理は FastAPI `BackgroundTasks`・定期処理は cron 起動の管理 CLI コマンドで確定。**未定**: 本番のスケジューラの具体（OS cron / コンテナオーケストレータの CronJob 等）と多重起動防止、各定期バッチ（カウント補正 / 一時アップロード GC / ストレージ削除 / 期限切れリフレッシュトークン掃除 / 古い通知掃除 / 閲覧履歴トリミング）の実行頻度、期限切れリフレッシュトークン・通知の保持期間、専用ジョブキュー（arq / Celery + Redis）へ移行する判断基準（大量フォロワー時の fan-out 性能測定） | Phase 0（土台）/ Phase 3・8（各ジョブ）/ Phase 10（仕上げ・キュー再検討） | [processing-model.md](processing-model.md), [architecture.md](architecture.md), [non-functional.md](non-functional.md) |
 
 | 60 | **クライアントの画像縮小上限がサーバー設定と乖離しうる**（Issue #40 / Codex P2・未対応）: サーバーの `IMAGE_MAX_DIMENSION` は環境変数で変更できるが、`expoApp/src/features/image/pickImage.ts` の `MAX_DIMENSION` は 2048 のハードコード。既定値では一致しているため実害は無いが、デプロイ先でサーバー値だけ変えるとサーバー側の再縮小（二重劣化）または送信前の無駄な解像度低下が起きる。**サーバー値を既定の 2048 から変える際は、クライアント側の定数も必ず同時に変えること**。恒久対応の候補: `EXPO_PUBLIC_IMAGE_MAX_DIMENSION` でビルド時に注入する / 設定取得エンドポイントを足して起動時に配る | 本番デプロイ時（Phase 10） | [features/image.md](features/image.md) |
+| 61 | **Android E2E の MVP 通しシナリオが未実装**（Issue #42 で着手し、**GitHub Issue #74 に切り出し**）: レシピエディタ末尾の「公開する」スイッチが UiAutomator のツリーに出ず、`scrollIntoView(resourceId(...))` / `classNameMatches(".*Switch")` / 生の `mobile: scrollGesture` のいずれでも到達できなかった。採取したツリーでは**スクロールは効いており**、最後の要素が `editor-add-step`、スクロール可能な要素は `ScrollView`（`bounds="[0,68][320,640]"`）1 つだけで、**その中身のコンテナの bounds がビューポートと完全に一致**していた。CI エミュレータの 320x640 dp 固有の可能性がある。Web 版（Playwright）の MVP 通しは緑。**着手時はまずローカルで APK をビルドできる状態を作ること**（このマシンでは `react-native-worklets` の CMake で失敗し再現できない） | MVP 完了後（Issue #74） | [testing.md](testing.md), [lessons-learned.md](../lessons-learned.md) |
 
 ## 決定済み（対象外で確定）
 

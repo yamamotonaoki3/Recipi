@@ -46,7 +46,7 @@ export default function SignupScreen() {
       {
         onSuccess: () => {
           // サインアップ成功後は常にホームへ（Issue #53。login.tsx と同じ方針）。
-          router.replace("/(app)");
+          router.replace("/home");
         },
         onError: (error) => {
           if (error instanceof ApiError && error.status === 409) {

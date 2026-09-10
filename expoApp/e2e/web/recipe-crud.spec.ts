@@ -50,10 +50,10 @@ test("レシピ作成 → 一覧 → 詳細 → 編集 → 保存", async ({ pag
   await page.getByTestId("signup-security-question").fill("好きな食べ物は？");
   await page.getByTestId("signup-security-answer").fill("ラーメン");
   await page.getByTestId("signup-submit").click();
-  await expect(page.getByText("ようこそ、E2E Recipe User さん")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
 
   // --- レシピを作成 ---
-  await page.getByTestId("home-link-new-recipe").click();
+  await page.getByTestId("nav-create").last().click();
   await expect(page.getByTestId("editor-title")).toBeVisible();
   await page.getByTestId("editor-title").fill("E2Eテストレシピ");
   await page.getByTestId("g0-i0-name").fill("じゃがいも");
@@ -67,7 +67,8 @@ test("レシピ作成 → 一覧 → 詳細 → 編集 → 保存", async ({ pag
 
   // --- ホームに戻って自分のレシピ一覧に出ることを確認 ---
   await page.getByTestId("recipe-detail-header-back").last().click();
-  await page.getByTestId("home-link-my-recipes").click();
+  await page.getByTestId("nav-my-page").last().click();
+  await page.getByTestId("my-page-my-recipes").last().click();
   const card = page.getByText("E2Eテストレシピ").last();
   await expect(card).toBeVisible({ timeout: 15_000 });
 
@@ -103,9 +104,9 @@ test("サムネイルと手順画像を付けて保存 → 詳細に表示され
   await page.getByTestId("signup-security-question").fill("好きな食べ物は？");
   await page.getByTestId("signup-security-answer").fill("ラーメン");
   await page.getByTestId("signup-submit").click();
-  await expect(page.getByText("ようこそ、E2E Image User さん")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
 
-  await page.getByTestId("home-link-new-recipe").click();
+  await page.getByTestId("nav-create").last().click();
   await expect(page.getByTestId("editor-title")).toBeVisible();
 
   // 画像を選ぶ前はプレースホルダ。
@@ -172,9 +173,9 @@ test("必須未入力のまま保存するとエラーがポップアップで�
   await page.getByTestId("signup-security-question").fill("好きな食べ物は？");
   await page.getByTestId("signup-security-answer").fill("ラーメン");
   await page.getByTestId("signup-submit").click();
-  await expect(page.getByText("ようこそ、E2E Error User さん")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
 
-  await page.getByTestId("home-link-new-recipe").click();
+  await page.getByTestId("nav-create").last().click();
   await expect(page.getByTestId("editor-title")).toBeVisible();
 
   // タイトルを空のまま、画面の一番下まで運んでから保存する

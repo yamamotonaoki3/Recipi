@@ -1,9 +1,15 @@
 /**
- * レシピ作成（screens/recipe-editor.md）。ボトムナビ「＋」の入口は #42。
- * 当面は (app)/index.tsx の一時リンクから来る。
+ * レシピ作成（screens/recipe-editor.md）。入口はボトムナビ / レールの「＋」。
+ *
+ * `from` は「＋ を押したときに居た destination」（`/home` など）。
+ * 保存後はその destination のスタック内の詳細へ遷移したいので受け取る
+ * （destination ごとにスタックが分かれている。screens/navigation.md）。
  */
+import { useLocalSearchParams } from "expo-router";
+
 import { RecipeEditor } from "@/features/recipe/RecipeEditor";
 
 export default function NewRecipeScreen() {
-  return <RecipeEditor mode="create" />;
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  return <RecipeEditor mode="create" basePath={from} />;
 }

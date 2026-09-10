@@ -18,7 +18,7 @@ import { useRecipe } from "@/features/recipe/hooks";
 import { useSession } from "@/store/session";
 
 export default function EditRecipeScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const router = useRouter();
   const { data, isPending, isError } = useRecipe(id);
   const currentUserId = useSession((s) => s.user?.id);
@@ -54,5 +54,5 @@ export default function EditRecipeScreen() {
     );
   }
 
-  return <RecipeEditor mode="edit" recipe={data} />;
+  return <RecipeEditor mode="edit" recipe={data} basePath={from} />;
 }

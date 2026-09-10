@@ -7,17 +7,18 @@
  */
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ApiError } from "@/features/auth/api";
+import { useRecordView } from "@/features/history/hooks";
 import { formatQuantity, type Placement } from "@/features/recipe/formatQuantity";
 import { useDeleteRecipe, useRecipe } from "@/features/recipe/hooks";
 import { useSession } from "@/store/session";
 
-export default function RecipeDetailScreen() {
+export function RecipeDetailScreen({ basePath }: { basePath: string }) {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -28,6 +29,28 @@ export default function RecipeDetailScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deadRefMessage, setDeadRefMessage] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
+
+  // --- 閲覧履歴への記録（features/view-history.md §3・processing-model.md §10）---
+  //
+  // `GET /recipes/{id}` の **取得に成功したあと**、`POST /recipes/{id}/view` を
+  // 非同期で 1 回だけ呼ぶ。`GET` 自体に副作用を持たせない（詳細は匿名でも引ける
+  // 設計なので、取得の副作用として書き込みを混ぜない）。
+  //
+  // 「1 回だけ」が重要で、記録を**描画のたび**に走らせてはいけない。この画面は
+  // 削除ダイアログの開閉などで何度も再描画されるため、そのたびに記録すると
+  // 履歴の順序が不必要に動く。送信済みのレシピ ID を ref に控えて弾く
+  // （ref は再描画をまたいで値が残り、書き換えても再描画を起こさない）。
+  const { mutate: recordView } = useRecordView();
+  const recordedRecipeIdRef = useRef<string | null>(null);
+  const loadedRecipeId = recipeQuery.data?.id;
+
+  useEffect(() => {
+    if (!loadedRecipeId) return;
+    if (recordedRecipeIdRef.current === loadedRecipeId) return;
+    recordedRecipeIdRef.current = loadedRecipeId;
+    // 結果は待たない。失敗しても履歴に載らないだけで、この画面には影響させない。
+    recordView(loadedRecipeId);
+  }, [loadedRecipeId, recordView]);
 
   if (recipeQuery.isPending) {
     return (
@@ -72,7 +95,12 @@ export default function RecipeDetailScreen() {
           <View className="flex-row gap-3">
             <Pressable
               testID="recipe-detail-edit"
-              onPress={() => router.push(`/(app)/recipes/${recipe.id}/edit` as never)}
+              onPress={() =>
+                router.push({
+                  pathname: "/(app)/recipes/[id]/edit",
+                  params: { id: recipe.id, from: basePath },
+                })
+              }
               accessibilityRole="button"
             >
               <Text className="text-orange-600">編集</Text>
@@ -162,7 +190,7 @@ export default function RecipeDetailScreen() {
                         testID={`detail-ingredient-link-${gi}-${ii}`}
                         onPress={() => {
                           if (ing.refRecipe?.id) {
-                            router.push(`/(app)/recipes/${ing.refRecipe.id}` as never);
+                            router.push(`${basePath}/recipes/${ing.refRecipe.id}` as never);
                           } else {
                             setDeadRefMessage(true);
                           }
@@ -220,7 +248,7 @@ export default function RecipeDetailScreen() {
               // 詳細を直接開いていて戻り先が無いと、削除後もこの（消えた）
               // レシピの画面に留まってしまう。戻れなければホームへ replace する。
               if (router.canGoBack()) router.back();
-              else router.replace("/(app)" as never);
+              else router.replace(basePath as never);
             },
             // 削除に失敗したら詳細画面に留まり、エラーを知らせる（無言で閉じない）。
             onError: () => setDeleteError(true),
