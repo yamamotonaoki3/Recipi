@@ -34,12 +34,6 @@ module.exports = {
       },
       // SafeArea（`useSafeAreaInsets`）のモック。理由は jest.setup.js のコメント。
       setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
-      // 既定の 5 秒だと、CI の遅いランナーでファイル内の最初のテストが
-      // モジュール読み込みのコストを被ってタイムアウトすることがある
-      // （RNTL v14 は render / fireEvent が非同期で、画面コンポーネントの
-      // 依存ツリーも大きい）。ローカルは 1 テスト 1 秒未満で終わるので、
-      // 「本当に固まっている」ケースを検出する余裕は残したまま引き上げる。
-      testTimeout: 20_000,
     },
     {
       displayName: "node",
@@ -68,6 +62,18 @@ module.exports = {
       branches: 50,
     },
   },
+  // 1 テストの制限時間。
+  //
+  // 既定の 5 秒だと、CI の遅いランナーでファイル内の最初のテストが
+  // モジュール読み込みのコストを被ってタイムアウトする（RNTL v14 は
+  // render / fireEvent が非同期で、画面コンポーネントの依存ツリーも大きい）。
+  // ローカルは 1 テスト 1 秒未満で終わるので、「本当に固まっている」ケースを
+  // 検出する余裕は残したまま引き上げる。
+  //
+  // **`projects[]` の中に書いても効かない**（Jest はプロジェクト単位の
+  // `testTimeout` を無視し、既定の 5000ms のままになる）。6 秒待つだけの
+  // テストが 5000ms で落ちることで確認したうえで、ルート側に置いている。
+  testTimeout: 20_000,
   // TanStack Query のタイマーなどで「Jest did not exit」警告が出ることがある。
   // scaffold では強制終了で十分（テスト自体は通っている）。
   forceExit: true,
