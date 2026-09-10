@@ -8,6 +8,7 @@ WB（実装ベース）: 「実際に 1 行増減した」分岐と「ON CONFLIC
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,10 +31,11 @@ def _make_user(client: TestClient) -> tuple[dict[str, str], str]:
     return headers, str(body["user"]["id"])
 
 
-def _profile(client: TestClient, headers: dict[str, str], user_id: str) -> dict:
+def _profile(client: TestClient, headers: dict[str, str], user_id: str) -> dict[str, Any]:
     res = client.get(f"{USERS_URL}/{user_id}", headers=headers)
     assert res.status_code == 200, res.text
-    return res.json()
+    body: dict[str, Any] = res.json()
+    return body
 
 
 def _counts(client: TestClient, headers: dict[str, str], user_id: str) -> tuple[int, int]:
@@ -42,9 +44,11 @@ def _counts(client: TestClient, headers: dict[str, str], user_id: str) -> tuple[
     return body["followingCount"], body["followerCount"]
 
 
-def _rows(client: TestClient, headers: dict[str, str], url: str, **params) -> list[dict]:
+def _rows(
+    client: TestClient, headers: dict[str, str], url: str, **params: Any
+) -> list[dict[str, Any]]:
     """一覧を最後までページングして全件返す。"""
-    items: list[dict] = []
+    items: list[dict[str, Any]] = []
     cursor: str | None = None
     for _ in range(50):
         query: dict[str, object] = {"limit": 50, **params}
