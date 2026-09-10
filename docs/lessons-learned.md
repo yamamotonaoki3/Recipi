@@ -120,6 +120,8 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 
 8. **「実数から数え直す」補正ジョブは、READ COMMITTED のままだと正しい値を古い値で上書きしうる**（Codex レビュー P1）。相関サブクエリ付きの `UPDATE users SET following_count = (SELECT COUNT(*) FROM follows ...)` が、フォロー処理の行ロックを待ったとき、PostgreSQL は相手のコミット後に**行だけ新しい版で見直す**が、**`COUNT(*)` のサブクエリは待つ前のスナップショットのまま**になる（EvalPlanQual）。結果、フォロー処理が +1 した正しい値を補正ジョブが古い実数で消す。**ズレを直すための処理がズレを作る**。対策は補正を **REPEATABLE READ** で走らせ、`run_with_retry()` で包むこと。REPEATABLE READ では、スナップショット後に更新された行を書こうとした時点で `serialization_failure` になり、トランザクションごと読み直せる。分離レベルは `engine.execution_options(isolation_level=...)` のように**接続を借りるたびに効く**形で付ける（リトライで接続を借り直すため）。テストは実際にスレッドを立て、`pg_stat_activity` で「補正がロック待ちに入った」ことを確かめてからフォロー側をコミットする（固定 sleep に頼らない。項目 4 と同じ考え方）。**書き込み時の ±1（第 1 層）だけでなく、保険の側（第 2 層）も並行実行を前提に書く**。
 
+9. **マイグレーションのコメントに書いた「既存の設計と同じく」は、書く前に確かめる**（Codex レビュー P2）。カウント列を `server_default="0"` で追加したあと `alter_column(..., server_default=None)` でデフォルトを外し、「既存の設計と同じく、DB のデフォルトに依存せずアプリ側のモデルを正とする」とコメントしていた。ところが既存の `token_version` はデフォルトを**残して**おり、`data-model.md` と Issue 本文も `INT NOT NULL DEFAULT 0`。デフォルトが無いと、アプリのモデルを通らない INSERT（管理用 SQL・将来の別経路）が NOT NULL 違反で落ちる。**DB のデフォルトは残し、モデル側の `Field(default=0)` と両方で持つ**（`token_version` と同じ形）。回帰テストは、テスト DB が `create_all` ではなく Alembic で作られていることを確かめたうえで、カウント列を省いた生 SQL の INSERT が 0 になることを見る。
+
 ---
 
 ## 2026-09-09 ホームフィード・検索・閲覧履歴（Issue #41）で backend の一覧 API・upsert・マイグレーションを書くとき

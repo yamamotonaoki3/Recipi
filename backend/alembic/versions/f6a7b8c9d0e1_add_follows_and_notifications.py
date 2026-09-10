@@ -40,10 +40,10 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # --- users のカウント列 -------------------------------------------
     #
-    # 既存行にも値が要るので `server_default="0"` を付けて追加する。
-    # そのあと server_default を外すのは、以後の INSERT で「アプリが必ず
-    # 値を書く」ことを明示するため（既存の設計と同じく、DB のデフォルトに
-    # 依存せずアプリ側のモデルを正とする）。
+    # 既存行を 0 で埋め戻しながら列を追加するため、`server_default="0"` を付ける。
+    # 新しい行でも、アプリのモデルを通らない INSERT で値を省略できるように、
+    # DB 側にもデフォルト 0 を残す。これは `token_version` と同じ形で、
+    # data-model.md の「INT NOT NULL DEFAULT 0」という仕様に合わせている。
     op.add_column(
         "users",
         sa.Column("following_count", sa.Integer(), nullable=False, server_default="0"),
@@ -52,8 +52,6 @@ def upgrade() -> None:
         "users",
         sa.Column("follower_count", sa.Integer(), nullable=False, server_default="0"),
     )
-    op.alter_column("users", "following_count", server_default=None)
-    op.alter_column("users", "follower_count", server_default=None)
     op.create_check_constraint(
         "ck_users_following_count_non_negative", "users", "following_count >= 0"
     )

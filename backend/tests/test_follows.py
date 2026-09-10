@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from app.models.follow import Follow
@@ -21,6 +22,39 @@ from tests.helpers import auth_headers, signup
 pytestmark = pytest.mark.integration
 
 USERS_URL = "/api/v1/users"
+
+
+def test_raw_user_insert_uses_zero_count_defaults(db_session: Session) -> None:
+    """モデルを通らない INSERT でもフォロー関連カウントは 0 になる。"""
+    user_id = uuid.uuid4()
+    email = f"testuser_{user_id.hex}@example.com"
+    row = db_session.execute(
+        text(
+            """
+            INSERT INTO users (
+                id, email, password_hash, display_name,
+                security_question, security_answer_hash, token_version,
+                created_at, updated_at
+            ) VALUES (
+                :id, :email, :password_hash, :display_name,
+                :security_question, :security_answer_hash, 0,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            RETURNING following_count, follower_count
+            """
+        ),
+        {
+            "id": user_id,
+            "email": email,
+            "password_hash": "raw-insert-test",
+            "display_name": f"testuser_{user_id.hex[:12]}",
+            "security_question": "テスト用の質問",
+            "security_answer_hash": "raw-insert-test",
+        },
+    ).one()
+    db_session.commit()
+
+    assert (row[0], row[1]) == (0, 0)
 
 
 def _make_user(client: TestClient) -> tuple[dict[str, str], str]:
