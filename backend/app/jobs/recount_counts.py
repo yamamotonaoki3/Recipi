@@ -17,7 +17,11 @@
 ## 冪等
 
 やることは「実数に合わせる」だけなので、何度流しても結果は同じ。
-そのため多重起動しても壊れない（それでも運用では 1 本に絞る。Phase 10）。
+そのため多重起動しても、また通常のフォロー / 解除処理と並行しても壊れない。
+並行して users 行が更新された場合は、REPEATABLE READ が古いスナップショット
+のまま上書きすることを防ぎ、serialization failure になった補正をロールバック
+して、コミット後の実数を読み直してやり直す（それでも運用では 1 本に絞る。
+Phase 10）。
 
 ## 使い方
 
@@ -35,7 +39,7 @@ from typing import Any, cast
 from sqlalchemy import CursorResult, func, select, update
 from sqlmodel import Session
 
-from app.db import engine
+from app.db import engine, run_with_retry
 from app.logging_config import configure_logging
 from app.models.follow import Follow
 from app.models.user import User
@@ -86,9 +90,21 @@ def recount_follow_counts(session: Session) -> int:
 
 def main() -> None:
     configure_logging()
-    with Session(engine) as session:
-        fixed = recount_follow_counts(session)
-        session.commit()
+    # 補正は「follows の実数を読む」と「users のカウントを書き換える」を
+    # 1 つのトランザクションで行う。READ COMMITTED のままだと、別のフォロー
+    # 処理が users 行を更新している間に UPDATE がロック待ちになったとき、
+    # 行だけ新しい版に再評価されても、相関 COUNT(*) は待つ前の古いスナップ
+    # ショットのままになり、正しく増えたカウントを古い実数で上書きしうる。
+    # REPEATABLE READ なら、スナップショット取得後に更新された行を変更しようと
+    # した時点で serialization failure になり、run_with_retry が rollback して
+    # 新しいトランザクションで実数を読み直すので、この上書きを防げる。
+    #
+    # Session に 1 回だけ分離レベルを設定するのではなく、engine に execution
+    # option を付ける。こうすると retry で接続を借り直す場合も毎回
+    # REPEATABLE READ が適用される。
+    recount_engine = engine.execution_options(isolation_level="REPEATABLE READ")
+    with Session(recount_engine) as session:
+        fixed = run_with_retry(session, lambda: recount_follow_counts(session))
     logger.info("recount finished", extra={"users_fixed": fixed})
 
 
