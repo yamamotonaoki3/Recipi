@@ -34,6 +34,28 @@ async function waitFor(selector: string, timeout = 20_000) {
   return $(selector);
 }
 
+/**
+ * フォームを下端までスクロールする。
+ *
+ * `scrollIntoView(...)` は「探す対象が見つかること」が前提で、UiAutomator2 は
+ * ScrollView の画面外の子をツリーに出さないため、対象がまだ画面外だと
+ * 「スクロールできないので見つからない / 見つからないのでスクロールしない」
+ * という堂々巡りになる（公開スイッチで実際に起きた）。
+ * ここでは対象を指定しない生のジェスチャで確実に下端まで送る。
+ */
+async function scrollFormToBottom() {
+  const scrollable = await $("android=new UiSelector().scrollable(true)");
+  for (let i = 0; i < 6; i += 1) {
+    const movedMore = await browser.execute("mobile: scrollGesture", {
+      elementId: scrollable.elementId,
+      direction: "down",
+      percent: 1,
+    });
+    // これ以上スクロールできなくなったら下端。
+    if (!movedMore) return;
+  }
+}
+
 async function hideKeyboard() {
   await (browser as BrowserWithMobileCommands).hideKeyboard().catch(() => {
     // 既に閉じている場合は無視する。
@@ -68,19 +90,20 @@ describe("mvp-flow", () => {
     await hideKeyboard();
     // フィード（feed=all）は公開レシピしか返さないので、公開に切り替える。
     //
-    // 公開トグルは React Native の `<Switch>`。**`testID` が Android の
-    // resource-id として出ないため `resourceId` では引けない**
-    // （`scrollIntoView(resourceId("editor-is-public"))` が
-    // "element wasn't found" になることを CI で確認）。TextInput や Pressable は
-    // 引けるので、Switch 固有の挙動。
-    // そこでラベルのテキストまでスクロールし、この画面に 1 つしかない Switch を
-    // クラス名で指定して押す（実装により `android.widget.Switch` /
-    // `androidx.appcompat.widget.SwitchCompat` のどちらにもなりうるので
-    // `classNameMatches` で受ける）。
-    await $(
-      'android=new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().textContains("公開する"))',
-    );
+    // 公開トグルはフォーム末尾にある React Native の `<Switch>`。
+    // `scrollIntoView(resourceId("editor-is-public"))` も
+    // `classNameMatches(".*Switch")` も "element wasn't found" になった（CI で確認）。
+    // 画面外の子はツリーに出ないため、まず対象非依存のジェスチャで下端まで送る。
+    await hideKeyboard();
+    await scrollFormToBottom();
+
     const publicSwitch = await $('android=new UiSelector().classNameMatches(".*Switch")');
+    if (!(await publicSwitch.isExisting())) {
+      // 次に直すときに推測しなくて済むよう、実際のツリーを失敗メッセージに残す。
+      const tree = await browser.getPageSource();
+      throw new Error(`公開スイッチが見つからない。画面のツリー:
+${tree}`);
+    }
     await publicSwitch.click();
     // 押せていないと、あとでフィードに出ず原因の分かりにくい失敗になる。
     // ここで ON になったことを確かめ、失敗をこの行に閉じ込める。
