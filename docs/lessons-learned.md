@@ -48,9 +48,17 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 
 5. **共通のテストモックが「無害な既定値」だと、抜けを検出できない**。`jest.setup.js` の `react-native-safe-area-context` モックは inset が全て 0 なので、`paddingBottom` を書き忘れても単体テストは緑のままだった。回帰を固定するテストでは、**その spec だけ inset を持つ端末に差し替える**（`jest.spyOn` はこの共通モックには効かず、ファイル単位の `jest.mock` で可変変数を読ませる必要があった。ファクトリは import より上に巻き上げられるため、変数名は `mock` で始めること）。
 
-6. **RN の `onSubmitEditing` は、生の `KEYCODE_ENTER` では発火しない**。`browser.pressKeyCode(66)` で検索を確定させようとしたが、`returnKeyType="search"` の TextInput は **IME のアクション**でしか `onSubmitEditing` を呼ばない。`browser.execute("mobile: performEditorAction", { action: "search" })` を使う。web の Playwright は `press("Enter")` で通るので、**同じシナリオでも確定の送り方はプラットフォームで違う**。
+6. **Android では「キーボードの確定キー」を Appium から送れない。だから確定手段をキーだけにしない**。`returnKeyType="search"` の TextInput は **IME のアクション**でしか `onSubmitEditing` を呼ばず、Appium から送る手段はどちらも効かなかった。
 
-    切り分けは page-source で行った。入力欄が `focused="true"` かつ `text` に値が入っているのにチップが無い、という状態から「フォーカスではなく確定が起きていない」と特定できた。**「押したはずのものが効かない」ときは、対象の状態（focused / text / checked）を実際に読む**。
+    - `browser.pressKeyCode(66)`（生の `KEYCODE_ENTER`）→ そもそも発火しない
+    - `browser.execute("mobile: performEditorAction", ...)` → **実行のたびに IME を付け替える実装**で、その付け替えで入力欄のフォーカスが外れ、アクションが届かない
+    - `appium:unicodeKeyboard` で既定 IME を変えても無駄。有効になるのは `UnicodeIME` で、`performEditorAction` が使うのは `AppiumIME` という**同じアプリ内の別 IME**なので、付け替えは変わらず起きる
+
+    **結論は「アプリ側に押せる検索ボタンを足す」だった**（ユーザーの判断）。これはテストの都合ではなく製品の改善でもある。確定がキーだけだと IME の実装や外部キーボードの有無に左右され、利用者にも操作方法が見えない。web の Playwright は `press("Enter")` で通っていたので、**web で通ることは Android で通ることを意味しない**。
+
+7. **「テストが操作できない」は、実装を見直す合図かもしれない**。上の件で `pressKeyCode` → `performEditorAction` → `unicodeKeyboard` と **Appium 側で何とかしようとして CI を 3 周（約 33 分）使った**。「Android では確定が IME のアクションでしか起きない」と分かった時点で、**アプリ側に導線を足す**という選択肢に切り替えるべきだった。自動操作しにくい UI は、人にとっても操作経路が細い UI であることが多い。
+
+8. **切り分けは対象の状態を読むところから**。入力欄が `focused="true"` かつ `text` に値が入っているのにチップが無い、React の state 由来の × ボタンは描画されている、という page-source の事実から「入力は届いており、確定だけが起きていない」と特定できた。**「押したはずのものが効かない」ときは、対象の状態（focused / text / checked）を実際に読む**。
 
 ---
 
