@@ -69,11 +69,14 @@ describe("signup-login-logout", () => {
     await hideKeyboard();
     await scrollToId("signup-submit").click();
 
-    // 登録成功 → 自動ログイン状態でホームに遷移し、
-    // 表示名入りのウェルカムメッセージが出ることを確認する。
-    await waitFor(`android=new UiSelector().textContains("ようこそ、${testDisplayName} さん")`, 30_000);
+    // 登録成功 → 自動ログイン状態でホーム（5 destination のシェル）に着地する。
+    // ホームの目印はロゴ（Issue #42 でウェルカムメッセージの仮画面は廃止）。
+    await waitFor(id("home-logo"), 30_000);
 
-    await $(id("home-logout")).click();
+    // ログアウトはマイページ destination の中（screens/my-page.md）。
+    await $(id("nav-my-page")).click();
+    await waitFor(id("my-page-logout"), 20_000);
+    await $(id("my-page-logout")).click();
 
     // ログアウト後は認可ゲート（useProtectedRoute）によりログイン画面へ戻される。
     await waitFor(id("login-email"));
@@ -86,6 +89,6 @@ describe("signup-login-logout", () => {
     await hideKeyboard();
     await $(id("login-submit")).click();
 
-    await waitFor(`android=new UiSelector().textContains("ようこそ、${testDisplayName} さん")`, 30_000);
+    await waitFor(id("home-logo"), 30_000);
   });
 });

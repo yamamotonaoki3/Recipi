@@ -4,7 +4,7 @@
 
 - **モバイル（コンパクト幅）**: 画面下部に**ボトムナビゲーション**（5 destination）。
 - **デスクトップ / タブレット（中〜広幅）**: 画面左に**ナビゲーションレール**（同じ 5 destination）。
-- 各クライアントで、ウィンドウ幅のブレークポイントに応じて adaptive に切り替える（compact = ボトムバー、medium / expanded = レール）。ブレークポイントの具体値は実装時に確定（→ [`../todo.md`](../todo.md)）。
+- 各クライアントで、ウィンドウ幅のブレークポイントに応じて adaptive に切り替える（compact = ボトムバー、medium / expanded = レール）。**切替ブレークポイントは 600px で確定**（Issue #42。Material 3 の Window size class で compact の上限が 600dp であることに合わせた。frontend-ts の実装値は `expoApp/src/components/AppNavBar.tsx` の `NAV_RAIL_MIN_WIDTH`）。
 - 現行案の「上部バーに検索バー常駐 + アカウントメニュー」は廃止。アカウント関連は「マイページ」destination に集約する。
 - **検索は独立 destination を持たず、[ホーム](home.md)画面の最上部に常時固定した検索窓**で行う（表示中のサブタブ内を絞り込む。[home.md](home.md) / [`../features/search.md`](../features/search.md)）。
 

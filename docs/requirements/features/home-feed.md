@@ -4,9 +4,11 @@
 
 ログイン後の中心画面。ボトムナビゲーション（モバイル）/ ナビゲーションレール（デスクトップ）の「ホーム」destination（[../screens/navigation.md](../screens/navigation.md)）。4 つのサブタブでレシピのフィードを切り替えて表示する。
 
-> **MVP でのスコープ**: Phase 4（MVP）で実装するのは **「全体」タブ ＋ ホーム上部の検索窓**のみ。「フォロー」「フォロワー」タブは Phase 5（フォロー機能）、「お気に入りレシピ」タブは Phase 6（お気に入り機能）で有効化する（[../roadmap.md](../roadmap.md)「MVP ライン」）。`GET /recipes` の `feed` パラメータも MVP では `all` のみ受け付ければよい。
+> **MVP でのスコープ**: Phase 4（MVP）で実装するのは **「全体」タブ ＋ ホーム上部の検索窓**のみ。「フォロー」「フォロワー」タブは Phase 5（フォロー機能）、「お気に入りレシピ」タブは Phase 6（お気に入り機能）で有効化する（[../roadmap.md](../roadmap.md)「MVP ライン」）。クライアント側の 3 タブの見せ方は「準備中」プレースホルダで確定（[../screens/home.md](../screens/home.md)。Issue #42）。
 >
-> **backend の実装状況（2026-09-10 / Issue #66）**: `feed=all` / `following` / `followers` は実装済み。`favorites` はお気に入り機能の Issue まで 400 を返す。
+> **backend の `feed` の実装状況**: Issue #41 では `all` 以外を 400 にしていたが、**Issue #66 で `following` / `followers` を解禁**した（2026-09-10）。`favorites` はお気に入り機能の Issue まで 400 を返す。
+>
+> なお **frontend-ts 側は Issue #42 時点のまま**で、「フォロー」「フォロワー」タブは「準備中」を出し API を呼ばない。backend が受け付けるようになったので、クライアントの解禁は Phase 5 の frontend-ts の Issue で行う。
 
 ## 2. 画面・UI
 

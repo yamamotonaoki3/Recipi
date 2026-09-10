@@ -50,14 +50,14 @@ describe("recipe-crud", () => {
     await hideKeyboard();
     await scrollToId("signup-submit").click();
 
-    await waitFor(`android=new UiSelector().textContains("ようこそ、${testDisplayName} さん")`, 30_000);
+    await waitFor(id("home-logo"), 30_000);
 
     // レシピ作成。
     // #40 で画面上部にサムネイル欄（192dp）が入り、フォーム全体が下へ押し
     // 下がった。CI のエミュレータは既定プロファイルの 320x640 dp と小さく、
     // UiAutomator2 は ScrollView の画面外の子をツリーに出さないため、
     // 各入力欄はスクロールして可視領域へ入れてから触る。
-    await $(id("home-link-new-recipe")).click();
+    await $(id("nav-create")).click();
     await waitFor(id("editor-thumbnail"));
     await scrollToId("editor-title").setValue("Androidテストレシピ");
     await hideKeyboard();
@@ -84,7 +84,9 @@ describe("recipe-crud", () => {
 
     // ホーム → 自分のレシピ一覧に出る。
     await $(id("recipe-detail-header-back")).click();
-    await $(id("home-link-my-recipes")).click();
+    await $(id("nav-my-page")).click();
+    await waitFor(id("my-page-my-recipes"), 20_000);
+    await $(id("my-page-my-recipes")).click();
     await waitFor('android=new UiSelector().textContains("Androidテストレシピ")', 30_000);
 
     // カード → 詳細 → 編集 → 保存。

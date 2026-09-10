@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import * as recipeApi from "../api";
 import { RefRecipePicker } from "../RefRecipePicker";
+import { useSession } from "@/store/session";
 
 jest.mock("../api", () => {
   const actual = jest.requireActual<typeof import("../api")>("../api");
@@ -24,8 +25,23 @@ function card(id: string, title: string) {
   return { id, title, thumbnailUrl: null, isPublic: true, createdAt: "2026-09-06T00:00:00Z" };
 }
 
+/**
+ * 認証必須の API は「セッション復元済み かつ ログイン済み」でのみ投げるように
+ * なったので（Codex #42 指摘の対策）、テストでもログイン状態を用意する。
+ */
+function signIn() {
+  useSession.setState({
+    hydrated: true,
+    isAuthenticated: true,
+    accessToken: "test-token",
+    refreshToken: "test-refresh",
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  useSession.getState().clear();
+  signIn();
   mockList.mockResolvedValue({
     items: [card("r1", "自家製だれ"), card("r2", "編集中のレシピ")],
     nextCursor: null,

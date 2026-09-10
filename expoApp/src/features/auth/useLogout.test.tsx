@@ -48,6 +48,28 @@ describe("useLogout", () => {
     expect(secureStorage.deleteUser).toHaveBeenCalled();
   });
 
+  it("サーバーデータのキャッシュも捨てる（次のユーザーに前のユーザーのデータを見せない）", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const sharedWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    // ログアウト前に「前のユーザーの閲覧履歴」がキャッシュに載っている状態を作る。
+    client.setQueryData(["history", "u1"], { pages: [{ items: [{ id: "secret" }] }] });
+
+    useSession.getState().setAuth({
+      accessToken: "a",
+      refreshToken: "r",
+      user: { id: "u1", displayName: "テスト太郎" },
+      rememberMe: true,
+    });
+    mockLogout.mockResolvedValue(undefined);
+
+    const { result } = await renderHook(() => useLogout(), { wrapper: sharedWrapper });
+    result.current.mutate();
+
+    await waitFor(() => expect(client.getQueryData(["history", "u1"])).toBeUndefined());
+  });
+
   it("リフレッシュトークンが無ければ API を呼ばずローカルだけ消す", async () => {
     useSession.getState().clear();
 
