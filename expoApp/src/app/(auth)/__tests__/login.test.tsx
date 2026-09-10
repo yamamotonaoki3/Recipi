@@ -50,7 +50,7 @@ describe("LoginScreen", () => {
     await fireEvent.changeText(getByTestId("login-password"), "TestPass123!");
     await fireEvent.press(getByTestId("login-submit"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/home"));
     expect(mockLogin).toHaveBeenCalledWith({
       email: "testuser_010@example.com",
       password: "TestPass123!",
@@ -70,7 +70,7 @@ describe("LoginScreen", () => {
     await fireEvent.changeText(getByTestId("login-password"), "TestPass123!");
     await fireEvent.press(getByTestId("login-submit"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/home"));
   });
 
   it("401 エラーは固定文言を表示する", async () => {

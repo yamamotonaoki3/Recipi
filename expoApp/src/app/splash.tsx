@@ -22,7 +22,7 @@ export default function SplashScreen() {
   useEffect(() => {
     if (!hydrated) return;
     if (isAuthenticated) {
-      router.replace("/(app)");
+      router.replace("/home");
     } else {
       router.replace("/(auth)/login");
     }

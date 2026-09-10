@@ -60,7 +60,7 @@ describe("SignupScreen", () => {
     await fillValidForm(getByTestId);
     await fireEvent.press(getByTestId("signup-submit"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/home"));
     expect(mockSignup).toHaveBeenCalledWith({
       email: "testuser_020@example.com",
       password: "TestPass123!",
@@ -81,7 +81,7 @@ describe("SignupScreen", () => {
     await fillValidForm(getByTestId);
     await fireEvent.press(getByTestId("signup-submit"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/home"));
   });
 
   it("パスワードが不一致だと、API を呼ばずにエラー表示する", async () => {

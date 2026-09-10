@@ -13,7 +13,7 @@ import { validateDisplayName } from "@/features/auth/validation";
 import { useUpdateProfile } from "@/features/auth/useUpdateProfile";
 import { useSession } from "@/store/session";
 
-export default function ProfileEditScreen() {
+export function ProfileEditScreen() {
   const user = useSession((s) => s.user);
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);

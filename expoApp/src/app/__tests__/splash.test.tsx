@@ -38,7 +38,7 @@ describe("SplashScreen", () => {
     useSession.getState().setHydrated(true);
 
     await render(<SplashScreen />);
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/home"));
   });
 
   it("hydrated=true かつ未認証ならログイン画面へ遷移する", async () => {

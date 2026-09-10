@@ -7,13 +7,14 @@
  * ——「ログアウトできなくなる」より「サーバー側のトークンは残るがローカルは
  * ログアウト済みになる」方が実害が小さいため。
  */
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { logout as logoutApi } from "./api";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
 
 export function useLogout() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const { refreshToken } = useSession.getState();
@@ -26,6 +27,16 @@ export function useLogout() {
         // 後始末なので、片方が失敗してももう片方は試み、かつログアウト
         // そのものを失敗として扱わない（CLAUDE.md「ベストエフォート」）。
         useSession.getState().clear();
+        // サーバーから取ってきたデータのキャッシュ（TanStack Query）も捨てる。
+        // `QueryClient` はログアウトしても生き続けるため、消さないと
+        // 「A がログアウト → すぐ B がログイン」したときに、stale time の
+        // 内側では**再取得なしで A のキャッシュが B の画面に出る**
+        // （閲覧履歴は本人だけが見られる情報。Codex #42 レビュー指摘）。
+        try {
+          queryClient.clear();
+        } catch {
+          // 後始末なので、失敗してもログアウト自体は成功扱いにする。
+        }
         try {
           await secureStorage.deleteRefreshToken();
         } catch {

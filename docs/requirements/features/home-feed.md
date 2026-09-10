@@ -4,7 +4,7 @@
 
 ログイン後の中心画面。ボトムナビゲーション（モバイル）/ ナビゲーションレール（デスクトップ）の「ホーム」destination（[../screens/navigation.md](../screens/navigation.md)）。4 つのサブタブでレシピのフィードを切り替えて表示する。
 
-> **MVP でのスコープ**: Phase 4（MVP）で実装するのは **「全体」タブ ＋ ホーム上部の検索窓**のみ。「フォロー」「フォロワー」タブは Phase 5（フォロー機能）、「お気に入りレシピ」タブは Phase 6（お気に入り機能）で有効化する（[../roadmap.md](../roadmap.md)「MVP ライン」）。`GET /recipes` の `feed` パラメータも MVP では `all` のみ受け付ければよい。
+> **MVP でのスコープ**: Phase 4（MVP）で実装するのは **「全体」タブ ＋ ホーム上部の検索窓**のみ。「フォロー」「フォロワー」タブは Phase 5（フォロー機能）、「お気に入りレシピ」タブは Phase 6（お気に入り機能）で有効化する（[../roadmap.md](../roadmap.md)「MVP ライン」）。`GET /recipes` の `feed` パラメータも MVP では `all` のみ受け付ければよい（Issue #41 で `all` 以外は 400 にした）。クライアント側の 3 タブの見せ方は「準備中」プレースホルダで確定（[../screens/home.md](../screens/home.md)）。
 
 ## 2. 画面・UI
 

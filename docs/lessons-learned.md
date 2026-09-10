@@ -29,6 +29,42 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-09 画像 UI（Issue #40）で frontend-ts のピッカー・押下イベントを扱うとき](#2026-09-09-画像-uiissue-40でfrontend-tsのピッカー押下イベントを扱うとき)
 - [2026-09-09 保存エラーのポップアップ（Issue #63）でスクロール移動を実装するとき](#2026-09-09-保存エラーのポップアップissue-63でスクロール移動を実装するとき)
 - [2026-09-09 ホームフィード・検索・閲覧履歴（Issue #41）で backend の一覧 API・upsert・マイグレーションを書くとき](#2026-09-09-ホームフィード検索閲覧履歴issue-41でbackendの一覧-apiupsertマイグレーションを書くとき)
+- [2026-09-10 ナビ・ホーム・履歴（Issue #42）で frontend-ts のタブシェルを組むとき](#2026-09-10-ナビホーム履歴issue-42でfrontend-tsのタブシェルを組むとき)
+
+---
+
+## 2026-09-10 ナビ・ホーム・履歴（Issue #42）で frontend-ts のタブシェルを組むとき
+
+**きっかけ**: Issue #42（5 destination のナビゲーションシェル ＋ ホーム「全体」フィード ＋ 検索 ＋ 閲覧履歴 ＋ 通知/マイページのスタブ）。MVP ライン最後の Issue。
+
+### expo-router の headless Tabs
+
+1. **ボトムバー ⇔ ナビゲーションレールを切り替えるなら headless Tabs（`expo-router/ui`）を使う**。見た目つきの `Tabs` はバーが画面下に固定で、デスクトップ用の左レールにできない。headless 版は `<TabSlot />`（画面本体）と `<TabList />`（バー）を自分で並べられるので、**`<Tabs>` の `flexDirection` を入れ替えるだけ**で下バー ⇔ 左レールになる（`column` / `row-reverse`）。expo-router に同梱なので**追加の依存は不要**（`@react-navigation/bottom-tabs` を別途入れなくてよい）。
+2. **子の順番は固定して方向だけ変える**。`[TabSlot, TabList]` の順を条件で入れ替えると画面がアンマウントされ、スクロール位置などの状態が飛ぶ。
+3. **`TabList` 内の TabTrigger 以外の要素は「無視される」**（`Tabs.js` の `parseTriggersFromChildren` が明示的にスキップする）。これを利用して、中央の「＋」を素の `Pressable` にすればタブを増やさずにモーダルを開ける（navigation.md「タブ自体は選択状態にしない」）。
+4. **トリガーの走査は Fragment と TabList の中しか降りない**。`<TabTrigger>` を自作コンポーネントで包むとタブとして認識されないので、`TabList` とその直下の `TabTrigger` は**ルートレイアウトに直接書く**。見た目の部品だけを別ファイルに切り出す。
+5. **【実ブラウザで踏んだ】`TabTrigger asChild` の子は必ず `Pressable` にする**。`asChild` は Pressable 用の props（`onPress` 等）を子に流し込むので、受け側を `View` にすると `onPress` が無視され、**Web ではアンカーの既定動作だけが残ってページ全体がリロード**される（＝クライアント側のタブ遷移にならず、メモリ上のセッションが飛んでログイン画面に戻る）。jest では気づけず、DevTools の Network で document リクエストが増えることで発覚した。**タブ遷移は「document リクエストが増えないこと」で確認する**。
+
+### destination ごとのスタック
+
+6. **「詳細を開いてもタブバーを残す」には destination ごとに Stack を切る**。詳細をタブの外側の Stack に置くと全画面になりバーが消える（navigation.md の「各 destination は独立したナビゲーションスタックを保持する」に反する）。`(tabs)/home/_layout.tsx` のように各タブ配下に Stack を作り、`home/recipes/[id]` のようにその中へ push する。
+7. **その結果、共有画面は 1 つの実装を複数のルートから使う形になる**。画面本体を `src/screens/` に置き（名前付き export）、各ルートファイルは 3 行の薄いラッパーにする。**push 先が destination で変わるので `basePath` を prop で渡す**（`/home` / `/history` / `/my-page`）。ハードコードした `/(app)/recipes/...` は別 destination のスタックへ飛んでしまう。
+8. **URL が変わることを受け入れる**。グループ `(home)` `(history)` の両方に `recipes/[id]` を置くとルートが衝突するため、実ディレクトリ名（`/home`・`/history`）にする必要がある。ホームが `/` から `/home` になるので、`router.replace("/(app)")` を使っていた**ログイン / サインアップ / スプラッシュ / エディタの着地先を全部洗う**（`grep '"/(app)"'`）。
+
+### テスト・E2E
+
+9. **画面を作り替えると既存 E2E が全部巻き添えになる**。#42 では E2E 5 本すべてが仮ホームの `home-link-new-recipe` / `home-logout` /「ようこそ、〜さん」に依存していた。**新機能より先に既存 E2E の依存を `grep` で洗う**。着地確認は「ウェルカムメッセージ」のような仮の文言ではなく、`home-logo` のような恒久的な testID にしておくと次回壊れない。
+10. **固定メールの E2E はローカルの開発 DB では 2 回目から落ちる**。CI は postgres コンテナを毎回作り直すので通るが、ローカルでは前回のユーザーが残って signup が失敗する。**ローカルで回す前に `DELETE FROM users WHERE email LIKE 'e2euser_%'`**（テストデータ規約の接頭辞がそのまま掃除条件になる）。
+11. **レスポンシブの分岐は境界値そのものでテストする**。`useWindowDimensions` を `jest.mock("react-native/Libraries/Utilities/useWindowDimensions")` で差し替え、599 / 600 の 2 点を見る。定数（`NAV_RAIL_MIN_WIDTH`）を export してテストからも参照すると、値を変えたときにテストが自動で追随する。
+12. **「描画のたびに呼ばない」は発火回数で担保する**。閲覧記録（`POST /recipes/{id}/view`）は取得成功後に 1 回だけ。ref で送信済み ID を控えるだけでなく、**ダイアログの開閉で再描画を起こしても呼び出し回数が 1 のまま**であることをテストに書く（lessons #40 の「発火回数はカウンタで測る」と同じ考え方）。
+13. **`renderHook` も v14 では非同期**。lessons #40 の「`render` / `fireEvent` は必ず `await`」に `renderHook` も含まれる。`await` を忘れると `result` が `undefined` になり「Cannot read properties of undefined (reading 'current')」で落ちる。
+14. **未解決の Promise をテストに残さない**。「送信中のリクエスト」を作るテストで、モジュールレベルの集合（`pendingViewRecords` のような）に Promise を積んだまま終わると、**同じファイルの後続テストがそれを待って軒並み落ちる**。必ず解決させてからテストを終える。
+
+### 認証状態とキャッシュ（Codex レビューで繰り返し出た論点）
+
+15. **認証必須のクエリは「セッション復元済み」でゲートする**。起動直後は保存済みトークンでの再ログイン中で、その間に投げると 401 → リフレッシュ失敗と見なされ、**まだ有効な保存済みリフレッシュトークンが消される**（ログインが飛ぶ）。`enabled: hydrated && isAuthenticated` を付ける。
+16. **`QueryClient` はログアウトしても生き続ける**。消さないと「A が抜けた直後に B がログイン」で、stale time の内側は**再取得なしで A のデータが B の画面に出る**。破棄は `useLogout` に置くのではなく、**セッションストアを購読して状態変化を起点に**行う（トークン失効・`token_version` 不一致・アカウント削除では `client.ts` が直接セッションを消し、`useLogout` を通らない）。監視条件は「ログアウト（true→false）」だけでなく **ユーザー ID の変化**も含める（ログイン済みのまま別アカウントで入り直す経路がある）。
+17. **fire-and-forget と破壊的操作が競合する**。閲覧記録は結果を待たないので、直後に「履歴を消去」すると**記録が DELETE より後に届いて 1 件だけ復活**する。送信中のリクエストを共有し、消去の前に `Promise.allSettled` で決着を待つ。
 
 ---
 

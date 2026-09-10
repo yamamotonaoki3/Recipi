@@ -28,7 +28,7 @@ export default function LoginScreen() {
       { email, password, rememberMe },
       {
         onSuccess: () => {
-          router.replace("/(app)");
+          router.replace("/home");
         },
         onError: (error) => {
           if (error instanceof ApiError && error.status === 401) {

@@ -49,11 +49,25 @@ import {
   type RecipeFormErrors,
 } from "./validation";
 import { ApiError } from "@/features/auth/api";
+import { resolveRecipeStackDestination } from "@/features/navigation/destinations";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImagePickerField } from "@/components/ImagePickerField";
 
-type RecipeEditorProps =
-  { mode: "create"; recipe?: undefined } | { mode: "edit"; recipe: RecipeResponse };
+/**
+ * `basePath` は「このエディタを開いた destination のスタックの根」
+ * （`/home` / `/history` / `/my-page`）。保存後に詳細へ遷移するとき、
+ * **開いた destination のスタックの中**に戻すために使う。決め打ちで
+ * `/home` にすると、履歴やマイページから作ったときにホームへ飛んでしまう
+ * （Codex #42 レビュー指摘）。**URL のクエリ経由で外から渡されうる値**なので、
+ * 使う前に `resolveRecipeStackDestination` で許可リストに絞る（省略・不正はホーム）。
+ */
+type RecipeEditorProps = (
+  | { mode: "create"; recipe?: undefined }
+  | {
+      mode: "edit";
+      recipe: RecipeResponse;
+    }
+) & { basePath?: string };
 
 const emptyErrors: RecipeFormErrors = { groups: {}, ingredients: {}, steps: {} };
 
@@ -63,7 +77,9 @@ const SCROLL_MARGIN = 16;
 /** エラー箇所の View を `anchorKey` で登録するための関数。 */
 export type RegisterAnchor = (anchorKey: string, node: View | null) => void;
 
-export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
+export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEditorProps) {
+  // 外部から渡されうる値なので、既知の destination だけに絞る（下の型の説明参照）。
+  const basePath = resolveRecipeStackDestination(rawBasePath);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { state, dispatch, dirty } = useRecipeForm(recipe);
@@ -114,9 +130,11 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
     if (router.canGoBack()) {
       router.back();
     } else if (mode === "edit") {
-      router.replace(`/(app)/recipes/${recipe.id}` as never);
+      // 開いた destination のスタックにある詳細へ戻す
+      // （destination ごとにスタックが分かれているため。screens/navigation.md）。
+      router.replace(`${basePath}/recipes/${recipe.id}` as never);
     } else {
-      router.replace("/(app)" as never);
+      router.replace(basePath as never);
     }
   }
 
@@ -257,7 +275,9 @@ export function RecipeEditor({ mode, recipe }: RecipeEditorProps) {
             // 作成画面はモーダルなので、モーダルスタックを閉じてから詳細へ
             // 遷移する。`replace` だと Android のネイティブスタック上で
             // モーダルのルートが残り、保存後も編集画面が表示され続けることがある。
-            router.dismissTo(`/(app)/recipes/${saved.id}` as never);
+            // 遷移先は**開いた destination**のスタック内の詳細
+            // （destination ごとにスタックが分かれている。screens/navigation.md）。
+            router.dismissTo(`${basePath}/recipes/${saved.id}` as never);
           }
         },
         onError: (error) => {

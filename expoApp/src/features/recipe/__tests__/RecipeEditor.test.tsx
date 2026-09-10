@@ -255,7 +255,21 @@ describe("RecipeEditor（作成）", () => {
       },
     ]);
     expect(body.steps).toEqual([{ body: "切って煮る" }]);
-    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/(app)/recipes/r-new"));
+    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/home/recipes/r-new"));
+  });
+
+  it("開いた destination のスタックに戻る（履歴から作ってもホームへ飛ばさない）", async () => {
+    mockCreateRecipe.mockResolvedValue({ id: "r-new" });
+    const { getByTestId } = await render(<RecipeEditor mode="create" basePath="/history" />, {
+      wrapper,
+    });
+
+    await fireEvent.changeText(getByTestId("editor-title"), "肉じゃが");
+    await fireEvent.changeText(getByTestId("g0-i0-name"), "じゃがいも");
+    await fireEvent.changeText(getByTestId("step-0-body"), "切って煮る");
+    await fireEvent.press(getByTestId("editor-save"));
+
+    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/history/recipes/r-new"));
   });
 
   it("画像のアップロード中は保存できず、完了すると保存できる", async () => {
@@ -455,7 +469,7 @@ describe("RecipeEditor（作成）", () => {
     });
     await fireEvent.changeText(getByTestId("editor-title"), "肉じゃが改");
     await fireEvent.press(getByTestId("editor-save"));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(app)/recipes/r1"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/home/recipes/r1"));
     expect(mockBack).not.toHaveBeenCalled();
   });
 

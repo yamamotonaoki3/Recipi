@@ -56,10 +56,24 @@ function makeRecipe(authorId: string): RecipeResponse {
   };
 }
 
+/**
+ * 認証必須の API は「セッション復元済み かつ ログイン済み」でのみ投げるように
+ * なったので（Codex #42 指摘の対策）、テストでもログイン状態を用意する。
+ */
+function signIn() {
+  useSession.setState({
+    hydrated: true,
+    isAuthenticated: true,
+    accessToken: "test-token",
+    refreshToken: "test-refresh",
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   (recipeApi.getUnits as jest.Mock).mockResolvedValue({ units: [] });
   useSession.getState().clear();
+  signIn();
 });
 
 describe("EditRecipeScreen", () => {

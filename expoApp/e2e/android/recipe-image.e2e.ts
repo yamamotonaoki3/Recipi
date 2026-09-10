@@ -113,10 +113,12 @@ describe("recipe-image", () => {
     await hideKeyboard();
     await scrollToId("login-submit").click();
 
-    await waitFor(`android=new UiSelector().textContains("ようこそ、${testDisplayName} さん")`, 30_000);
+    await waitFor(id("home-logo"), 30_000);
 
     // 一覧カードのサムネイル。
-    await $(id("home-link-my-recipes")).click();
+    await $(id("nav-my-page")).click();
+    await waitFor(id("my-page-my-recipes"), 20_000);
+    await $(id("my-page-my-recipes")).click();
     await waitFor(`android=new UiSelector().textContains("${recipeTitle}")`, 30_000);
     await waitFor(id(`my-recipe-${recipeId}-thumbnail`), 30_000);
 

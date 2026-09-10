@@ -23,11 +23,14 @@ test("signup → 自動ログイン確認 → logout → 再ログイン", async
   await page.getByTestId("signup-security-answer").fill("ラーメン");
   await page.getByTestId("signup-submit").click();
 
-  // 登録成功 → 自動ログイン状態でホームに遷移し、
-  // 表示名入りのウェルカムメッセージが出ることを確認する。
-  await expect(page.getByText("ようこそ、E2EUser B さん")).toBeVisible({ timeout: 15_000 });
+  // 登録成功 → 自動ログイン状態でホーム（5 destination のシェル）に着地する。
+  // ホームの目印はロゴ（Issue #42 でウェルカムメッセージの仮画面は廃止）。
+  await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
 
-  await page.getByTestId("home-logout").click();
+  // ログアウトはマイページ destination の中（screens/my-page.md）。
+  await page.getByTestId("nav-my-page").last().click();
+  await expect(page.getByTestId("my-page-display-name").last()).toHaveText("E2EUser B");
+  await page.getByTestId("my-page-logout").last().click();
 
   // ログアウト後は認可ゲート（useProtectedRoute）によりログイン画面へ戻される。
   await expect(page.getByTestId("login-email")).toBeVisible();
@@ -36,5 +39,5 @@ test("signup → 自動ログイン確認 → logout → 再ログイン", async
   await page.getByTestId("login-password").fill("TestPass123!");
   await page.getByTestId("login-submit").click();
 
-  await expect(page.getByText("ようこそ、E2EUser B さん")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
 });

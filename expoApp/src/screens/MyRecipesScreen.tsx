@@ -10,7 +10,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } fr
 import { RecipeCard } from "@/components/RecipeCard";
 import { useMyRecipes } from "@/features/recipe/hooks";
 
-export default function MyRecipesScreen() {
+export function MyRecipesScreen({ basePath }: { basePath: string }) {
   const router = useRouter();
   const {
     data,
@@ -63,7 +63,7 @@ export default function MyRecipesScreen() {
           <RecipeCard
             testID={`my-recipe-${item.id}`}
             recipe={item}
-            onPress={() => router.push(`/(app)/recipes/${item.id}` as never)}
+            onPress={() => router.push(`${basePath}/recipes/${item.id}` as never)}
           />
         )}
         ListEmptyComponent={
