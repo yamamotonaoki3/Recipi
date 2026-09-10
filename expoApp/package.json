@@ -69,13 +69,13 @@
     "webdriverio": "^9.31.5"
   },
   "scripts": {
-    "android": "expo start --android",
+    "android": "expo run:android",
     "build:web": "expo export -p web --output-dir dist",
     "e2e:android": "wdio run wdio.conf.ts",
     "e2e:web": "playwright test",
     "format": "prettier --check .",
     "gen:api": "openapi-typescript ../openapi/openapi.json -o src/api/schema.ts",
-    "ios": "expo start --ios",
+    "ios": "expo run:ios",
     "lint": "eslint .",
     "start": "expo start",
     "tauri": "tauri",

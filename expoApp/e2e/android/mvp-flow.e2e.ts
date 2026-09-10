@@ -67,7 +67,27 @@ describe("mvp-flow", () => {
     await scrollToId("step-0-body").setValue("材料を切って炒める");
     await hideKeyboard();
     // フィード（feed=all）は公開レシピしか返さないので、公開に切り替える。
-    await scrollToId("editor-is-public").click();
+    //
+    // 公開トグルは React Native の `<Switch>`。**`testID` が Android の
+    // resource-id として出ないため `resourceId` では引けない**
+    // （`scrollIntoView(resourceId("editor-is-public"))` が
+    // "element wasn't found" になることを CI で確認）。TextInput や Pressable は
+    // 引けるので、Switch 固有の挙動。
+    // そこでラベルのテキストまでスクロールし、この画面に 1 つしかない Switch を
+    // クラス名で指定して押す（実装により `android.widget.Switch` /
+    // `androidx.appcompat.widget.SwitchCompat` のどちらにもなりうるので
+    // `classNameMatches` で受ける）。
+    await $(
+      'android=new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().textContains("公開する"))',
+    );
+    const publicSwitch = await $('android=new UiSelector().classNameMatches(".*Switch")');
+    await publicSwitch.click();
+    // 押せていないと、あとでフィードに出ず原因の分かりにくい失敗になる。
+    // ここで ON になったことを確かめ、失敗をこの行に閉じ込める。
+    await browser.waitUntil(async () => (await publicSwitch.getAttribute("checked")) === "true", {
+      timeout: 10_000,
+      timeoutMsg: "公開スイッチを ON にできなかった",
+    });
     // 最後の入力が JS 側の reducer に反映されるまで待つ。
     await browser.pause(500);
     // `editor-save` は ScrollView の外の固定ヘッダーにあるので常に可視。
