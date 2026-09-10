@@ -48,6 +48,10 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 
 5. **共通のテストモックが「無害な既定値」だと、抜けを検出できない**。`jest.setup.js` の `react-native-safe-area-context` モックは inset が全て 0 なので、`paddingBottom` を書き忘れても単体テストは緑のままだった。回帰を固定するテストでは、**その spec だけ inset を持つ端末に差し替える**（`jest.spyOn` はこの共通モックには効かず、ファイル単位の `jest.mock` で可変変数を読ませる必要があった。ファクトリは import より上に巻き上げられるため、変数名は `mock` で始めること）。
 
+6. **RN の `onSubmitEditing` は、生の `KEYCODE_ENTER` では発火しない**。`browser.pressKeyCode(66)` で検索を確定させようとしたが、`returnKeyType="search"` の TextInput は **IME のアクション**でしか `onSubmitEditing` を呼ばない。`browser.execute("mobile: performEditorAction", { action: "search" })` を使う。web の Playwright は `press("Enter")` で通るので、**同じシナリオでも確定の送り方はプラットフォームで違う**。
+
+    切り分けは page-source で行った。入力欄が `focused="true"` かつ `text` に値が入っているのにチップが無い、という状態から「フォーカスではなく確定が起きていない」と特定できた。**「押したはずのものが効かない」ときは、対象の状態（focused / text / checked）を実際に読む**。
+
 ---
 
 ## 2026-09-10 ナビ・ホーム・履歴（Issue #42）で frontend-ts のタブシェルを組むとき
