@@ -72,9 +72,11 @@ test("サインアップ → 作成 → ホーム → 検索 → 詳細 → 履�
   await expect(page.getByTestId("home-search-chip")).toHaveCount(0);
   await expect(page.getByTestId("home-search-input").last()).toHaveValue("");
 
-  // 検索し直してから詳細へ進む。
+  // 検索し直してから詳細へ進む。ここは**検索ボタン**で確定する
+  // （確定の経路は Enter とボタンの 2 つあり、両方を通しで確かめる。
+  // Android は IME の都合でボタンしか使えない。Issue #74）。
   await page.getByTestId("home-search-input").last().fill(UNIQUE_INGREDIENT);
-  await page.getByTestId("home-search-input").last().press("Enter");
+  await page.getByTestId("home-search-submit").last().click();
   await expect(page.getByTestId("home-search-chip").last()).toBeVisible();
 
   // --- カードタップで詳細（ここで POST /recipes/{id}/view が飛ぶ）---

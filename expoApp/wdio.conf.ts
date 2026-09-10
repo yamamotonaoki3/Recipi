@@ -74,22 +74,6 @@ export const config = {
       //     → proxy {"strategy":"id","selector":"editor-save"} → status 200
       // 追加前は同じリクエストが 44ms で 404 を返していた。
       "appium:disableIdLocatorAutocompletion": true,
-      /**
-       * セッションの最初から Appium の IME を使う（Issue #74）。
-       *
-       * ホームの検索窓は `returnKeyType="search"` で、確定は IME のアクション
-       * （`onSubmitEditing`）でしか起きない。生の `KEYCODE_ENTER` では発火せず、
-       * `mobile: performEditorAction` も**実行のたびに IME を Appium のものへ
-       * 切り替えて元に戻す**ため、その切り替えで入力欄のフォーカスが外れて
-       * アクションが届かなかった（CI の appium.log で IME の付け替えを、
-       * page-source で `focused="false"` を確認）。
-       *
-       * 最初から Appium の IME にしておけば付け替えが起きず、フォーカスを
-       * 保ったままアクションを送れる。日本語の入力にも強い（この IME は
-       * 非 ASCII を扱うためのもの）。
-       */
-      "appium:unicodeKeyboard": true,
-      "appium:resetKeyboard": true,
     },
   ],
 

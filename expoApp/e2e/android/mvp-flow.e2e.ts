@@ -101,13 +101,16 @@ describe("mvp-flow", () => {
 
     // --- 検索（材料名でヒットする。features/search.md）---
     await $(id("home-search-input")).setValue(uniqueIngredient);
-    // 検索窓は `returnKeyType="search"` で、確定は IME の「検索」キー
-    // （`onSubmitEditing`）。**生の KEYCODE_ENTER では発火しない**。
-    // CI の page-source で、入力欄が `focused="true"` かつ値も入っているのに
-    // 検索チップが出ていないことを確認した（＝フォーカスではなく確定の問題。
-    // Issue #74）。Appium の IME アクションを直接送る。
-    await browser.execute("mobile: performEditorAction", { action: "search" });
+    // 確定は検索ボタンで行う。キーボードの確定キーには頼らない。
+    //
+    // Android では確定が IME のアクションでしか起きず、Appium からそれを送る
+    // 手段（`pressKeyCode(66)` / `mobile: performEditorAction`）はどちらも
+    // 効かなかった。前者はそもそも `onSubmitEditing` を発火させず、後者は
+    // **実行のたびに IME を付け替える実装**で、その付け替えで入力欄の
+    // フォーカスが外れてアクションが届かない（appium.log と page-source で
+    // 確認。Issue #74）。押せるボタンを画面に足して経路を増やした。
     await hideKeyboard();
+    await $(id("home-search-submit")).click();
     await waitFor(id("home-search-chip"), 20_000);
     await waitFor(`android=new UiSelector().textContains("${recipeTitle}")`, 30_000);
 
