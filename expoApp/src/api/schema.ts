@@ -134,9 +134,9 @@ export interface paths {
          * List Feed
          * @description ホームフィード / 検索（features/home-feed.md・search.md）。
          *
-         *     MVP で受け付ける `feed` は `all` のみ。`following` / `followers` / `favorites`
-         *     は Phase 5・6 で有効化するので、それらを含む `all` 以外の値は 400 にする
-         *     （home-feed.md §6「不正値は 400」）。
+         *     受け付ける `feed` は `all` / `following` / `followers`。`favorites` は
+         *     お気に入り機能の Issue で有効化するので、今はまだ 400 にする
+         *     （home-feed.md §6「不正値は 400」）。`q` はどの `feed` とも併用できる。
          */
         get: operations["list_feed_api_v1_recipes_get"];
         put?: never;
@@ -224,6 +224,53 @@ export interface paths {
         patch: operations["update_me_api_v1_users_me_patch"];
         trace?: never;
     };
+    "/api/v1/users/me/followers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Followers
+         * @description 自分をフォローしているユーザー一覧。
+         *
+         *     各要素の `isFollowing` は「自分がその人をフォローしているか」なので、
+         *     画面ではフォローバック済みかどうかの判定に使える（follow.md §5）。
+         */
+        get: operations["list_my_followers_api_v1_users_me_followers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/following": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Following
+         * @description 自分がフォローしているユーザー一覧。
+         *
+         *     `GET /users/{id}/following` に自分の ID を渡した場合と同じ内容を返す
+         *     ショートカット（follow.md §5）。クライアントが自分の ID を持っていなくても
+         *     呼べるようにするためのもの。
+         */
+        get: operations["list_my_following_api_v1_users_me_following_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/history": {
         parameters: {
             query?: never;
@@ -259,6 +306,97 @@ export interface paths {
         };
         /** List My Recipes */
         get: operations["list_my_recipes_api_v1_users_me_recipes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get User
+         * @description ユーザープロフィール（features/profile.md §5 の最小版）。
+         *
+         *     アバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。
+         */
+        get: operations["get_user_api_v1_users__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Follow User
+         * @description `user_id` をフォローする。冪等（二重フォローでも 204）。
+         *
+         *     `run_with_retry` で包む理由: 同じ相手に同時フォローが来ると `users` 行の
+         *     ロック待ちが発生し、まれにデッドロックで中断されることがある。
+         *     そのときはサーバー側でやり直し、クライアントにはエラーを見せない
+         *     （follow.md §3 / non-functional.md）。commit も `run_with_retry` が行う。
+         */
+        post: operations["follow_user_api_v1_users__user_id__follow_post"];
+        /**
+         * Unfollow User
+         * @description フォローを解除する。フォローしていなくても 204（冪等）。
+         */
+        delete: operations["unfollow_user_api_v1_users__user_id__follow_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/followers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List User Followers
+         * @description `user_id` のユーザーをフォローしているユーザー一覧。
+         */
+        get: operations["list_user_followers_api_v1_users__user_id__followers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/following": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List User Following
+         * @description `user_id` のユーザーがフォローしているユーザー一覧。
+         */
+        get: operations["list_user_following_api_v1_users__user_id__following_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -704,6 +842,29 @@ export interface components {
              */
             id: string;
         };
+        /**
+         * UserProfileResponse
+         * @description `GET /users/{id}` の最小版（features/profile.md §5）。
+         *
+         *     アバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。
+         */
+        UserProfileResponse: {
+            /** Avatarurl */
+            avatarUrl?: string | null;
+            /** Displayname */
+            displayName: string;
+            /** Followercount */
+            followerCount: number;
+            /** Followingcount */
+            followingCount: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Isfollowing */
+            isFollowing: boolean | null;
+        };
         /** UserPublic */
         UserPublic: {
             /** Displayname */
@@ -713,6 +874,30 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /**
+         * UserRow
+         * @description 一覧の 1 行（アバター + 表示名 + フォロー状態ボタン）。
+         */
+        UserRow: {
+            /** Avatarurl */
+            avatarUrl?: string | null;
+            /** Displayname */
+            displayName: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Isfollowing */
+            isFollowing: boolean;
+        };
+        /** UserRowListResponse */
+        UserRowListResponse: {
+            /** Items */
+            items: components["schemas"]["UserRow"][];
+            /** Nextcursor */
+            nextCursor: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1405,6 +1590,88 @@ export interface operations {
             };
         };
     };
+    list_my_followers_api_v1_users_me_followers_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRowListResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_my_following_api_v1_users_me_following_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRowListResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     get_my_history_api_v1_users_me_history_get: {
         parameters: {
             query?: {
@@ -1506,6 +1773,244 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_user_api_v1_users__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProfileResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    follow_user_api_v1_users__user_id__follow_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    unfollow_user_api_v1_users__user_id__follow_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_user_followers_api_v1_users__user_id__followers_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRowListResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_user_following_api_v1_users__user_id__following_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRowListResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

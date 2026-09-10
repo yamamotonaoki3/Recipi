@@ -119,8 +119,12 @@ def test_feed_requires_auth(client: TestClient) -> None:
     assert client.get(RECIPES_URL).status_code == 401
 
 
-@pytest.mark.parametrize("feed", ["following", "followers", "favorites", "bogus"])
-def test_feed_non_all_values_are_rejected(client: TestClient, feed: str) -> None:
+@pytest.mark.parametrize("feed", ["favorites", "bogus", "ALL", ""])
+def test_feed_unsupported_values_are_rejected(client: TestClient, feed: str) -> None:
+    """`favorites`（未実装）と定義に無い値は 400（home-feed.md §6）。
+
+    `following` / `followers` は Issue #66 で有効化したので、ここには含めない。
+    """
     headers = auth_headers(client)
     res = client.get(RECIPES_URL, params={"feed": feed}, headers=headers)
     assert res.status_code == 400
@@ -258,3 +262,120 @@ def test_feed_malformed_cursor_returns_400(client: TestClient, cursor: str) -> N
     headers = auth_headers(client)
     res = client.get(RECIPES_URL, params={"feed": "all", "cursor": cursor}, headers=headers)
     assert res.status_code == 400
+
+
+# --- feed=following / followers（Issue #66・features/home-feed.md） -----
+
+
+def _follow(client: TestClient, headers: dict[str, str], target_id: str) -> None:
+    res = client.post(f"/api/v1/users/{target_id}/follow", headers=headers)
+    assert res.status_code == 204, res.text
+
+
+def _user_id(client: TestClient, headers: dict[str, str]) -> str:
+    """認証ヘッダーの持ち主の id を返す（自分のプロフィールから取る）。"""
+    me = client.get("/api/v1/users/me/following", headers=headers)
+    assert me.status_code == 200
+    # `/users/me/*` は id を返さないので、レシピを 1 件作ってその author から取る。
+    res = client.post(
+        RECIPES_URL, json=recipe_payload(title="__id_probe__", isPublic=False), headers=headers
+    )
+    assert res.status_code == 201, res.text
+    author_id: str = res.json()["author"]["id"]
+    client.delete(f"{RECIPES_URL}/{res.json()['id']}", headers=headers)
+    return author_id
+
+
+def test_feed_following_shows_only_followed_authors(client: TestClient) -> None:
+    """「フォロー」タブにはフォロー中ユーザーの公開レシピだけが出る（home-feed.md §7）。"""
+    viewer_headers, viewer_name = _unique_author(client)
+    followed_headers, followed_name = _unique_author(client)
+    other_headers, other_name = _unique_author(client)
+
+    followed_id = _user_id(client, followed_headers)
+    _follow(client, viewer_headers, followed_id)
+
+    _create(client, followed_headers, title="フォロー中の公開レシピ", isPublic=True)
+    _create(client, followed_headers, title="フォロー中の非公開レシピ", isPublic=False)
+    _create(client, other_headers, title="無関係な人の公開レシピ", isPublic=True)
+
+    titles = _feed_titles_by_author(
+        client, viewer_headers, followed_name, params={"feed": "following"}
+    )
+    assert titles == ["フォロー中の公開レシピ"]
+
+    # 無関係な投稿者のレシピは 1 件も出ない。
+    assert (
+        _feed_titles_by_author(client, viewer_headers, other_name, params={"feed": "following"})
+        == []
+    )
+    # 自分自身のレシピも（自分をフォローできない以上）出ない。
+    assert (
+        _feed_titles_by_author(client, viewer_headers, viewer_name, params={"feed": "following"})
+        == []
+    )
+
+
+def test_feed_followers_shows_only_authors_who_follow_me(client: TestClient) -> None:
+    """「フォロワー」タブには自分をフォローしている人の公開レシピだけが出る。"""
+    viewer_headers, _ = _unique_author(client)
+    follower_headers, follower_name = _unique_author(client)
+    other_headers, other_name = _unique_author(client)
+
+    viewer_id = _user_id(client, viewer_headers)
+    _follow(client, follower_headers, viewer_id)
+
+    _create(client, follower_headers, title="フォロワーの公開レシピ", isPublic=True)
+    _create(client, follower_headers, title="フォロワーの非公開レシピ", isPublic=False)
+    _create(client, other_headers, title="無関係な人の公開レシピ2", isPublic=True)
+
+    titles = _feed_titles_by_author(
+        client, viewer_headers, follower_name, params={"feed": "followers"}
+    )
+    assert titles == ["フォロワーの公開レシピ"]
+    assert (
+        _feed_titles_by_author(client, viewer_headers, other_name, params={"feed": "followers"})
+        == []
+    )
+
+
+def test_feed_following_is_empty_without_follows(client: TestClient) -> None:
+    """フォロー 0 なら空（画面はここで空状態メッセージを出す）。"""
+    viewer_headers, _ = _unique_author(client)
+    res = client.get(RECIPES_URL, params={"feed": "following", "limit": 50}, headers=viewer_headers)
+    assert res.status_code == 200, res.text
+    assert res.json()["items"] == []
+
+
+def test_feed_following_can_be_narrowed_by_q(client: TestClient) -> None:
+    """検索語は表示中のタブの集合の中だけで絞り込む（home-feed.md §3）。"""
+    viewer_headers, _ = _unique_author(client)
+    followed_headers, followed_name = _unique_author(client)
+
+    _follow(client, viewer_headers, _user_id(client, followed_headers))
+    _create(client, followed_headers, title="肉じゃが", isPublic=True)
+    _create(client, followed_headers, title="カレーライス", isPublic=True)
+
+    titles = _feed_titles_by_author(
+        client, viewer_headers, followed_name, params={"feed": "following", "q": "カレー"}
+    )
+    assert titles == ["カレーライス"]
+
+
+def test_feed_following_reflects_unfollow(client: TestClient) -> None:
+    """フォロー解除の結果は次の取得に反映される（home-feed.md §7）。"""
+    viewer_headers, _ = _unique_author(client)
+    followed_headers, followed_name = _unique_author(client)
+    followed_id = _user_id(client, followed_headers)
+
+    _follow(client, viewer_headers, followed_id)
+    _create(client, followed_headers, title="解除前に見えるレシピ", isPublic=True)
+    assert _feed_titles_by_author(
+        client, viewer_headers, followed_name, params={"feed": "following"}
+    ) == ["解除前に見えるレシピ"]
+
+    client.delete(f"/api/v1/users/{followed_id}/follow", headers=viewer_headers)
+    assert (
+        _feed_titles_by_author(client, viewer_headers, followed_name, params={"feed": "following"})
+        == []
+    )

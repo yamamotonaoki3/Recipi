@@ -1036,6 +1036,59 @@
         "title": "UserMeResponse",
         "type": "object"
       },
+      "UserProfileResponse": {
+        "description": "`GET /users/{id}` の最小版（features/profile.md §5）。\n\nアバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。",
+        "properties": {
+          "avatarUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatarurl"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "followerCount": {
+            "title": "Followercount",
+            "type": "integer"
+          },
+          "followingCount": {
+            "title": "Followingcount",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isFollowing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isfollowing"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "followingCount",
+          "followerCount",
+          "isFollowing"
+        ],
+        "title": "UserProfileResponse",
+        "type": "object"
+      },
       "UserPublic": {
         "properties": {
           "displayName": {
@@ -1053,6 +1106,70 @@
           "displayName"
         ],
         "title": "UserPublic",
+        "type": "object"
+      },
+      "UserRow": {
+        "description": "一覧の 1 行（アバター + 表示名 + フォロー状態ボタン）。",
+        "properties": {
+          "avatarUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatarurl"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isFollowing": {
+            "title": "Isfollowing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "isFollowing"
+        ],
+        "title": "UserRow",
+        "type": "object"
+      },
+      "UserRowListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "title": "UserRowListResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -1484,7 +1601,7 @@
     },
     "/api/v1/recipes": {
       "get": {
-        "description": "ホームフィード / 検索（features/home-feed.md・search.md）。\n\nMVP で受け付ける `feed` は `all` のみ。`following` / `followers` / `favorites`\nは Phase 5・6 で有効化するので、それらを含む `all` 以外の値は 400 にする\n（home-feed.md §6「不正値は 400」）。",
+        "description": "ホームフィード / 検索（features/home-feed.md・search.md）。\n\n受け付ける `feed` は `all` / `following` / `followers`。`favorites` は\nお気に入り機能の Issue で有効化するので、今はまだ 400 にする\n（home-feed.md §6「不正値は 400」）。`q` はどの `feed` とも併用できる。",
         "operationId": "list_feed_api_v1_recipes_get",
         "parameters": [
           {
@@ -2005,6 +2122,160 @@
         ]
       }
     },
+    "/api/v1/users/me/followers": {
+      "get": {
+        "description": "自分をフォローしているユーザー一覧。\n\n各要素の `isFollowing` は「自分がその人をフォローしているか」なので、\n画面ではフォローバック済みかどうかの判定に使える（follow.md §5）。",
+        "operationId": "list_my_followers_api_v1_users_me_followers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRowListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List My Followers",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/following": {
+      "get": {
+        "description": "自分がフォローしているユーザー一覧。\n\n`GET /users/{id}/following` に自分の ID を渡した場合と同じ内容を返す\nショートカット（follow.md §5）。クライアントが自分の ID を持っていなくても\n呼べるようにするためのもの。",
+        "operationId": "list_my_following_api_v1_users_me_following_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRowListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List My Following",
+        "tags": [
+          "users"
+        ]
+      }
+    },
     "/api/v1/users/me/history": {
       "delete": {
         "description": "閲覧履歴を全消去する（features/view-history.md §5）。\n\n書き込みなので、レスポンスを返す前に明示的に commit する（ファイル冒頭コメント）。",
@@ -2199,6 +2470,381 @@
         "summary": "List My Recipes",
         "tags": [
           "recipes"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "get": {
+        "description": "ユーザープロフィール（features/profile.md §5 の最小版）。\n\nアバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。",
+        "operationId": "get_user_api_v1_users__user_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/follow": {
+      "delete": {
+        "description": "フォローを解除する。フォローしていなくても 204（冪等）。",
+        "operationId": "unfollow_user_api_v1_users__user_id__follow_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unfollow User",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "description": "`user_id` をフォローする。冪等（二重フォローでも 204）。\n\n`run_with_retry` で包む理由: 同じ相手に同時フォローが来ると `users` 行の\nロック待ちが発生し、まれにデッドロックで中断されることがある。\nそのときはサーバー側でやり直し、クライアントにはエラーを見せない\n（follow.md §3 / non-functional.md）。commit も `run_with_retry` が行う。",
+        "operationId": "follow_user_api_v1_users__user_id__follow_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Follow User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/followers": {
+      "get": {
+        "description": "`user_id` のユーザーをフォローしているユーザー一覧。",
+        "operationId": "list_user_followers_api_v1_users__user_id__followers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRowListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List User Followers",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/following": {
+      "get": {
+        "description": "`user_id` のユーザーがフォローしているユーザー一覧。",
+        "operationId": "list_user_following_api_v1_users__user_id__following_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRowListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List User Following",
+        "tags": [
+          "users"
         ]
       }
     },

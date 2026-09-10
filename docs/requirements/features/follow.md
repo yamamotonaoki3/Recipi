@@ -40,22 +40,38 @@
 ```sql
 -- フォロー（A → B）
 BEGIN;
-INSERT INTO follows (follower_id, followee_id) VALUES (:a, :b) ON CONFLICT DO NOTHING;
--- 1行入ったときだけ、関与する2行を id 昇順でロックしてから更新する
-SELECT id FROM users WHERE id IN (:a, :b) ORDER BY id FOR UPDATE;
+-- 先に users 2行を id 昇順・FOR NO KEY UPDATE でロックする（順序と強さは下記の注記）
+SELECT id FROM users WHERE id IN (:a, :b) ORDER BY id FOR NO KEY UPDATE;
+INSERT INTO follows (follower_id, followee_id) VALUES (:a, :b)
+  ON CONFLICT DO NOTHING RETURNING follower_id;   -- 返れば「実際に1行入った」
+-- 1行入ったときだけカウントを更新する
 UPDATE users SET following_count = following_count + 1 WHERE id = :a;
 UPDATE users SET follower_count  = follower_count  + 1 WHERE id = :b;
 COMMIT;
 
 -- フォロー解除
 BEGIN;
-DELETE FROM follows WHERE follower_id = :a AND followee_id = :b;  -- 削除件数を確認
--- 1行消えたときだけ、関与する2行を id 昇順でロックしてから更新する
-SELECT id FROM users WHERE id IN (:a, :b) ORDER BY id FOR UPDATE;
+SELECT id FROM users WHERE id IN (:a, :b) ORDER BY id FOR NO KEY UPDATE;
+DELETE FROM follows WHERE follower_id = :a AND followee_id = :b
+  RETURNING follower_id;                          -- 返れば「実際に1行消えた」
+-- 1行消えたときだけカウントを更新する
 UPDATE users SET following_count = following_count - 1 WHERE id = :a;
 UPDATE users SET follower_count  = follower_count  - 1 WHERE id = :b;
 COMMIT;
 ```
+
+> **ロックの順序と強さ（2026-09-10 / Issue #66 で確定）**: `users` 行のロックは
+> **`follows` への INSERT / DELETE より前**に、**`FOR UPDATE` ではなく
+> `FOR NO KEY UPDATE`** で取る。`follows` への書き込みは、外部キーの整合性のために
+> PostgreSQL が参照先の `users` 行へ自動的に `FOR KEY SHARE`（共有ロック）を取る。
+> 同じ相手を同時にフォローする N 人が全員それを持った状態で、全員が
+> `FOR KEY SHARE` と衝突する `FOR UPDATE` へ昇格しようとすると**全員が待ち合って
+> デッドロック**になる（5 並列の結合テストで再現）。`FOR NO KEY UPDATE` は
+> `FOR KEY SHARE` と衝突せず、同種どうしだけが順番待ちになるため、主キーを変えない
+> カウント更新にはこちらが適切。
+>
+> **増減の判定は `RETURNING` で行う**（実行行数 `rowcount` は ORM 経由だと
+> -1 = 「不明」が返ることがあり、増減の取りこぼしにつながる）。
 
 - 同じユーザーへの同時フォローは `users` 行のロックで直列化される。**クライアントにエラーは返さず、再フォローも不要。**
 - `deadlock` / `serialization_failure` が起きたら**サーバー側で**トランザクションを数回リトライする（クライアントには見せない）。

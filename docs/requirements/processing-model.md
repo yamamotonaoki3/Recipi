@@ -164,7 +164,7 @@
 | 通知 | POST /notifications/read | `notifications.read_at` の一括 UPDATE | 同期 | — |
 | AI 校正（Phase 11） | POST /ai/proofread | DB 書き込みは無し（レート制限カウンタのみ）。プロバイダ呼び出しはタイムアウト付き・トランザクション外 | リクエストスコープ（**外部 I/O は Tx 外**）。クライアント UI は非同期（[ai-proofread.md](features/ai-proofread.md)） | `ai_usage` の集計 / 日次リセット（→ [todo.md](todo.md) #45） |
 
-> **通知の生成タイミング**: 上表の「成立時に `followed` / `recipe_favorited` / `recipe_commented` を同一 Tx で INSERT」は **Phase 8（通知）で発火元の書き込み経路に組み込む**。Phase 5〜7 の時点では `notifications` テーブルが無く通知行は作らない（[roadmap.md](roadmap.md)）。`followee_new_recipe` の fan-out も Phase 8。
+> **通知の生成タイミング**: 上表の「成立時に `followed` / `recipe_favorited` / `recipe_commented` を同一 Tx で INSERT」は、**発火元の機能を実装する Phase でそのまま組み込む**（2026-09-10 / Issue #66 で実装順を変更。`notifications` テーブルは Phase 5 の先頭で作る）。後から 3 つの service とその結合テストを書き直す手戻りを避けるため。Phase 8 に残るのは通知の**一覧 API** と `followee_new_recipe` の fan-out（outbox ＋ `BackgroundTasks` ＋ スイープ）。[roadmap.md](roadmap.md) も同じ。
 
 ## 7. 非同期後処理（`BackgroundTasks`）の台帳
 
