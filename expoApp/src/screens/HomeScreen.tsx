@@ -61,6 +61,19 @@ export function HomeScreen({ basePath }: { basePath: string }) {
   };
 
   /**
+   * 検索を確定する。検索ボタンと、キーボードの確定キー（`onSubmitEditing`）の
+   * 両方から呼ぶ。
+   *
+   * **確定手段をキーだけにしない**のは、Android では確定が IME のアクション
+   * でしか起きず、IME の実装や外部キーボードの有無に左右されるため
+   * （Android E2E が実際にここで詰まった。Issue #74）。押せるボタンがあれば
+   * 経路がひとつ増え、利用者にも「どうすれば検索できるか」が見える。
+   */
+  const submitSearch = () => {
+    setSubmittedQuery(input.trim());
+  };
+
+  /**
    * 入力が変わったときの処理。
    *
    * 「検索語を消すと通常フィード表示に戻る」（home.md §2）ので、**空にした
@@ -114,7 +127,7 @@ export function HomeScreen({ basePath }: { basePath: string }) {
           value={input}
           onChangeText={handleChangeText}
           ref={searchInputRef}
-          onSubmitEditing={() => setSubmittedQuery(input.trim())}
+          onSubmitEditing={submitSearch}
           placeholder="レシピ・材料で検索"
           returnKeyType="search"
           className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-base text-neutral-900"
@@ -129,6 +142,17 @@ export function HomeScreen({ basePath }: { basePath: string }) {
             <Text className="px-1 text-lg text-neutral-500">×</Text>
           </Pressable>
         )}
+        {/* 押して検索できる導線（home.md §5）。キーボードの確定キーだけに
+            頼らないためのもの（`submitSearch` のコメント参照）。 */}
+        <Pressable
+          testID="home-search-submit"
+          onPress={submitSearch}
+          accessibilityRole="button"
+          accessibilityLabel="検索"
+          className="rounded-lg bg-orange-500 px-3 py-2"
+        >
+          <Text className="text-sm font-semibold text-white">検索</Text>
+        </Pressable>
       </View>
 
       {/* サブタブ */}

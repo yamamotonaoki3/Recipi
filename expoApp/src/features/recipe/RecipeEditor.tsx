@@ -308,9 +308,23 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
   const unitOptions = units.data?.units ?? [];
 
   return (
-    // 画面ルートでステータスバーの inset を確保する（Issue #57 / #58）。
-    // ヘッダー側の `py-3` を上書きしないよう、パディングはここで足す。
-    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
+    // 画面ルートで上下のセーフエリアを確保する（上端: Issue #57 / #58、
+    // 下端: Issue #74）。ヘッダー側の `py-3` を上書きしないよう、
+    // パディングはここで足す。
+    //
+    // 下端が要るのは、この画面が**タブシェルの外**（モーダル）にあるため。
+    // タブ内の画面はボトムナビが `insets.bottom` を持っているので下に何も
+    // 敷かなくてよいが、モーダルには何も無く、`targetSdk 36` の edge-to-edge で
+    // 画面はナビゲーションバーの裏まで広がる。確保しないと ScrollView が
+    // 「画面の下端まで自分の領域」と解釈し、最下部までスクロールしても
+    // **末尾の約 48dp がナビゲーションバーの下から出てこない**（フォーム末尾の
+    // 公開スイッチが押せず、隠れたノードは a11y ツリーからも剪定されるため
+    // Android E2E からも触れなかった。Issue #74）。
+    <View
+      testID="editor-screen"
+      className="flex-1 bg-white"
+      style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+    >
       {/* 未保存の変更または画像処理中は iOS モーダルのスワイプ down を無効化する
           （スワイプで閉じると requestClose を通らず確認ダイアログが出ないため。
           Android のハードウェアバックは useUnsavedChangesGuard が横取りする）。 */}

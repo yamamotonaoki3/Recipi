@@ -93,6 +93,26 @@ describe("HomeScreen", () => {
     expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ q: "玉ねぎ" }));
   });
 
+  /**
+   * 確定の経路は「キーボードの確定キー」と「検索ボタン」の 2 つある。
+   * Android は確定が IME のアクションでしか起きず、Appium からは送れなかった
+   * ため、押せるボタンを足した（Issue #74）。両方の経路を固定しておく。
+   */
+  it("検索ボタンでも確定できる", async () => {
+    mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
+    const { findByText, findByTestId, getByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+
+    await fireEvent.changeText(getByTestId("home-search-input"), "玉ねぎ");
+    await fireEvent.press(getByTestId("home-search-submit"));
+
+    expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ q: "玉ねぎ" }));
+    expect(await findByTestId("home-search-chip")).toBeTruthy();
+  });
+
   it("複数語はそのまま q に載せる（分割はサーバー側の責務）", async () => {
     mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
     const { findByText, getByTestId } = await render(<HomeScreen basePath="/home" />, { wrapper });

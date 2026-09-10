@@ -40,6 +40,22 @@ jest.mock("../api", () => {
 
 jest.mock("@/features/image/api", () => ({ uploadImage: jest.fn() }));
 
+/**
+ * セーフエリアはテストごとに差し替えたいので、この spec だけ `jest.setup.js` の
+ * 共通モック（inset が全て 0 固定）を上書きする。共通モックの関数を
+ * `jest.spyOn` で差し替える方法は効かなかったため、可変の変数を読ませる。
+ * `jest.mock` のファクトリは import より上に巻き上げられるので、外側の変数は
+ * `mock` で始まる名前でなければ参照できない（Jest の制約）。
+ */
+let mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => mockInsets,
+  useSafeAreaFrame: () => ({ x: 0, y: 0, width: 320, height: 640 }),
+  SafeAreaProvider: ({ children }: { children: unknown }) => children,
+  SafeAreaView: ({ children }: { children: unknown }) => children,
+}));
+
 const mockGetUnits = recipeApi.getUnits as jest.Mock;
 const mockCreateRecipe = recipeApi.createRecipe as jest.Mock;
 const mockUploadImage = imageApi.uploadImage as jest.Mock;
@@ -484,5 +500,31 @@ describe("RecipeEditor（作成）", () => {
 
     await fireEvent.press(getByTestId("editor-discard-dialog-confirm"));
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
+  });
+});
+
+/**
+ * セーフエリア（Issue #74）。
+ *
+ * この画面はタブシェルの外（モーダル）にあり、下に何も敷かれていない。
+ * 下端の inset を確保しないと、edge-to-edge で広がった ScrollView の
+ * 末尾約 48dp がナビゲーションバーの下から出てこなくなり、フォーム末尾の
+ * 公開スイッチが押せなくなる（実際に Android E2E で起きた）。
+ *
+ * `jest.setup.js` の共通モックは inset が全て 0 なので、そのままでは
+ * 「足し忘れ」と区別が付かない。ここだけ下端を持つ端末に差し替える。
+ */
+describe("RecipeEditor（セーフエリア）", () => {
+  afterEach(() => {
+    // 他のテストに波及させないよう、inset の無い端末に戻す。
+    mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+  });
+
+  it("画面ルートに上下のセーフエリアを確保する", async () => {
+    mockInsets = { top: 24, right: 0, bottom: 48, left: 0 };
+
+    const { getByTestId } = await render(<RecipeEditor mode="create" />, { wrapper });
+
+    expect(getByTestId("editor-screen")).toHaveStyle({ paddingTop: 24, paddingBottom: 48 });
   });
 });
