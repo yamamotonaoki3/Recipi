@@ -158,7 +158,7 @@
 | 閲覧履歴 | GET / DELETE /users/me/history | 読み取り / 全削除 | 同期 | — |
 | フォロー | POST / DELETE follow | **1 Tx**: 関与 2 行を id 昇順で `FOR NO KEY UPDATE` でロック → `follows` INSERT（`ON CONFLICT DO NOTHING ... RETURNING`）/ DELETE（`RETURNING`）→ 実際に増減したときだけ `following_count` / `follower_count` 更新。成立時は `followed` 通知を同一 Tx で INSERT（[follow.md](features/follow.md)） | 同期 | カウント補正ジョブ |
 | お気に入り | POST / DELETE favorite | **1 Tx**: `recipes` 行を `FOR NO KEY UPDATE` でロック → `favorites` INSERT（`ON CONFLICT DO NOTHING ... RETURNING`）/ DELETE（`RETURNING`）→ 実際に増減したときだけ `recipes.favorite_count` 増減。成立かつ他人のレシピなら `recipe_favorited` 通知を同一 Tx で INSERT（[favorite.md](features/favorite.md)） | 同期 | カウント補正ジョブ |
-| 感想 | POST / DELETE comment | **1 Tx**: `recipe_comments` INSERT / DELETE ＋ `recipes.comment_count` 増減。新規投稿時は `recipe_commented` 通知を同一 Tx で INSERT。削除で外れた画像キーは同一 Tx で削除キューに登録（[comment.md](features/comment.md)） | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
+| 感想 | POST / DELETE comment | **1 Tx**: `recipes` 行を先に `FOR NO KEY UPDATE` でロック（削除・編集は recipes → recipe_comments の順）→ `recipe_comments` INSERT / DELETE ＋ `recipes.comment_count` 増減。新規投稿時は `recipe_commented` 通知を同一 Tx で INSERT。削除で外れた画像キーは同一 Tx で削除キューに登録（[comment.md](features/comment.md)） | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
 | 感想 | PATCH comment | `recipe_comments` UPDATE のみ（カウント不変・通知なし）。差し替え / 削除で外れた旧画像キーは同一 Tx で削除キューに登録 | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
 | 通知 | GET /notifications, GET /notifications/unread-count | 読み取りのみ（`unreadCount` も同時に返す。[non-functional.md](non-functional.md)） | 同期 | 古い通知の掃除（→ [todo.md](todo.md) #18） |
 | 通知 | POST /notifications/read | `notifications.read_at` の一括 UPDATE | 同期 | — |

@@ -106,6 +106,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Comment
+         * @description 感想の投稿者、またはレシピの投稿者が感想を削除する。
+         */
+        delete: operations["delete_comment_api_v1_comments__comment_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Comment
+         * @description 自分の感想の本文・画像を変える（送られた項目だけ）。
+         */
+        patch: operations["update_comment_api_v1_comments__comment_id__patch"];
+        trace?: never;
+    };
     "/api/v1/images": {
         parameters: {
             query?: never;
@@ -161,6 +185,30 @@ export interface paths {
         post?: never;
         /** Delete Recipe */
         delete: operations["delete_recipe_api_v1_recipes__recipe_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Comments
+         * @description そのレシピの感想を新しい順に返す。他人の非公開レシピは 404。
+         */
+        get: operations["list_comments_api_v1_recipes__recipe_id__comments_get"];
+        put?: never;
+        /**
+         * Create Comment
+         * @description 感想を投稿する（レシピ投稿者本人は 403）。
+         */
+        post: operations["create_comment_api_v1_recipes__recipe_id__comments_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -589,6 +637,71 @@ export interface components {
              * @description JPEG / PNG / WebP の画像 1 枚
              */
             file: string;
+        };
+        /**
+         * CommentCreateRequest
+         * @description `POST /recipes/{id}/comments` の body。本文は必須、画像は任意。
+         */
+        CommentCreateRequest: {
+            /** Body */
+            body: string;
+            /** Imagekey */
+            imageKey?: string | null;
+        };
+        /** CommentListResponse */
+        CommentListResponse: {
+            /** Items */
+            items: components["schemas"]["CommentResponse"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /**
+         * CommentResponse
+         * @description 感想 1 件（features/comment.md §5）。
+         *
+         *     `imageUrl` と `author.avatarUrl` は、保存したオブジェクトキーから組み立てる
+         *     表示用の派生値（features/image.md §4）。
+         */
+        CommentResponse: {
+            author: components["schemas"]["RecipeAuthor"];
+            /** Body */
+            body: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Imageurl */
+            imageUrl: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * CommentUpdateRequest
+         * @description `PATCH /comments/{id}` の body。**送られた項目だけ**を変える。
+         *
+         *     - `body`: 送られたら 1〜1000 文字で検証して置き換える。**null は送れない**
+         *       （本文は必須の列）。OpenAPI 上も「任意だが null ではない」にするため、
+         *       null を型から隠す `SkipJsonSchema[None]` を使う。`str | None` のままだと、
+         *       生成される frontend の型が `body: null` を許してしまい、実際には 400 になる
+         *       という契約の食い違いが起きる
+         *     - `image_key`: 省略 = 変更なし / 今と同じキー = 維持 / null = 削除 /
+         *       新しいキー = 差し替え（image.md §3）。null に意味があるので nullable
+         *     - どちらも送られていない `{}` は 400
+         */
+        CommentUpdateRequest: {
+            /** Body */
+            body?: string;
+            /** Imagekey */
+            imageKey?: string | null;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -1444,6 +1557,124 @@ export interface operations {
             };
         };
     };
+    delete_comment_api_v1_comments__comment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_comment_api_v1_comments__comment_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     upload_image_api_v1_images_post: {
         parameters: {
             query?: never;
@@ -1708,6 +1939,120 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_comments_api_v1_recipes__recipe_id__comments_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentListResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_comment_api_v1_recipes__recipe_id__comments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentResponse"];
+                };
             };
             /** @description リクエストの内容が不正です */
             400: {

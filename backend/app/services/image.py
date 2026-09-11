@@ -39,6 +39,7 @@ from app.config import settings
 from app.errors import AppError, validation_error
 from app.models.pending_storage_deletion import PendingStorageDeletion
 from app.models.upload import Upload
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -283,3 +284,45 @@ def build_object_key(extension: str) -> str:
     ランダムな UUID だけを使う。
     """
     return f"uploads/{uuid.uuid4()}.{extension}"
+
+
+def consume_upload_keys(
+    session: Session,
+    user: User,
+    keys: list[str],
+) -> None:
+    """本参照されるキーを検証し、`stored` → `consumed` に進める。
+
+    レシピ（サムネ・手順画像）と感想画像で共有する（以前は
+    app/services/recipe.py にあった）。呼び出し元と同じトランザクションで動く。
+
+    次のいずれかなら 400（features/image.md §3・§7）:
+    - 存在しないキー
+    - 他人がアップロードしたキー
+    - すでに別のリソースに紐付いている（＝ `consumed` 済みの）キー
+
+    `with_for_update()`（SELECT ... FOR UPDATE）で行をロックしてから状態を
+    見るのは、GC や別リクエストが同じ行を同時に触るのを直列化するため。
+    ロックせずに「読んでから書く」と、その間に GC が消してしまう競合が起きうる
+    （processing-model.md §9）。
+    """
+    # 複数の行を入力された順にロックすると、リクエスト 1 が [A, B]、リクエスト 2
+    # が [B, A] のときに、お互いが相手のロックを待ち続けるデッドロックになる。
+    # 常に同じ順序でロックすれば、一方は最初のロック取得で待つため、先に進んだ
+    # リクエストがキーを consumed にした後、待っていた側は「使用済み」と判定できる。
+    # ソートするのはロックを取る順序だけで、エラー表示と状態変更は入力順を保つ。
+    uploads_by_key: dict[str, Upload | None] = {}
+    for key in sorted(keys):
+        uploads_by_key[key] = session.exec(
+            select(Upload).where(Upload.key == key).with_for_update()
+        ).first()
+
+    for key in keys:
+        upload = uploads_by_key[key]
+        if upload is None or upload.user_id != user.id or upload.status != "stored":
+            raise validation_error(
+                "指定された画像は使用できません（存在しない / 他のユーザーのもの / 既に使用済み）",
+                {"imageKey": key},
+            )
+        upload.status = "consumed"
+        session.add(upload)

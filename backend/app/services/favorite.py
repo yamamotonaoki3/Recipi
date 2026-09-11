@@ -51,7 +51,7 @@ from app.models.user import User
 from app.schemas.recipe import RecipeFeedItem, RecipeFeedResponse
 from app.services.image import image_url
 from app.services.notification import create_single_notification
-from app.services.recipe import apply_search_terms, author_of, resolve_authors
+from app.services.recipe import apply_search_terms, author_of, lock_recipe, resolve_authors
 
 # --- カーソル（(favorites.created_at, recipe_id) の複合） -----------------
 #
@@ -80,22 +80,6 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
 # --- 登録 / 解除 -------------------------------------------------------
 
 
-def _lock_recipe(session: Session, recipe_id: uuid.UUID) -> Recipe | None:
-    """レシピの行を `FOR NO KEY UPDATE` でロックして、DB の最新値で読む。
-
-    `populate_existing` は「同じ行がセッションに読み込み済みでも、DB から読み直した
-    値で上書きする」指定。同じセッションで同じ行を select し直しても古い Python
-    オブジェクトが返る、という SQLAlchemy の落とし穴を避ける（lessons-learned
-    2026-09-11）。公開 / 非公開の判定は、ロックを取った時点の値で行いたい。
-    """
-    return session.exec(
-        select(Recipe)
-        .where(Recipe.id == recipe_id)
-        .with_for_update(key_share=True)
-        .execution_options(populate_existing=True)
-    ).first()
-
-
 def favorite(session: Session, user: User, recipe_id: uuid.UUID) -> None:
     """`user` が `recipe_id` をお気に入りに登録する（features/favorite.md §5）。
 
@@ -105,7 +89,7 @@ def favorite(session: Session, user: User, recipe_id: uuid.UUID) -> None:
     - 他人のレシピなら、投稿者に `recipe_favorited` 通知を同じトランザクションで作る
     """
     # ロックは INSERT より先（モジュール冒頭の 1）。
-    recipe = _lock_recipe(session, recipe_id)
+    recipe = lock_recipe(session, recipe_id)
     if recipe is None or (not recipe.is_public and recipe.user_id != user.id):
         raise not_found("レシピが見つかりません")
 
@@ -152,7 +136,7 @@ def unfavorite(session: Session, user: User, recipe_id: uuid.UUID) -> None:
     """
     # 登録と同じ理由で、ロックは DELETE より先（DELETE も外部キーのために
     # 参照先へ `FOR KEY SHARE` を取るため）。
-    recipe = _lock_recipe(session, recipe_id)
+    recipe = lock_recipe(session, recipe_id)
     if recipe is None:
         # レシピが削除済みなら、ON DELETE CASCADE で行もすでに無い。
         return

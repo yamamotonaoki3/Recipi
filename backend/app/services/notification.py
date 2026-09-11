@@ -39,6 +39,7 @@ def create_single_notification(
     type: NotificationType,
     actor_id: uuid.UUID,
     recipe_id: uuid.UUID | None = None,
+    comment_id: uuid.UUID | None = None,
 ) -> Notification | None:
     """単一行の通知を 1 件作る。自分あて（受信者 = 行為者）なら作らず `None`。
 
@@ -55,6 +56,7 @@ def create_single_notification(
         type=type,
         actor_id=actor_id,
         recipe_id=recipe_id,
+        comment_id=comment_id,
     )
     session.add(notification)
     return notification

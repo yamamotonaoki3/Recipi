@@ -22,7 +22,8 @@
 
 テーブルと「単一行の通知を作るヘルパー」（app/services/notification.py）まで。
 一覧 API（`GET /notifications`）と fan-out は Phase 8 の Issue で足す。
-`comment_id` 列は参照先の `recipe_comments` がまだ無いため、感想の Issue で追加する。
+`comment_id` 列は Issue #66 の時点では参照先の `recipe_comments` が無く作れなかった
+ため、感想の Issue #69 で追加した。
 
 ## `read_at` が NULL = 未読
 
@@ -79,6 +80,7 @@ class Notification(SQLModel, table=True):
         # 行為者・レシピが消えたときの ON DELETE CASCADE 用（FK 列は自動 index されない）。
         sa.Index("ix_notifications_actor_id", "actor_id"),
         sa.Index("ix_notifications_recipe_id", "recipe_id"),
+        sa.Index("ix_notifications_comment_id", "comment_id"),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -95,6 +97,15 @@ class Notification(SQLModel, table=True):
     recipe_id: uuid.UUID | None = Field(
         default=None,
         foreign_key="recipes.id",
+        nullable=True,
+        ondelete="CASCADE",
+    )
+
+    # 感想の通知（`recipe_commented`）で、どの感想かを指す（Issue #69 で追加）。
+    # 他の種類では NULL。感想が消えたら通知も消える（ON DELETE CASCADE）。
+    comment_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="recipe_comments.id",
         nullable=True,
         ondelete="CASCADE",
     )

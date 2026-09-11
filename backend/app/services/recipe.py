@@ -28,9 +28,9 @@ from app.models.follow import Follow
 from app.models.ingredient import Ingredient
 from app.models.ingredient_group import IngredientGroup
 from app.models.recipe import Recipe
+from app.models.recipe_comment import RecipeComment
 from app.models.step import Step
 from app.models.unit import Unit
-from app.models.upload import Upload
 from app.models.user import User
 from app.schemas.recipe import (
     MAX_SEARCH_TERM_LENGTH,
@@ -48,7 +48,7 @@ from app.schemas.recipe import (
     StepInput,
     StepOutput,
 )
-from app.services.image import enqueue_object_deletion, image_url
+from app.services.image import consume_upload_keys, enqueue_object_deletion, image_url
 from app.text_normalize import normalize_search_text, split_search_terms
 
 
@@ -91,6 +91,26 @@ def resolve_favorited_flags(
         )
     ).all()
     return set(rows)
+
+
+def lock_recipe(session: Session, recipe_id: uuid.UUID) -> Recipe | None:
+    """レシピの行を `FOR NO KEY UPDATE` でロックして、DB の最新値で読む。
+
+    カウント列（`favorite_count` / `comment_count`）を増減する処理が、子テーブル
+    （`favorites` / `recipe_comments`）へ書き込む**前に**呼ぶ（non-functional.md
+    「カウント列キャッシュのトランザクション方針」）。お気に入りと感想で共有する。
+
+    `populate_existing` は「同じ行がセッションに読み込み済みでも、DB から読み直した
+    値で上書きする」指定。同じセッションで同じ行を select し直しても古い Python
+    オブジェクトが返る、という SQLAlchemy の落とし穴を避ける（lessons-learned
+    2026-09-11）。公開 / 非公開の判定は、ロックを取った時点の値で行いたい。
+    """
+    return session.exec(
+        select(Recipe)
+        .where(Recipe.id == recipe_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    ).first()
 
 
 # --- 単位の自動 upsert -------------------------------------------------
@@ -264,45 +284,6 @@ def _rebuild_children(
 # 漏れると GC が使用中の画像を消してしまうし、2 が漏れると孤児が残り続ける。
 
 
-def _consume_upload_keys(
-    session: Session,
-    user: User,
-    keys: list[str],
-) -> None:
-    """本参照されるキーを検証し、`stored` → `consumed` に進める。
-
-    次のいずれかなら 400（features/image.md §3・§7）:
-    - 存在しないキー
-    - 他人がアップロードしたキー
-    - すでに別のリソースに紐付いている（＝ `consumed` 済みの）キー
-
-    `with_for_update()`（SELECT ... FOR UPDATE）で行をロックしてから状態を
-    見るのは、GC や別リクエストが同じ行を同時に触るのを直列化するため。
-    ロックせずに「読んでから書く」と、その間に GC が消してしまう競合が起きうる
-    （processing-model.md §9）。
-    """
-    # 複数の行を入力された順にロックすると、リクエスト 1 が [A, B]、リクエスト 2
-    # が [B, A] のときに、お互いが相手のロックを待ち続けるデッドロックになる。
-    # 常に同じ順序でロックすれば、一方は最初のロック取得で待つため、先に進んだ
-    # リクエストがキーを consumed にした後、待っていた側は「使用済み」と判定できる。
-    # ソートするのはロックを取る順序だけで、エラー表示と状態変更は入力順を保つ。
-    uploads_by_key: dict[str, Upload | None] = {}
-    for key in sorted(keys):
-        uploads_by_key[key] = session.exec(
-            select(Upload).where(Upload.key == key).with_for_update()
-        ).first()
-
-    for key in keys:
-        upload = uploads_by_key[key]
-        if upload is None or upload.user_id != user.id or upload.status != "stored":
-            raise validation_error(
-                "指定された画像は使用できません（存在しない / 他のユーザーのもの / 既に使用済み）",
-                {"imageKey": key},
-            )
-        upload.status = "consumed"
-        session.add(upload)
-
-
 def _new_image_keys(
     *,
     thumbnail_key: str | None,
@@ -362,7 +343,7 @@ def create_recipe(session: Session, user: User, body: RecipeWriteRequest) -> Rec
     cleaned_steps = _clean_steps(body.steps)  # 早期に「手順 0 件」を弾く
 
     # 新規作成なので既存の参照は無い。指定された画像キーはすべて新規消費。
-    _consume_upload_keys(
+    consume_upload_keys(
         session,
         user,
         _new_image_keys(
@@ -433,7 +414,7 @@ def replace_recipe(
 
     # 既にこのレシピが持っているキーの再送は「維持」なので再検証しない
     # （既に consumed なので、検証に回すと 400 になってしまう）。
-    _consume_upload_keys(session, user, [k for k in new_keys if k not in old_keys])
+    consume_upload_keys(session, user, [k for k in new_keys if k not in old_keys])
 
     # 逆に、今回の body に出てこなくなった旧キーは参照から外れる。
     for orphan in old_keys - set(new_keys):
@@ -461,9 +442,9 @@ def delete_recipe(session: Session, recipe: Recipe) -> None:
     - このレシピを `ref_recipe_id` で参照している材料（＝投稿者本人の他レシピの
       材料）は、FK の ON DELETE SET NULL で `ref_recipe_id` だけ NULL になり、
       材料行と `ref_recipe_title`（スナップショット）は残る（features/recipe.md §3）。
-    - サムネ / 手順画像は **CASCADE で行が消える前に**キーを集めて削除キューに
-      積む。行が消えた後ではキーを取り出せないため、順序が重要
-      （processing-model.md §9）。感想画像の分は Phase 7 で足す。
+    - サムネ / 手順画像 / **感想画像**は、**CASCADE で行が消える前に**キーを集めて
+      削除キューに積む。行が消えた後ではキーを取り出せないため、順序が重要
+      （processing-model.md §9）。感想画像は Issue #69 で追加した。
     """
     # キーを読む前に親の Recipe 行をロックし、PUT と DELETE を同じレシピ単位で直列化する。
     # 先に古いキーを読んでからロックすると、PUT の完了を待った後に CASCADE で消える
@@ -475,6 +456,18 @@ def delete_recipe(session: Session, recipe: Recipe) -> None:
     for key in _existing_step_image_keys(session, recipe):
         enqueue_object_deletion(session, key, "recipe_deleted")
     enqueue_object_deletion(session, recipe.thumbnail_key, "recipe_deleted")
+
+    # 感想画像。レシピ行をロックした後に読むので、同時に投稿された感想も取りこぼさない
+    # （感想の投稿も同じレシピ行のロックを通るため、投稿が先ならここで見える。
+    # 削除が先なら、投稿側はロック後にレシピが無いことを知って 404 になる）。
+    comment_image_keys = session.exec(
+        select(RecipeComment.image_key).where(
+            RecipeComment.recipe_id == recipe.id,
+            RecipeComment.image_key.is_not(None),  # type: ignore[union-attr]
+        )
+    ).all()
+    for comment_key in comment_image_keys:
+        enqueue_object_deletion(session, comment_key, "recipe_deleted")
 
     session.delete(recipe)
 

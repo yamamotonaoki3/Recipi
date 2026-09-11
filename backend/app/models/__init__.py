@@ -16,6 +16,7 @@ from app.models.notification import Notification
 from app.models.password_reset_attempt import PasswordResetAttempt
 from app.models.pending_storage_deletion import PendingStorageDeletion
 from app.models.recipe import Recipe
+from app.models.recipe_comment import RecipeComment
 from app.models.recipe_view import RecipeView
 from app.models.refresh_token import RefreshToken
 from app.models.step import Step
@@ -32,6 +33,7 @@ __all__ = [
     "PasswordResetAttempt",
     "PendingStorageDeletion",
     "Recipe",
+    "RecipeComment",
     "RecipeView",
     "RefreshToken",
     "Step",
