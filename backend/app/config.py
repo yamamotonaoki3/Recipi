@@ -97,6 +97,8 @@ class Settings(BaseSettings):
     #
     # 環境変数で上書きできるようにしているのは、結合テストで極端に短くして
     # GC の挙動（24 時間待たずに）を検証するため。
+    # pending の寿命は PUT にかかる最大時間（app/storage.py のタイムアウト × リトライ、数分）
+    # より十分長くすること。アカウント削除の遅延削除がこれを前提にしている（Issue #71）。
     UPLOAD_PENDING_TTL_SECONDS: int = 3600  # 1 時間
     UPLOAD_STORED_TTL_SECONDS: int = 86400  # 24 時間
 

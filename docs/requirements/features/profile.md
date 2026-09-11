@@ -49,6 +49,8 @@
   - 削除は**単一のアプリケーショントランザクション**で行う。削除前に `users.token_version` を原子的に `+1` する。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（共通方針は [non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」、処理方式全体は [processing-model.md](../processing-model.md) §6）。
   - 削除で本人の `recipes`（→ `ingredients` / `steps` / その `recipe` への `favorites` / `recipe_comments`）、`follows`（`follower_id` = me と `followee_id` = me の両方向）、`favorites`（`user_id` = me）、`recipe_comments`（`user_id` = me）、`refresh_tokens`（`user_id` = me）、`notifications`（`user_id` = me と `actor_id` = me）を CASCADE 削除。
   - **CASCADE 削除の前に**、消えるサムネ・手順画像・**感想画像**・アバター、および本人所有で未消費の一時アップロード（`uploads` の `pending` / `stored`）のキーを集めて削除キューに INSERT する（同一トランザクション内。行が消えた後ではキーを取り出せない。[../processing-model.md](../processing-model.md) §6・§9）。ストレージからの実削除は定期バッチ。
+  - 実装（Issue #71）: 本人行を `FOR UPDATE` → `token_version` +1 → 関係者の users・関係レシピ・本人の未使用 uploads を id 順にロック → 画像キーを削除キューへ（reason `account_deleted`。`pending` は `delete_after` で遅延）→ 他人のカウント列を減算 → `DELETE FROM users`（CASCADE）。デッドロックは `run_with_retry()` がやり直す。同時に 2 回退会した 2 件目は 401。`password_reset_attempts`（users への FK なし・レート制限の記録）は削除しない
+  - 退会する本人が削除と同時に送った別の書き込み（お気に入り・感想・閲覧記録）は外部キー違反で 500 になりうる（データは壊れない）。レシピ作成は本人行を先に確認して 401、画像アップロードは 401 / 500（孤児は残さない）
   - 削除は成功時 204。既発行のアクセストークンは、認証依存性のユーザー存在チェック（および削除前の `token_version` 加算）により以降 401 になる。リフレッシュトークンは CASCADE 削除される。専用の冪等機構は設けない（トークン検証の共通方針は [auth.md](auth.md)）。
 
 ## 4. データモデル

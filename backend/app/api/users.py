@@ -31,6 +31,7 @@ from app.schemas.follow import (
 from app.schemas.image import AvatarResponse
 from app.schemas.recipe import HistoryResponse
 from app.schemas.user import UpdateMeRequest, UserMeResponse
+from app.services import account as account_service
 from app.services import follow as follow_service
 from app.services import history as history_service
 from app.services import user as user_service
@@ -54,6 +55,25 @@ def update_me(
     # 応答を返す前に commit する（ファイル冒頭のコメント）。
     session.commit()
     return user_service.me_response(current_user)
+
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_error_responses(401),
+)
+def delete_me(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """アカウントを削除する（features/profile.md §5。確認はクライアントのダイアログ）。
+
+    本人のデータは CASCADE で消え、画像は削除キューへ、他人のカウント列は同じ
+    トランザクションで減らす（app/services/account.py）。デッドロックで中断されたら
+    `run_with_retry` がやり直す。以降、同じトークンでのリクエストは 401 になる。
+    """
+    run_with_retry(session, lambda: account_service.delete_account(session, current_user))
+    return None
 
 
 @router.put("/me/avatar", responses=_error_responses(400, 401, 500))

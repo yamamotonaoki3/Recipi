@@ -24,9 +24,10 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, update
-from sqlmodel import Session, select
+from sqlmodel import Session, col, or_, select
 
 from app import storage
 from app.config import settings
@@ -56,7 +57,14 @@ def process_queue(session: Session, *, limit: int = BATCH_SIZE) -> tuple[int, in
         (row_id, key)
         for row_id, key in session.exec(
             select(PendingStorageDeletion.id, PendingStorageDeletion.key)
-            .where(PendingStorageDeletion.attempts < MAX_ATTEMPTS)
+            .where(
+                PendingStorageDeletion.attempts < MAX_ATTEMPTS,
+                # 「この時刻より後に消す」が付いた行は、その時刻を過ぎるまで待つ（Issue #71）。
+                or_(
+                    col(PendingStorageDeletion.delete_after).is_(None),
+                    col(PendingStorageDeletion.delete_after) <= datetime.now(UTC),
+                ),
+            )
             .order_by(
                 PendingStorageDeletion.attempts,  # type: ignore[arg-type]
                 PendingStorageDeletion.enqueued_at,  # type: ignore[arg-type]

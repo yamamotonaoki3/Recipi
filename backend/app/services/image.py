@@ -32,11 +32,12 @@ from datetime import UTC, datetime, timedelta
 from typing import BinaryIO, Final
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app import storage
 from app.config import settings
-from app.errors import AppError, validation_error
+from app.errors import AppError, unauthorized, validation_error
 from app.models.pending_storage_deletion import PendingStorageDeletion
 from app.models.upload import Upload
 from app.models.user import User
@@ -173,7 +174,9 @@ def _save(image: Image.Image, buffer: io.BytesIO, image_format: str) -> None:
         image.save(buffer, format="WEBP", quality=85, method=4)
 
 
-def enqueue_object_deletion(session: Session, key: str | None, reason: str) -> None:
+def enqueue_object_deletion(
+    session: Session, key: str | None, reason: str, *, delete_after: datetime | None = None
+) -> None:
     """参照から外れたオブジェクトキーを削除キューに積む（`None` は何もしない）。
 
     **実際のストレージ削除はここでは行わない**。定期ジョブ
@@ -190,7 +193,7 @@ def enqueue_object_deletion(session: Session, key: str | None, reason: str) -> N
     if not key:
         return
 
-    session.add(PendingStorageDeletion(key=key, reason=reason))
+    session.add(PendingStorageDeletion(key=key, reason=reason, delete_after=delete_after))
 
     upload = session.exec(select(Upload).where(Upload.key == key)).first()
     if upload is not None:
@@ -262,7 +265,13 @@ def stage_upload(session: Session, user_id: uuid.UUID, image: ProcessedImage) ->
             created_at=now,
         )
     )
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # 本人の users 行が消えていた（アカウント削除と同時だった）。外部キーの確認で
+        # 退会のコミットを待ち、行が無いので失敗する。まだ PUT していないので何も残らない。
+        session.rollback()
+        raise unauthorized("ユーザーが見つかりません") from None
 
     # --- ② Tx 外: オブジェクトを保存する --------------------------------
     try:
@@ -272,6 +281,17 @@ def stage_upload(session: Session, user_id: uuid.UUID, image: ProcessedImage) ->
         # ここで後始末をする必要はない（できることも無い）。
         logger.exception("オブジェクトの保存に失敗しました key=%s", key)
         raise AppError(500, "STORAGE_ERROR", "画像の保存に失敗しました") from None
+
+    # --- ②' PUT 後の自己点検（Issue #71） ------------------------------
+    # PUT している間に、アカウント削除（や GC）がこの pending 行を削除キューへ移して
+    # いたら、今置いたオブジェクトは誰にも管理されていない。PUT がどれだけ遅れても
+    # 孤児を残さないよう、行が無くなっていたらキーをもう一度削除キューに積んで失敗にする
+    # （直接は消さない。失敗時は削除キューへ、が processing-model.md §9 の決まり）。
+    still_tracked = session.exec(select(Upload.id).where(Upload.key == key)).first()
+    if still_tracked is None:
+        session.add(PendingStorageDeletion(key=key, reason="upload_untracked_after_put"))
+        session.commit()
+        raise AppError(500, "STORAGE_ERROR", "画像の保存に失敗しました")
 
     return key
 

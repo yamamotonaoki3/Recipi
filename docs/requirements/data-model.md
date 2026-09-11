@@ -158,7 +158,7 @@ erDiagram
 
 > 一時アップロードは所有者と使用状態を保持する（例: `uploads` テーブル。状態 `pending` → `stored` → 消費、`user_id`）。キーはアップロード前に行 INSERT で確定し、オブジェクトだけが存在して行が無い状態を作らない（[processing-model.md](processing-model.md) §9）。具体スキーマは Phase 3 で確定（→ [todo.md](todo.md) #32）。
 
-> **ストレージ削除キュー**: 参照から外れたオブジェクトキー（差し替え / 削除された画像）をためて定期バッチで実削除するためのキュー（`pending_storage_deletions` 仮、または `uploads` に状態列を追加）。**キューへの登録は参照を外す書き込みと同一トランザクション**、S3 / MinIO への実 DELETE だけが定期バッチ（[processing-model.md](processing-model.md) §5・§9 / [todo.md](todo.md) #32）。
+> **ストレージ削除キュー**: 参照から外れたオブジェクトキー（差し替え / 削除された画像）をためて定期バッチで実削除するためのキュー（`pending_storage_deletions`。`delete_after` NULL 可 = この時刻まで実削除しない。Issue #71）。**キューへの登録は参照を外す書き込みと同一トランザクション**、S3 / MinIO への実 DELETE だけが定期バッチ（[processing-model.md](processing-model.md) §5・§9 / [todo.md](todo.md) #32）。
 
 > **通知 fan-out の outbox**: `followee_new_recipe` の配布は、公開レシピ作成トランザクション内で `notification_outbox` に 1 行書き（発火とアトミック）、コミット後に `BackgroundTasks` が配布、落ちた分を定期スイープが回収する（Phase 8。[processing-model.md](processing-model.md) §7・§9、[features/notification.md](features/notification.md)）。
 
