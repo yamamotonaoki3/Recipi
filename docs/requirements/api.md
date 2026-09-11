@@ -115,9 +115,9 @@
 
 | メソッド | パス | 認証 | 概要 |
 | --- | --- | --- | --- |
-| GET | `/recipes/{id}/comments` | 任意 | 感想一覧（新しい順、カーソルページング / 無限スクロール） |
+| GET | `/recipes/{id}/comments` | 任意 | 感想一覧（新しい順、カーソルページング / 無限スクロール。`limit` 既定 20・1〜50） |
 | POST | `/recipes/{id}/comments` | 必要 | 感想投稿。body に `body` ＋ `imageKey`（任意）。レシピ投稿者本人は 403、非公開レシピは 404 |
-| PATCH | `/comments/{commentId}` | 必要 | 感想編集（投稿者本人のみ）。`body` / `imageKey`（省略 = 変更なし、同じ既存キー = 維持、`null` = 削除、未使用キー = 差し替え） |
+| PATCH | `/comments/{commentId}` | 必要 | 感想編集（投稿者本人のみ）。`body` / `imageKey`（省略 = 変更なし、同じ既存キー = 維持、`null` = 削除、未使用キー = 差し替え。`body: null` と `{}` は 400） |
 | DELETE | `/comments/{commentId}` | 必要 | 感想削除（感想の投稿者 or レシピの投稿者）。感想画像もストレージ削除ジョブ対象 |
 
 ### 通知 — [features/notification.md](features/notification.md)

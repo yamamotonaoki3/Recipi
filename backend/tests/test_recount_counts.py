@@ -16,10 +16,16 @@ from sqlalchemy import text, update
 from sqlmodel import Session, select
 
 from app.db import engine
-from app.jobs.recount_counts import main, recount_favorite_counts, recount_follow_counts
+from app.jobs.recount_counts import (
+    main,
+    recount_comment_counts,
+    recount_favorite_counts,
+    recount_follow_counts,
+)
 from app.models.favorite import Favorite
 from app.models.follow import Follow
 from app.models.recipe import Recipe
+from app.models.recipe_comment import RecipeComment
 from app.models.user import User
 from tests.helpers import recipe_payload, signup
 
@@ -295,3 +301,90 @@ def test_recount_retries_after_concurrent_favorite_commit(
     if thread_errors:
         raise thread_errors[0]
     assert _favorite_count(db_session, rid) == 1
+
+
+# --- 感想数（Issue #69） ---------------------------------------------------------
+
+
+def _comment_count(session: Session, recipe_id: uuid.UUID) -> int:
+    session.expire_all()
+    recipe = session.get(Recipe, recipe_id)
+    assert recipe is not None
+    return recipe.comment_count
+
+
+def test_recount_fixes_drifted_comment_count(client: TestClient, db_session: Session) -> None:
+    """`recipes.comment_count` がずれていたら `recipe_comments` の実数に戻す。"""
+    owner_headers, _ = _make_user(client)
+    rid = _create_recipe(client, owner_headers)
+    fan_headers, _ = _make_user(client)
+    for i in range(2):
+        res = client.post(
+            f"/api/v1/recipes/{rid}/comments", json={"body": f"感想{i}"}, headers=fan_headers
+        )
+        assert res.status_code == 201, res.text
+
+    db_session.execute(update(Recipe).where(Recipe.id == rid).values(comment_count=99))  # type: ignore[arg-type]
+    db_session.commit()
+
+    fixed = recount_comment_counts(db_session)
+    db_session.commit()
+
+    assert fixed >= 1
+    assert _comment_count(db_session, rid) == 2
+    # 2 回目はこのレシピを直さない（冪等）。
+    recount_comment_counts(db_session)
+    db_session.commit()
+    assert _comment_count(db_session, rid) == 2
+
+
+def test_recount_retries_after_concurrent_comment_commit(
+    client: TestClient, db_session: Session
+) -> None:
+    """感想投稿の `recipes` ロックを待っても、コミット後の実数で補正し直す。"""
+    owner_headers, _ = _make_user(client)
+    _, fan_id = _make_user(client)
+    rid = _create_recipe(client, owner_headers)
+
+    db_session.execute(update(Recipe).where(Recipe.id == rid).values(comment_count=99))  # type: ignore[arg-type]
+    db_session.commit()
+
+    thread_errors: list[BaseException] = []
+
+    def run_recount() -> None:
+        try:
+            main()
+        except BaseException as exc:  # noqa: BLE001  スレッド内の失敗を親へ渡す
+            thread_errors.append(exc)
+
+    with Session(engine) as comment_session:
+        # 本物の感想投稿と同じ順序・ロックの種類で、先にレシピ行をロックする。
+        comment_session.exec(
+            select(Recipe.id).where(Recipe.id == rid).with_for_update(key_share=True)
+        ).one()
+        comment_session.add(RecipeComment(recipe_id=rid, user_id=fan_id, body="[TEST] 並行"))
+        comment_session.flush()
+        comment_session.execute(
+            update(Recipe)
+            .where(Recipe.id == rid)  # type: ignore[arg-type]
+            .values(comment_count=Recipe.comment_count + 1)
+        )
+
+        recount_thread = Thread(target=run_recount)
+        recount_thread.start()
+        try:
+            deadline = monotonic() + 10
+            while not _recount_is_waiting_for_recipe_lock() and monotonic() < deadline:
+                sleep(0.01)
+            assert _recount_is_waiting_for_recipe_lock()
+            comment_session.commit()
+        finally:
+            if comment_session.in_transaction():
+                comment_session.rollback()
+
+        recount_thread.join(timeout=10)
+
+    assert not recount_thread.is_alive()
+    if thread_errors:
+        raise thread_errors[0]
+    assert _comment_count(db_session, rid) == 1

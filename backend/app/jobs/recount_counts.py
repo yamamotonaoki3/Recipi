@@ -30,8 +30,7 @@ Phase 10）。
 数え直す対象:
 - `users.following_count` / `follower_count` ← `follows`（Issue #66）
 - `recipes.favorite_count` ← `favorites`（Issue #68）
-
-感想（`recipes.comment_count`）の補正は、感想の Issue でこのファイルに追加する。
+- `recipes.comment_count` ← `recipe_comments`（Issue #69）
 """
 
 from __future__ import annotations
@@ -47,6 +46,7 @@ from app.logging_config import configure_logging
 from app.models.favorite import Favorite
 from app.models.follow import Follow
 from app.models.recipe import Recipe
+from app.models.recipe_comment import RecipeComment
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -116,9 +116,35 @@ def recount_favorite_counts(session: Session) -> int:
     return result.rowcount or 0
 
 
-def _recount_all(session: Session) -> tuple[int, int]:
-    """補正する列をすべて数え直す（1 つのトランザクションの中で呼ぶ）。"""
-    return recount_follow_counts(session), recount_favorite_counts(session)
+def recount_comment_counts(session: Session) -> int:
+    """`recipe_comments` の実数から `recipes.comment_count` を数え直す（作りは他と同じ）。"""
+    comment_expr = (
+        select(func.count())
+        .select_from(RecipeComment)
+        .where(RecipeComment.recipe_id == Recipe.id)  # type: ignore[arg-type]
+        .scalar_subquery()
+    )
+    result = cast(
+        "CursorResult[Any]",
+        session.execute(
+            update(Recipe)
+            .where(Recipe.comment_count != comment_expr)  # type: ignore[arg-type]
+            .values(comment_count=comment_expr)
+        ),
+    )
+    return result.rowcount or 0
+
+
+def _recount_all(session: Session) -> tuple[int, int, int]:
+    """補正する列をすべて数え直す（1 つのトランザクションの中で呼ぶ）。
+
+    戻り値は (users を直した行数, favorite_count を直した行数, comment_count を直した行数)。
+    """
+    return (
+        recount_follow_counts(session),
+        recount_favorite_counts(session),
+        recount_comment_counts(session),
+    )
 
 
 def main() -> None:
@@ -140,10 +166,16 @@ def main() -> None:
     # お気に入りの登録と競合したときも、フォローと同じ理由で上書きを防げる
     # （`recipes` 行のロックを待った UPDATE が serialization failure → やり直し）。
     with Session(recount_engine) as session:
-        users_fixed, recipes_fixed = run_with_retry(session, lambda: _recount_all(session))
+        users_fixed, favorites_fixed, comments_fixed = run_with_retry(
+            session, lambda: _recount_all(session)
+        )
     logger.info(
         "recount finished",
-        extra={"users_fixed": users_fixed, "recipes_fixed": recipes_fixed},
+        extra={
+            "users_fixed": users_fixed,
+            "favorites_fixed": favorites_fixed,
+            "comments_fixed": comments_fixed,
+        },
     )
 
 
