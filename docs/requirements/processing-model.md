@@ -147,7 +147,7 @@
 | プロフィール | PATCH /users/me | `users` UPDATE のみ | 同期 | — |
 | プロフィール | アバター PUT | `POST /images` と同じ段階方式: ①新キーの管理行を `pending` で INSERT → ②オブジェクトを PUT → ③**1 Tx**で `users.avatar_key` を新キーに更新 ＋ 旧キーを削除キューに登録 ＋ 新キーの管理行を消費済みに。②③失敗時は新キー行が未参照のまま残り GC が回収（§9） | 同期（②の PUT と③の削除キュー登録を含む） | ストレージ削除ジョブ・一時アップロード GC |
 | プロフィール | アバター DELETE | **1 Tx**: `users.avatar_key` を NULL に ＋ 旧キーを削除キューに登録 | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
-| プロフィール | アカウント削除（DELETE /users/me） | **単一 Tx**: `token_version` +1 → **CASCADE 削除の前に、消えるレシピ / 手順 / 感想 / アバターの画像キー ＋ 本人所有で未消費の `uploads`（`pending` / `stored`）のキーを全て集めて削除キューに INSERT** → CASCADE 削除 → 生き残る他ユーザー / 他レシピのカウント列を減算 or ピンポイントに数え直し → COMMIT（[non-functional.md](non-functional.md) / [profile.md](features/profile.md) / [data-model.md](data-model.md)） | 同期 | カウント補正ジョブ（多層防御）・ストレージ削除ジョブ（画像） |
+| プロフィール | アカウント削除（DELETE /users/me） | **単一 Tx**: 本人行を `FOR UPDATE`（本人に関係する行の新規作成を止める）→ `token_version` +1 → 関係者の users → 関係レシピ → 本人の未使用 uploads を id 順にロック → **CASCADE 削除の前に、消えるレシピ / 手順 / 感想 / アバターの画像キー ＋ 本人所有で未消費の `uploads`（`pending` / `stored`）のキーを全て集めて削除キューに INSERT**（`pending` は `delete_after` で実削除を遅らせる）→ 生き残る他ユーザー / 他レシピのカウント列を**減算**（行が消える前に）→ CASCADE 削除 → COMMIT（Issue #71 で実装）（[non-functional.md](non-functional.md) / [profile.md](features/profile.md) / [data-model.md](data-model.md)） | 同期 | カウント補正ジョブ（多層防御）・ストレージ削除ジョブ（画像） |
 | レシピ | POST / PUT | **1 Tx**: `recipes` ＋ `ingredient_groups` ＋ `ingredients`（全入れ替え）＋ `steps`（全入れ替え）＋ `units` 未登録分の `ON CONFLICT` upsert ＋ `title_normalized` / `name_normalized` 生成。PUT で参照から外れた画像キーは同一 Tx で削除キューに登録 | 同期（削除キュー登録を含む） | ストレージ削除ジョブ・一時アップロード GC |
 | レシピ | 公開レシピの新規投稿（副作用） | 上記 Tx 内で `notification_outbox` に 1 行 → コミット後に `BackgroundTasks` が fan-out。取りこぼしは定期スイープが回収（§7・§8・§9） | **非同期**（`BackgroundTasks` ＋ outbox） | 通知 outbox スイープ・古い通知の掃除 |
 | レシピ | DELETE | **1 Tx**: サムネ・手順画像・そのレシピへの感想画像のキーを**集めて削除キューに INSERT** → CASCADE（材料 / グループ / 手順 / お気に入り / 感想 / 通知）＋ 自分の他レシピ材料の `ref_recipe_id` を SET NULL | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
@@ -200,7 +200,9 @@
   - GC（§8）: `expires_at` を過ぎた `pending` 行、または `stored` のまま猶予を過ぎた行を `FOR UPDATE SKIP LOCKED` でロック → ロック後にもう一度状態を確認（`consumed` になっていたら対象外）→ **同一トランザクションで、そのキーを削除キューに INSERT し `uploads` 行を DELETE**。GC 自身は外部 I/O をしない（実 DELETE はストレージ削除ジョブに任せる）。
 - 所有者（`user_id`）と消費状態を保持し、「本人所有かつ未使用（`stored`）or 更新対象自身に紐付け済み」だけを本参照に使える（[image.md](features/image.md)）。
 
-### 削除キュー（`pending_storage_deletions` 想定）
+### 削除キュー（`pending_storage_deletions`）
+
+- `delete_after`（NULL 可。Issue #71）: この時刻を過ぎるまで削除ジョブは消さない。アカウント削除で、PUT が終わっていないかもしれない `pending` のキーを積むときに `expires_at + UPLOAD_PENDING_TTL_SECONDS` を入れる。さらに `stage_upload` は PUT 後に自分の `uploads` 行が残っているかを確かめ、消えていればキーを削除キューに積み直して 500 を返す（PUT がどれだけ遅れても孤児を残さない）
 
 - 「参照から外れたオブジェクトキー」をためる。列の例: `key` / `reason` / `enqueued_at` / `attempts` / `last_error`。
 - **登録は発火元と同一トランザクション**（§5-2）。コミットされれば必ず後で消される。

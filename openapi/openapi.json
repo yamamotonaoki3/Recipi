@@ -3344,6 +3344,34 @@
       }
     },
     "/api/v1/users/me": {
+      "delete": {
+        "description": "アカウントを削除する（features/profile.md §5。確認はクライアントのダイアログ）。\n\n本人のデータは CASCADE で消え、画像は削除キューへ、他人のカウント列は同じ\nトランザクションで減らす（app/services/account.py）。デッドロックで中断されたら\n`run_with_retry` がやり直す。以降、同じトークンでのリクエストは 401 になる。",
+        "operationId": "delete_me_api_v1_users_me_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Me",
+        "tags": [
+          "users"
+        ]
+      },
       "patch": {
         "description": "自分のプロフィール設定を**送られた項目だけ**更新する（features/profile.md §5）。",
         "operationId": "update_me_api_v1_users_me_patch",

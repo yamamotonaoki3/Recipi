@@ -54,4 +54,9 @@ class PendingStorageDeletion(SQLModel, table=True):
 
     # 削除ジョブが失敗するたびに +1。上限を超えたものは調査対象として残す。
     attempts: int = Field(default=0, nullable=False)
+
+    # この時刻を過ぎるまで削除ジョブは消さない。NULL は「すぐ消してよい」。
+    # アカウント削除で、アップロード途中（pending）のキーを積むときにだけ使う
+    # （PUT がまだ終わっていないかもしれないので、pending の期限を過ぎてから消す。Issue #71）。
+    delete_after: datetime | None = Field(default=None, nullable=True)
     last_error: str | None = Field(default=None, nullable=True)

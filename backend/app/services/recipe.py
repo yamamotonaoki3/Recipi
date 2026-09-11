@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, delete, select
 
-from app.errors import not_found, validation_error
+from app.errors import not_found, unauthorized, validation_error
 from app.models.favorite import Favorite
 from app.models.follow import Follow
 from app.models.ingredient import Ingredient
@@ -340,6 +340,16 @@ def _collect_unit_values(body: RecipeWriteRequest) -> list[str]:
 
 
 def create_recipe(session: Session, user: User, body: RecipeWriteRequest) -> Recipe:
+    # 最初に本人の users 行を `FOR KEY SHARE`（退会だけを止める一番弱いロック）で取る。
+    # アカウント削除の最中なら、ここで退会のコミットを待ち、行が無くなっていれば 401。
+    # 先に users を取るので、ロックの順番が退会（users → uploads）と同じ向きになり、
+    # 画像キーの消費（uploads のロック）と退会が待ち合うことも無い（Issue #71）。
+    still_exists = session.exec(
+        select(User.id).where(User.id == user.id).with_for_update(read=True, key_share=True)
+    ).first()
+    if still_exists is None:
+        raise unauthorized("ユーザーが見つかりません")
+
     ref_titles = _validate_ref_recipes(session, user, body, current_recipe_id=None)
     cleaned_steps = _clean_steps(body.steps)  # 早期に「手順 0 件」を弾く
 

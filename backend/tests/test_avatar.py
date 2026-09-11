@@ -355,7 +355,9 @@ def test_finalize_failure_keeps_avatar_key(
     assert res.status_code == 500, res.text
     assert _avatar_key(me) == old_key
     new_key = tracked_keys[-1]
-    assert _queued_reasons(new_key) == ["avatar_finalize_failed"]
+    # 行が消えていた場合は、PUT 直後の自己点検（Issue #71）が先に気づいて積む。
+    expected = "upload_untracked_after_put" if mode == "deleted" else "avatar_finalize_failed"
+    assert _queued_reasons(new_key) == [expected]
     assert _queued_reasons(old_key) == []
 
 

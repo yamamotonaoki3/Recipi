@@ -49,7 +49,7 @@ from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, delete, select
 
-from app.errors import not_found, validation_error
+from app.errors import not_found, unauthorized, validation_error
 from app.models.follow import Follow
 from app.models.user import User
 from app.schemas.follow import UserRow, UserRowListResponse
@@ -89,7 +89,7 @@ def _load_user_or_404(session: Session, user_id: uuid.UUID) -> User:
     return user
 
 
-def _lock_users_in_id_order(session: Session, user_ids: list[uuid.UUID]) -> None:
+def _lock_users_in_id_order(session: Session, user_ids: list[uuid.UUID]) -> set[uuid.UUID]:
     """カウント列を更新する前に、対象の `users` 行を id 昇順でロックする。
 
     ポイントが 2 つある。
@@ -109,13 +109,17 @@ def _lock_users_in_id_order(session: Session, user_ids: list[uuid.UUID]) -> None
     `FOR NO KEY UPDATE` は「主キーは変えない更新をする」宣言で、
     `FOR KEY SHARE` とは衝突せず、同じ `FOR NO KEY UPDATE` どうしだけが
     順番待ちになる。カウント列は主キーではないのでこれで必要十分。
+
+    戻り値はロックできた（＝今も存在する）id の集合。ロックを待っている間に
+    相手が退会していれば、その id は含まれない（Issue #71）。
     """
-    session.exec(
+    rows = session.exec(
         select(User.id)
         .where(User.id.in_(user_ids))  # type: ignore[attr-defined]
         .order_by(User.id)  # type: ignore[arg-type]
         .with_for_update(key_share=True)
     ).all()
+    return set(rows)
 
 
 def _add_to_count(session: Session, user_id: uuid.UUID, column: str, delta: int) -> None:
@@ -170,7 +174,14 @@ def follow(session: Session, follower: User, followee_id: uuid.UUID) -> None:
     # ロックへ昇格することになり、同じ相手への同時フォローがデッドロックする
     # （`_lock_users_in_id_order` のコメント②）。先に取っておけば、
     # 各トランザクションは最初の 1 か所で順番待ちになるだけで済む。
-    _lock_users_in_id_order(session, [follower.id, followee_id])
+    locked = _lock_users_in_id_order(session, [follower.id, followee_id])
+    if follower.id not in locked:
+        # 自分自身がロック待ちの間に退会した（別リクエストの DELETE /users/me）。
+        raise unauthorized("ユーザーが見つかりません")
+    if followee_id not in locked:
+        # ロックを待っている間に相手が退会した（Issue #71）。このまま INSERT すると
+        # 外部キー違反の 500 になるので、ロック前の確認と同じ 404 にそろえる。
+        raise not_found("ユーザーが見つかりません")
 
     # 「まだ無ければ 1 行作る」。すでにあれば何もしない（例外にはならない）。
     #

@@ -62,6 +62,12 @@ def get_s3_client() -> Any:
             s3={"addressing_style": "path"},
             # 一時的なネットワークエラーは boto3 側で数回リトライさせる。
             retries={"max_attempts": 3, "mode": "standard"},
+            # 1 回の接続・読み取りの待ち時間の上限（botocore の既定値に頼らず明示する）。
+            # 画像 1 枚の PUT はリトライ込みでも数分で終わる。アップロード途中の
+            # pending 行の寿命（UPLOAD_PENDING_TTL_SECONDS）はこれより十分長くしておく
+            # （Issue #71。アカウント削除の遅延削除と PUT 後の自己点検が前提にしている）。
+            connect_timeout=10,
+            read_timeout=60,
         ),
     )
 

@@ -352,7 +352,15 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Me
+         * @description アカウントを削除する（features/profile.md §5。確認はクライアントのダイアログ）。
+         *
+         *     本人のデータは CASCADE で消え、画像は削除キューへ、他人のカウント列は同じ
+         *     トランザクションで減らす（app/services/account.py）。デッドロックで中断されたら
+         *     `run_with_retry` がやり直す。以降、同じトークンでのリクエストは 401 になる。
+         */
+        delete: operations["delete_me_api_v1_users_me_delete"];
         options?: never;
         head?: never;
         /**
@@ -2486,6 +2494,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnitsResponse"];
+                };
+            };
+        };
+    };
+    delete_me_api_v1_users_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
