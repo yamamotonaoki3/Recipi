@@ -27,8 +27,11 @@ Phase 10）。
 
     python -m app.jobs.recount_counts
 
-お気に入り（`recipes.favorite_count`）と感想（`recipes.comment_count`）の
-補正は、それぞれの機能の Issue でこのファイルに追加していく。
+数え直す対象:
+- `users.following_count` / `follower_count` ← `follows`（Issue #66）
+- `recipes.favorite_count` ← `favorites`（Issue #68）
+
+感想（`recipes.comment_count`）の補正は、感想の Issue でこのファイルに追加する。
 """
 
 from __future__ import annotations
@@ -41,7 +44,9 @@ from sqlmodel import Session
 
 from app.db import engine, run_with_retry
 from app.logging_config import configure_logging
+from app.models.favorite import Favorite
 from app.models.follow import Follow
+from app.models.recipe import Recipe
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -88,6 +93,34 @@ def recount_follow_counts(session: Session) -> int:
     return result.rowcount or 0
 
 
+def recount_favorite_counts(session: Session) -> int:
+    """`favorites` の実数から `recipes.favorite_count` を数え直す。
+
+    ズレていた行数を返す（commit は呼び出し側）。作りは `recount_follow_counts` と
+    同じで、相関サブクエリ 1 本の UPDATE にまとめ、今の値と実数が違う行だけを書く。
+    """
+    favorite_expr = (
+        select(func.count())
+        .select_from(Favorite)
+        .where(Favorite.recipe_id == Recipe.id)  # type: ignore[arg-type]
+        .scalar_subquery()
+    )
+    result = cast(
+        "CursorResult[Any]",
+        session.execute(
+            update(Recipe)
+            .where(Recipe.favorite_count != favorite_expr)  # type: ignore[arg-type]
+            .values(favorite_count=favorite_expr)
+        ),
+    )
+    return result.rowcount or 0
+
+
+def _recount_all(session: Session) -> tuple[int, int]:
+    """補正する列をすべて数え直す（1 つのトランザクションの中で呼ぶ）。"""
+    return recount_follow_counts(session), recount_favorite_counts(session)
+
+
 def main() -> None:
     configure_logging()
     # 補正は「follows の実数を読む」と「users のカウントを書き換える」を
@@ -103,9 +136,15 @@ def main() -> None:
     # option を付ける。こうすると retry で接続を借り直す場合も毎回
     # REPEATABLE READ が適用される。
     recount_engine = engine.execution_options(isolation_level="REPEATABLE READ")
+    # フォロー数とお気に入り数を同じトランザクション（＝同じスナップショット）で直す。
+    # お気に入りの登録と競合したときも、フォローと同じ理由で上書きを防げる
+    # （`recipes` 行のロックを待った UPDATE が serialization failure → やり直し）。
     with Session(recount_engine) as session:
-        fixed = run_with_retry(session, lambda: recount_follow_counts(session))
-    logger.info("recount finished", extra={"users_fixed": fixed})
+        users_fixed, recipes_fixed = run_with_retry(session, lambda: _recount_all(session))
+    logger.info(
+        "recount finished",
+        extra={"users_fixed": users_fixed, "recipes_fixed": recipes_fixed},
+    )
 
 
 if __name__ == "__main__":

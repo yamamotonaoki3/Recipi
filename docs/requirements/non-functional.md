@@ -86,7 +86,8 @@
 - 関連テーブル（`follows` / `favorites` / `recipe_comments`）への **INSERT / DELETE と、カウント列の原子的増減（`SET c = c ± 1`）を、同一トランザクション**で実行する。
 - 関連テーブルは複合 PK ＋ `INSERT ... ON CONFLICT DO NOTHING`、DELETE は削除件数チェックで冪等にし、**実際に行が増減したときだけ**カウントを更新する。
 - 同一対象への同時操作（同じレシピへの同時お気に入り、同じユーザーへの同時フォロー等）は **DB の行ロックで直列化**される。**クライアントにエラーは返さず、クライアント側の再試行も不要。**
-- デッドロック回避のため、フォロー / フォロー解除で複数の `users` 行を触る場合は、カウント更新前に対象行を **id 昇順で `SELECT ... FOR UPDATE`** してから更新する（[features/follow.md](features/follow.md)）。お気に入り / 感想はそれぞれ単一の `recipes` 行だけを更新するため、複数行のロック順序問題はない。
+- デッドロック回避のため、フォロー / フォロー解除で複数の `users` 行を触る場合は、カウント更新前に対象行を **id 昇順でロック**してから更新する（[features/follow.md](features/follow.md)）。お気に入り / 感想はそれぞれ単一の `recipes` 行だけを更新するため、複数行のロック順序問題はない。
+- **ロックの種類とタイミング**（Issue #66 で実際にデッドロックを踏んで確定）: カウント列を持つ親の行は **`FOR UPDATE` ではなく `FOR NO KEY UPDATE`** で、**関連テーブル（子）への INSERT / DELETE より先に**ロックする。子に書くと PostgreSQL は外部キーの整合性のため親の行へ自動で `FOR KEY SHARE`（共有ロック）を取り、同じ親を同時に操作した全員がそれを持てる。その後で `FOR UPDATE`（`FOR KEY SHARE` と衝突する）に上げようとすると全員が互いを待ってデッドロックする。`FOR NO KEY UPDATE` は `FOR KEY SHARE` と衝突せず、同じ種類どうしだけが順番待ちになる（カウント列は主キーではないので意味的にも正しい）。フォロー（`users`）・お気に入り（`recipes`）・感想（`recipes`）すべてこの形にする
 - それでも `deadlock` / `serialization_failure` が発生したら、**サーバー側で**（SQLAlchemy セッション単位で）トランザクションを数回リトライする（上限は → [todo.md](todo.md)）。
 - アカウント削除は**単一のアプリケーショントランザクション**で行い、CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする（[features/profile.md](features/profile.md)）。`recipe_views` も CASCADE で消えるが、カウント列キャッシュには関与しないため補正は不要。
 - 多層防御として、カウントを実数から数え直して補正する**定期ジョブ**を用意する（頻度は → [todo.md](todo.md)）。アカウント削除時の整合は削除トランザクション内で取り、後追いの補正ジョブ任せにしない。

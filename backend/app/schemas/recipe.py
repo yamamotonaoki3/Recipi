@@ -184,7 +184,8 @@ class RecipeResponse(CamelModel):
     # サムネイルのオブジェクトキー（PUT で「省略 = 変更なし」を選ぶか、
     # 明示的に同じキーを再送するかは画面側の判断。features/recipe.md §5）。
     thumbnail_key: str | None
-    is_favorited: bool  # Phase 6 まで常に false
+    # 閲覧者がこのレシピをお気に入り済みか（未ログインで見たときは常に false）。
+    is_favorited: bool
     favorite_count: int
     comment_count: int
     ingredient_groups: list[IngredientGroupOutput]
@@ -213,6 +214,8 @@ class RecipeSummary(CamelModel):
     created_at: datetime
     author: RecipeAuthor
     favorite_count: int
+    # 閲覧者がこのレシピをお気に入り済みか（Issue #68）。
+    is_favorited: bool
 
 
 class RecipeListResponse(CamelModel):
@@ -227,10 +230,11 @@ class RecipeListResponse(CamelModel):
 class RecipeFeedItem(CamelModel):
     """ホームフィードのレシピカード 1 枚分（features/home-feed.md §5）。
 
-    自分のレシピ一覧（`RecipeSummary`）と違い、他人のレシピも並ぶので
-    投稿者情報（`author`）を含める。`is_public` は公開レシピしか出さないため
+    ホームフィード（全体 / フォロー / フォロワー / お気に入りレシピ）・
+    `GET /users/me/favorites`・閲覧履歴（`HistoryItem` が継承）で共通。
+    `is_public` は公開レシピ（とお気に入りでは自分の非公開）しか出さないため
     持たせない。`favorite_count` は `recipes.favorite_count`（カウント列
-    キャッシュ）をそのまま返す（Phase 6 でお気に入り機能が入るまでは 0）。
+    キャッシュ）をそのまま返す。
     """
 
     id: uuid.UUID
@@ -238,6 +242,9 @@ class RecipeFeedItem(CamelModel):
     thumbnail_url: str | None
     author: RecipeAuthor
     favorite_count: int
+    # 閲覧者がこのレシピをお気に入り済みか（Issue #68）。1 ページ分をまとめて
+    # 1 クエリで調べる（app/services/recipe.py の `resolve_favorited_flags`）。
+    is_favorited: bool
 
 
 class RecipeFeedResponse(CamelModel):

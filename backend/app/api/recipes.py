@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
-from app.db import get_session
+from app.db import get_session, run_with_retry
 from app.dependencies import get_current_user, get_current_user_optional
 from app.errors import ErrorEnvelope, forbidden, not_found, validation_error
 from app.models.recipe import Recipe
@@ -30,6 +30,7 @@ from app.schemas.recipe import (
     RecipeResponse,
     RecipeWriteRequest,
 )
+from app.services import favorite as favorite_service
 from app.services import history as history_service
 from app.services import recipe as recipe_service
 
@@ -42,9 +43,8 @@ def _error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
 
 
 # ホームのサブタブに対応する `feed` の値（features/home-feed.md §5）。
-# `favorites` はお気に入り機能の Issue で `_SUPPORTED_FEEDS` に移す。
-_SUPPORTED_FEEDS = frozenset({"all", "following", "followers"})
-_PLANNED_FEEDS = frozenset({"favorites"})
+# `favorites` は Issue #68 で解禁した（お気に入り一覧と同じ内容を返す）。
+_SUPPORTED_FEEDS = frozenset({"all", "following", "followers", "favorites"})
 
 
 def _load_for_write(session: Session, user: User, recipe_id: uuid.UUID) -> Recipe:
@@ -70,7 +70,9 @@ def create_recipe(
     recipe = recipe_service.create_recipe(session, current_user, body)
     session.commit()
     session.refresh(recipe)
-    return recipe_service.serialize_recipe(session, recipe, current_user, include_image_keys=True)
+    return recipe_service.serialize_recipe(
+        session, recipe, current_user, viewer=current_user, include_image_keys=True
+    )
 
 
 @router.get("/recipes", responses=_error_responses(400, 401))
@@ -84,17 +86,20 @@ def list_feed(
 ) -> RecipeFeedResponse:
     """ホームフィード / 検索（features/home-feed.md・search.md）。
 
-    受け付ける `feed` は `all` / `following` / `followers`。`favorites` は
-    お気に入り機能の Issue で有効化するので、今はまだ 400 にする
-    （home-feed.md §6「不正値は 400」）。`q` はどの `feed` とも併用できる。
+    受け付ける `feed` は `all` / `following` / `followers` / `favorites`。
+    それ以外は 400（home-feed.md §6）。`q` はどの `feed` とも併用できる。
     """
     if feed not in _SUPPORTED_FEEDS:
-        # 未対応の値と、そもそも定義に無い値を分けてメッセージにする。
-        # 画面側は 4 タブを出すので、「まだ実装していない」ことが分かると調査が早い。
-        if feed in _PLANNED_FEEDS:
-            raise validation_error("feed=favorites はまだ利用できません", {"feed": feed})
         raise validation_error(
-            "feed は all / following / followers のいずれかを指定してください", {"feed": feed}
+            "feed は all / following / followers / favorites のいずれかを指定してください",
+            {"feed": feed},
+        )
+    if feed == "favorites":
+        # お気に入りレシピは並び（お気に入りした日時順）も対象（自分の非公開も含む）も
+        # 他の 3 つと違うので、お気に入りのサービスに任せる。`GET /users/me/favorites`
+        # と同じ関数なので、2 つの API は必ず同じ内容になる（favorite.md §5）。
+        return favorite_service.list_favorites(
+            session, current_user, q=q, cursor=cursor, limit=limit
         )
     return recipe_service.list_feed(
         session, current_user, feed=feed, q=q, cursor=cursor, limit=limit
@@ -125,7 +130,9 @@ def get_recipe(
     assert author is not None  # FK があるので投稿者は必ず存在する
     # 画像キー（内部のストレージ識別子）は投稿者本人にだけ返す。
     is_owner = current_user is not None and current_user.id == recipe.user_id
-    return recipe_service.serialize_recipe(session, recipe, author, include_image_keys=is_owner)
+    return recipe_service.serialize_recipe(
+        session, recipe, author, viewer=current_user, include_image_keys=is_owner
+    )
 
 
 @router.put("/recipes/{recipe_id}", responses=_error_responses(400, 401, 403, 404))
@@ -143,7 +150,9 @@ def update_recipe(
     )
     session.commit()
     session.refresh(recipe)
-    return recipe_service.serialize_recipe(session, recipe, current_user, include_image_keys=True)
+    return recipe_service.serialize_recipe(
+        session, recipe, current_user, viewer=current_user, include_image_keys=True
+    )
 
 
 @router.delete(
@@ -182,6 +191,41 @@ def record_recipe_view(
     return None
 
 
+@router.post(
+    "/recipes/{recipe_id}/favorite",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_error_responses(401, 404),
+)
+def favorite_recipe(
+    recipe_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """お気に入りに登録する（冪等・204。features/favorite.md §5）。
+
+    公開レシピと自分の非公開レシピだけが対象。他人の非公開・存在しないレシピは 404。
+    同じレシピへの同時登録で起きうるデッドロック等は `run_with_retry` がやり直し、
+    commit まで済ませてから返す。
+    """
+    run_with_retry(session, lambda: favorite_service.favorite(session, current_user, recipe_id))
+    return None
+
+
+@router.delete(
+    "/recipes/{recipe_id}/favorite",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_error_responses(401),
+)
+def unfavorite_recipe(
+    recipe_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """お気に入りを解除する（冪等・204）。未登録・存在しないレシピでも 204。"""
+    run_with_retry(session, lambda: favorite_service.unfavorite(session, current_user, recipe_id))
+    return None
+
+
 @router.get("/users/me/recipes", responses=_error_responses(400, 401))
 def list_my_recipes(
     q: str | None = Query(default=None),
@@ -191,6 +235,22 @@ def list_my_recipes(
     session: Session = Depends(get_session),
 ) -> RecipeListResponse:
     return recipe_service.list_my_recipes(session, current_user, q=q, cursor=cursor, limit=limit)
+
+
+@router.get("/users/me/favorites", responses=_error_responses(400, 401))
+def list_my_favorites(
+    q: str | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> RecipeFeedResponse:
+    """自分のお気に入り一覧（features/favorite.md §5）。
+
+    お気に入りした日時の新しい順。自分の非公開レシピは含み、他人のレシピで
+    非公開化されたものは含まない。`GET /recipes?feed=favorites` と同じ内容。
+    """
+    return favorite_service.list_favorites(session, current_user, q=q, cursor=cursor, limit=limit)
 
 
 # **このルートは必ず上の `/users/me/recipes` より後ろに置く。**

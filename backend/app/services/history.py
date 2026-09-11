@@ -27,7 +27,7 @@ from app.models.recipe_view import RecipeView
 from app.models.user import User
 from app.schemas.recipe import HistoryItem, HistoryResponse
 from app.services.image import image_url
-from app.services.recipe import author_of, resolve_authors
+from app.services.recipe import author_of, resolve_authors, resolve_favorited_flags
 
 # --- カーソル（(viewed_at, recipe_id) の複合） ---------------------------
 #
@@ -129,6 +129,7 @@ def list_history(
     page = rows[:limit]
     recipes = [recipe for recipe, _ in page]
     authors = resolve_authors(session, recipes)
+    favorited = resolve_favorited_flags(session, user, [r.id for r in recipes])
 
     items = [
         HistoryItem(
@@ -137,6 +138,7 @@ def list_history(
             thumbnail_url=image_url(recipe.thumbnail_key),
             author=author_of(authors[recipe.user_id]),
             favorite_count=recipe.favorite_count,
+            is_favorited=recipe.id in favorited,
             viewed_at=viewed_at,
         )
         for recipe, viewed_at in page
