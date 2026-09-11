@@ -52,7 +52,8 @@ from sqlmodel import Session, delete, select
 from app.errors import not_found, validation_error
 from app.models.follow import Follow
 from app.models.user import User
-from app.schemas.follow import UserProfileResponse, UserRow, UserRowListResponse
+from app.schemas.follow import UserRow, UserRowListResponse
+from app.services.image import image_url
 from app.services.notification import create_single_notification
 
 # --- カーソル（(created_at, user_id) の複合） --------------------------
@@ -276,6 +277,7 @@ def _list_users(  # type: ignore[no-untyped-def]
         UserRow(
             id=user.id,
             display_name=user.display_name,
+            avatar_url=image_url(user.avatar_key),
             is_following=user.id in following_ids,
         )
         for user in users
@@ -326,29 +328,3 @@ def list_followers(
         .where(Follow.followee_id == target_id)
     )
     return _list_users(session, viewer, stmt=stmt, cursor=cursor, limit=limit)
-
-
-# --- プロフィール（最小版） -------------------------------------------
-
-
-def get_user_profile(session: Session, viewer: User, target_id: uuid.UUID) -> UserProfileResponse:
-    """`GET /users/{id}` の最小版（features/profile.md §5）。
-
-    アバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。
-    ここではフォロー機能の画面（ユーザープロフィール / フォロー・フォロワー画面）に
-    必要な「表示名 ＋ フォロー数 / フォロワー数 ＋ 自分がフォロー中か」だけを返す。
-    """
-    target = _load_user_or_404(session, target_id)
-    is_following: bool | None
-    if target.id == viewer.id:
-        # 自分自身にフォローの概念は無いので null（profile.md §5 の本人取得例）。
-        is_following = None
-    else:
-        is_following = bool(resolve_following_flags(session, viewer, [target.id]))
-    return UserProfileResponse(
-        id=target.id,
-        display_name=target.display_name,
-        following_count=target.following_count,
-        follower_count=target.follower_count,
-        is_following=is_following,
-    )

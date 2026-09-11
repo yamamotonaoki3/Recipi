@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, delete, select
 
-from app.errors import validation_error
+from app.errors import not_found, validation_error
 from app.models.follow import Follow
 from app.models.ingredient import Ingredient
 from app.models.ingredient_group import IngredientGroup
@@ -47,7 +47,7 @@ from app.schemas.recipe import (
     StepInput,
     StepOutput,
 )
-from app.services.image import build_image_url, enqueue_object_deletion
+from app.services.image import enqueue_object_deletion, image_url
 from app.text_normalize import normalize_search_text, split_search_terms
 
 
@@ -55,18 +55,18 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-def image_url(key: str | None) -> str | None:
-    """オブジェクトキーから表示用 URL を組み立てる（キーが無ければ null）。
+def author_of(user: User) -> RecipeAuthor:
+    """レシピカード・詳細に載せる「投稿者」を組み立てる。
 
-    実体は `app/services/image.py` の `build_image_url`。URL の作り方を
-    1 か所に集約しておくことで、将来「公開バケット → 署名付き URL」に
-    移行するときの変更箇所をそこだけに閉じ込められる。
-    キーが null のときに null を返すのは、クライアントにプレースホルダを
-    出させるため（features/image.md §7）。
+    詳細・フィード・自分のレシピ一覧・ユーザーのレシピ一覧・閲覧履歴の
+    すべてで同じ形を返すため、組み立てをここ 1 か所に集める。アバターの
+    URL は `users.avatar_key` から作る（無ければ null）。
     """
-    if not key:
-        return None
-    return build_image_url(key)
+    return RecipeAuthor(
+        id=user.id,
+        display_name=user.display_name,
+        avatar_url=image_url(user.avatar_key),
+    )
 
 
 # --- 単位の自動 upsert -------------------------------------------------
@@ -509,7 +509,7 @@ def serialize_recipe(
 
     return RecipeResponse(
         id=recipe.id,
-        author=RecipeAuthor(id=author.id, display_name=author.display_name),
+        author=author_of(author),
         title=recipe.title,
         description=recipe.description,
         servings=recipe.servings,
@@ -621,8 +621,34 @@ def list_my_recipes(
 
     `q` はタイトル + 材料名を対象に AND 検索（マッチ規則は features/search.md）。
     新着順（created_at DESC, id DESC）・カーソルページング。
+    中身は「本人が自分のレシピを見る」場合の `list_recipes_by_owner` と同じ。
     """
-    stmt = select(Recipe).where(Recipe.user_id == user.id)
+    return list_recipes_by_owner(session, user, user.id, q=q, cursor=cursor, limit=limit)
+
+
+def list_recipes_by_owner(
+    session: Session,
+    viewer: User,
+    owner_id: uuid.UUID,
+    *,
+    q: str | None,
+    cursor: str | None,
+    limit: int,
+) -> RecipeListResponse:
+    """あるユーザーのレシピ一覧（features/profile.md §5「GET /users/{id}/recipes」）。
+
+    - **本人**が見るときは非公開も含めて全部
+    - **他人**が見るときは公開レシピだけ（非公開はその人だけのもの）
+
+    存在しないユーザーは 404。並びとページングは自分のレシピ一覧と同じ。
+    """
+    owner = session.get(User, owner_id)
+    if owner is None:
+        raise not_found("ユーザーが見つかりません")
+
+    stmt = select(Recipe).where(Recipe.user_id == owner_id)
+    if owner_id != viewer.id:
+        stmt = stmt.where(Recipe.is_public.is_(True))  # type: ignore[attr-defined]
     stmt = apply_search_terms(stmt, q)
 
     if cursor is not None:
@@ -637,6 +663,8 @@ def list_my_recipes(
 
     has_more = len(rows) > limit
     page = rows[:limit]
+    # 1 ページのレシピはすべて同じ投稿者なので、投稿者は 1 回だけ組み立てる。
+    author = author_of(owner)
     return RecipeListResponse(
         items=[
             RecipeSummary(
@@ -645,6 +673,8 @@ def list_my_recipes(
                 thumbnail_url=image_url(r.thumbnail_key),
                 is_public=r.is_public,
                 created_at=r.created_at,
+                author=author,
+                favorite_count=r.favorite_count,
             )
             for r in page
         ],
@@ -716,10 +746,7 @@ def list_feed(
                 id=r.id,
                 title=r.title,
                 thumbnail_url=image_url(r.thumbnail_key),
-                author=RecipeAuthor(
-                    id=authors[r.user_id].id,
-                    display_name=authors[r.user_id].display_name,
-                ),
+                author=author_of(authors[r.user_id]),
                 favorite_count=r.favorite_count,
             )
             for r in page

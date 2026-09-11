@@ -122,3 +122,22 @@ def test_q_too_many_terms_returns_400(client: TestClient) -> None:
     headers = auth_headers(client)
     res = client.get(MY_RECIPES_URL, params={"q": "a b c d e f"}, headers=headers)
     assert res.status_code == 400
+
+
+def test_items_have_author_and_favorite_count(client: TestClient) -> None:
+    """レシピカードに要る投稿者（アバター ＋ 表示名）とお気に入り数が付く（Issue #67）。
+
+    項目を足しただけで、既存の項目（id / title / thumbnailUrl / isPublic / createdAt）は
+    そのまま残っている（frontend が `RecipeSummary` を名前で使っているため）。
+    """
+    headers = auth_headers(client, display_name="testuser_my_list_card")
+    _create(client, headers)
+
+    items = client.get(MY_RECIPES_URL, headers=headers).json()["items"]
+
+    assert len(items) == 1
+    item = items[0]
+    assert {"id", "title", "thumbnailUrl", "isPublic", "createdAt"} <= set(item)
+    assert item["author"]["displayName"] == "testuser_my_list_card"
+    assert item["author"]["avatarUrl"] is None
+    assert item["favoriteCount"] == 0

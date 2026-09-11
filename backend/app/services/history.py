@@ -25,8 +25,9 @@ from app.errors import not_found, validation_error
 from app.models.recipe import Recipe
 from app.models.recipe_view import RecipeView
 from app.models.user import User
-from app.schemas.recipe import HistoryItem, HistoryResponse, RecipeAuthor
-from app.services.recipe import image_url, resolve_authors
+from app.schemas.recipe import HistoryItem, HistoryResponse
+from app.services.image import image_url
+from app.services.recipe import author_of, resolve_authors
 
 # --- カーソル（(viewed_at, recipe_id) の複合） ---------------------------
 #
@@ -134,10 +135,7 @@ def list_history(
             id=recipe.id,
             title=recipe.title,
             thumbnail_url=image_url(recipe.thumbnail_key),
-            author=RecipeAuthor(
-                id=authors[recipe.user_id].id,
-                display_name=authors[recipe.user_id].display_name,
-            ),
+            author=author_of(authors[recipe.user_id]),
             favorite_count=recipe.favorite_count,
             viewed_at=viewed_at,
         )

@@ -1,4 +1,8 @@
-"""`/api/v1/users/*` エンドポイント（Phase 1 では自分の表示名変更のみ）。
+"""`/api/v1/users/*` エンドポイント（プロフィール・アバター・閲覧履歴・フォロー）。
+
+ユーザーのレシピ一覧 `GET /users/{id}/recipes` だけは `app/api/recipes.py` にある
+（既存の `GET /users/me/recipes` より後ろに登録しないと、`me` を UUID として
+解釈して 422 になるため。詳しくはそちらのコメント）。
 
 書き込みを終えたら `return` する前に必ず `session.commit()` する理由は
 `app/api/auth.py` 冒頭のコメントを参照（FastAPI の `Depends(yield)` は
@@ -10,21 +14,26 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlmodel import Session
 
 from app.db import get_session, run_with_retry
 from app.dependencies import get_current_user
 from app.errors import ErrorEnvelope
 from app.models.user import User
-from app.schemas.follow import UserProfileResponse, UserRowListResponse
+from app.schemas.follow import (
+    UserPublicProfileResponse,
+    UserRowListResponse,
+    UserSelfProfileResponse,
+)
+from app.schemas.image import AvatarResponse
 from app.schemas.recipe import HistoryResponse
 from app.schemas.user import UpdateMeRequest, UserMeResponse
 from app.services import follow as follow_service
 from app.services import history as history_service
+from app.services import user as user_service
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -34,21 +43,48 @@ def _error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
     return {code: {"model": ErrorEnvelope} for code in status_codes}
 
 
-@router.patch("/me", responses={401: {"model": ErrorEnvelope}})
+@router.patch("/me", responses=_error_responses(400, 401))
 def update_me(
     body: UpdateMeRequest,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> UserMeResponse:
-    current_user.display_name = body.display_name
-    current_user.updated_at = datetime.now(UTC)
-    session.add(current_user)
+    """自分のプロフィール設定を**送られた項目だけ**更新する（features/profile.md §5）。"""
+    user_service.update_me(session, current_user, body)
+    # 応答を返す前に commit する（ファイル冒頭のコメント）。
     session.commit()
-    return UserMeResponse(
-        id=current_user.id,
-        email=current_user.email,
-        display_name=current_user.display_name,
-    )
+    return user_service.me_response(current_user)
+
+
+@router.put("/me/avatar", responses=_error_responses(400, 401, 500))
+def put_my_avatar(
+    file: UploadFile = File(..., description="JPEG / PNG / WebP の画像 1 枚"),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> AvatarResponse:
+    """アバターを設定 / 差し替えする（features/image.md §3・§5）。
+
+    保存の手順（管理行 → ストレージ → 確定）は `services/user.py` の `set_avatar`。
+    最後の確定のトランザクションをここで commit してから URL を返す。
+    """
+    avatar_url = user_service.set_avatar(session, current_user, file.file)
+    session.commit()
+    return AvatarResponse(avatar_url=avatar_url)
+
+
+@router.delete(
+    "/me/avatar",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_error_responses(401),
+)
+def delete_my_avatar(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """アバターを外す。設定していなくても 204（冪等）。"""
+    user_service.delete_avatar(session, current_user)
+    session.commit()
+    return None
 
 
 @router.get("/me/history", responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}})
@@ -127,12 +163,13 @@ def get_user(
     user_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
-) -> UserProfileResponse:
-    """ユーザープロフィール（features/profile.md §5 の最小版）。
+) -> UserSelfProfileResponse | UserPublicProfileResponse:
+    """ユーザープロフィール（features/profile.md §5）。
 
-    アバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。
+    自分自身なら全項目 ＋ 公開トグルの状態、他人なら公開 ON の項目だけを返す
+    （non-functional.md「データの可視性ルール」。組み立ては `services/user.py`）。
     """
-    return follow_service.get_user_profile(session, current_user, user_id)
+    return user_service.get_user_profile(session, current_user, user_id)
 
 
 @router.post(

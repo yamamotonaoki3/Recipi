@@ -191,3 +191,26 @@ def list_my_recipes(
     session: Session = Depends(get_session),
 ) -> RecipeListResponse:
     return recipe_service.list_my_recipes(session, current_user, q=q, cursor=cursor, limit=limit)
+
+
+# **このルートは必ず上の `/users/me/recipes` より後ろに置く。**
+# FastAPI はルートを登録した順に照合する。`/users/{user_id}/recipes` が先にあると、
+# `/users/me/recipes` へのリクエストが先にこちらに当たり、"me" を UUID として
+# 解釈しようとして 422 になる（＝今動いている自分のレシピ一覧が壊れる）。
+# また `users.py` 側に置くのも同じ理由で不可（`main.py` は users のルーターを
+# recipes のルーターより先に登録している）。
+@router.get("/users/{user_id}/recipes", responses=_error_responses(400, 401, 404))
+def list_user_recipes(
+    user_id: uuid.UUID,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> RecipeListResponse:
+    """あるユーザーのレシピ一覧（features/profile.md §5）。
+
+    他人が見れば公開レシピだけ、本人が見れば非公開も含む。存在しないユーザーは 404。
+    """
+    return recipe_service.list_recipes_by_owner(
+        session, current_user, user_id, q=None, cursor=cursor, limit=limit
+    )

@@ -28,13 +28,11 @@ GC（app/jobs/gc_uploads.py）が期限切れとして回収できる。
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlmodel import Session, select
 
-from app import storage
-from app.config import settings
 from app.db import get_session
 from app.dependencies import get_current_user
 from app.errors import AppError, ErrorEnvelope
@@ -63,33 +61,11 @@ def upload_image(
     # ここで弾ければ `pending` 行もオブジェクトも作らずに済む。
     raw = image_service.read_upload_within_limit(file.file)
     processed = image_service.process_image(raw)
-    key = image_service.build_object_key(processed.extension)
 
-    # --- ① Tx1: pending 行を作ってキーを確定する ------------------------
-    now = datetime.now(UTC)
-    upload = Upload(
-        user_id=current_user.id,
-        key=key,
-        status="pending",
-        content_type=processed.content_type,
-        size_bytes=len(processed.data),
-        expires_at=now + timedelta(seconds=settings.UPLOAD_PENDING_TTL_SECONDS),
-        created_at=now,
-    )
-    session.add(upload)
-    # ここで commit するのが重要。②のストレージ PUT を「行が確定した後」に
-    # 行うため、また PUT の待ち時間だけトランザクションを開いたままに
-    # しないため（上のコメント参照）。
-    session.commit()
-
-    # --- ② Tx 外: オブジェクトを保存する --------------------------------
-    try:
-        storage.put_object(key, processed.data, processed.content_type)
-    except Exception:
-        # 行は `pending` のまま残る。期限を過ぎれば GC が回収するので、
-        # ここで後始末をする必要はない（できることも無い）。
-        logger.exception("オブジェクトの保存に失敗しました key=%s", key)
-        raise AppError(500, "STORAGE_ERROR", "画像の保存に失敗しました") from None
+    # --- ① Tx1 ＋ ② Tx 外の保存 -----------------------------------------
+    # アバター（PUT /users/me/avatar）と共通なので `stage_upload` にまとめてある。
+    # ①で commit してキーを確定させてから②で保存する（順序の理由は関数のコメント）。
+    key = image_service.stage_upload(session, current_user.id, processed)
 
     # --- ③ Tx2: 行をロックして pending なら stored にする ---------------
     # `with_for_update()` = SELECT ... FOR UPDATE。GC や他のリクエストが

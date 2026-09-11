@@ -57,14 +57,14 @@
 
 | カラム | 型 | 制約 |
 | --- | --- | --- |
-| `display_name` | string | NOT NULL（1〜30 文字） |
+| `display_name` | string | NOT NULL（1〜30 文字。空白だけは不可） |
 | `avatar_key` | string | NULL 可 |
 | `email_public` | boolean | NOT NULL DEFAULT false |
-| `x_url` | string | NULL 可（URL 形式） |
+| `x_url` | string | NULL 可（URL 形式・2048 文字まで） |
 | `x_public` | boolean | NOT NULL DEFAULT false |
-| `instagram_url` | string | NULL 可（URL 形式） |
+| `instagram_url` | string | NULL 可（URL 形式・2048 文字まで） |
 | `instagram_public` | boolean | NOT NULL DEFAULT false |
-| `other_url` | string | NULL 可（URL 形式） |
+| `other_url` | string | NULL 可（URL 形式・2048 文字まで） |
 | `other_public` | boolean | NOT NULL DEFAULT false |
 
 CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時の CASCADE」参照。
@@ -94,10 +94,18 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 }
 ```
 
+- 他人向けの補足（Issue #67 で確定）:
+  - 公開トグル OFF の項目は `null` ではなく**キーごと含めない**。公開 ON でも値が無い項目もキーを出さない
+  - `email` は `emailPublic` が ON のときだけキーを出す
+  - `links` は**常に返す**（公開された SNS が無ければ `{}`）。キーは `x` / `instagram` / `other`
+  - 公開トグルの状態（`emailPublic` など）や `xUrl` などの生の項目は、他人向けには一切含めない
+  - `avatarUrl` は公開トグルの対象外なので常に返す（未設定なら `null`）
+
 ### PATCH `/users/me`（認証必要）
 
 - body（すべて任意、送られた項目だけ更新）: `displayName`, `emailPublic`, `xUrl`, `xPublic`, `instagramUrl`, `instagramPublic`, `otherUrl`, `otherPublic`
-- 200 / 400（形式エラー）
+- 送らなかった項目は変更しない。URL に `null` を送ると削除。`displayName` と各トグルに `null` は 400
+- 200（本人向けの設定一式）/ 400（形式エラー。1 項目でも不正なら何も書き換えない）
 
 ### PUT `/users/me/avatar`（認証必要、multipart）／ DELETE `/users/me/avatar`
 
@@ -110,14 +118,15 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 
 ### GET `/users/{id}/recipes`（認証必要）
 
-- 他人: 公開レシピのみ。本人: 非公開も含む。ページング。
+- 他人: 公開レシピのみ。本人: 非公開も含む。ページング（`limit` / `cursor`）。存在しないユーザーは 404。
+- 1 件の形は `GET /users/me/recipes` と同じ（レシピカードの項目: `author`（アバター ＋ 表示名）・`favoriteCount`・`isPublic` ほか）。
 
 ## 6. バリデーション
 
 | 項目 | ルール |
 | --- | --- |
-| displayName | 1〜30 文字 |
-| xUrl / instagramUrl / otherUrl | URL 形式（`http(s)://`）。空文字は null 扱い。厳格なドメイン検証の要否は [todo.md](../todo.md) |
+| displayName | 1〜30 文字。空白だけ（半角・全角とも）は不可 |
+| xUrl / instagramUrl / otherUrl | URL 形式（`http(s)://` で始まり空白を含まない）。2048 文字まで（文字数で数える）。空文字・空白だけは null 扱い。ドメイン許可リストは採らない（[todo.md](../todo.md) #14 で確定） |
 | アバター画像 | [image.md](image.md) の共通ルール（形式・サイズ、1 枚、正方形推奨） |
 
 ## 7. 受け入れ基準

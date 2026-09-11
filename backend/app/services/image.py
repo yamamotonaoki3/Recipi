@@ -26,16 +26,21 @@
 from __future__ import annotations
 
 import io
+import logging
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import BinaryIO, Final
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlmodel import Session, select
 
+from app import storage
 from app.config import settings
-from app.errors import validation_error
+from app.errors import AppError, validation_error
 from app.models.pending_storage_deletion import PendingStorageDeletion
 from app.models.upload import Upload
+
+logger = logging.getLogger(__name__)
 
 # Pillow が返す形式名 → (Content-Type, 拡張子)。
 # ここに無い形式は受け付けない（features/image.md §6）。
@@ -202,6 +207,72 @@ def build_image_url(key: str) -> str:
     中身だけを差し替えればよい**（DB の移行は不要）。
     """
     return f"{settings.S3_PUBLIC_URL_BASE.rstrip('/')}/{key.lstrip('/')}"
+
+
+def image_url(key: str | None) -> str | None:
+    """オブジェクトキーから表示用 URL を組み立てる（キーが無ければ null）。
+
+    実体は上の `build_image_url`。キーが null のときに null を返すのは、
+    クライアントにプレースホルダを出させるため（features/image.md §7）。
+
+    サムネイル・手順画像・アバターのどれにも使う。以前は
+    `app/services/recipe.py` にあったが、フォロー・プロフィール・履歴からも
+    使うようになったので、どこからでも import できるこの中立なモジュールへ
+    移した（recipe ⇄ user のような循環 import を作らないため）。
+    """
+    if not key:
+        return None
+    return build_image_url(key)
+
+
+def stage_upload(session: Session, user_id: uuid.UUID, image: ProcessedImage) -> str:
+    """加工済みの画像を「①管理行を作る → ②ストレージに保存する」まで進め、キーを返す。
+
+    `POST /images`（一時アップロード）と `PUT /users/me/avatar` の共通部分。
+    その後の「③本参照として確定する」は用途ごとに違うので、呼び出し側が行う。
+
+    ## 順序が大事（processing-model.md §6・§9）
+
+        ① Tx1: uploads に pending 行を INSERT して commit  → キーが確定する
+        ② Tx 外: オブジェクトを S3 / MinIO に PUT
+
+    先に DB の行を作っておけば、②で失敗しても行は `pending` のまま残り、
+    期限を過ぎれば GC（app/jobs/gc_uploads.py）が回収できる。逆順（先に PUT）に
+    すると、PUT 成功後に DB への記録が失敗したとき「誰も知らないオブジェクト」が
+    ストレージに残り、後から掃除できない。
+
+    ②をトランザクションの外で行うのは、外部 I/O を待つあいだ DB のロックや
+    接続を握り続けないため（processing-model.md §2）。
+
+    **この関数は①で commit する**（②の前にキーを確定させる必要があるため）。
+    """
+    key = build_object_key(image.extension)
+
+    # --- ① Tx1: pending 行を作ってキーを確定する ------------------------
+    now = datetime.now(UTC)
+    session.add(
+        Upload(
+            user_id=user_id,
+            key=key,
+            status="pending",
+            content_type=image.content_type,
+            size_bytes=len(image.data),
+            expires_at=now + timedelta(seconds=settings.UPLOAD_PENDING_TTL_SECONDS),
+            created_at=now,
+        )
+    )
+    session.commit()
+
+    # --- ② Tx 外: オブジェクトを保存する --------------------------------
+    try:
+        storage.put_object(key, image.data, image.content_type)
+    except Exception:
+        # 行は `pending` のまま残る。期限を過ぎれば GC が回収するので、
+        # ここで後始末をする必要はない（できることも無い）。
+        logger.exception("オブジェクトの保存に失敗しました key=%s", key)
+        raise AppError(500, "STORAGE_ERROR", "画像の保存に失敗しました") from None
+
+    return key
 
 
 def build_object_key(extension: str) -> str:
