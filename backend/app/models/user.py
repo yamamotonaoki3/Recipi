@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
 
@@ -20,6 +21,12 @@ def _utcnow() -> datetime:
 
 class User(SQLModel, table=True):
     __tablename__ = "users"
+    __table_args__ = (
+        # カウント列は減算もするので、バグで負の数になったら DB で気付けるようにする
+        # （data-model.md「DB レベルの制約が正」／ recipes の favorite_count と同じ方針）。
+        sa.CheckConstraint("following_count >= 0", name="ck_users_following_count_non_negative"),
+        sa.CheckConstraint("follower_count >= 0", name="ck_users_follower_count_non_negative"),
+    )
 
     # UUID は Postgres の拡張（pgcrypto 等）に頼らず、Python 側
     # （uuid4）で発行する。DB 拡張が入っていない環境でもそのまま動く。
@@ -44,6 +51,16 @@ class User(SQLModel, table=True):
     # すると、それより前に発行済みのアクセストークンは（有効期限内でも）
     # 全て無効になる（dependencies.py の get_current_user がここを照合する）。
     token_version: int = Field(default=0, nullable=False)
+
+    # 非正規化カウント（カウント列キャッシュ。non-functional.md）。
+    # - following_count … この人が「フォローしている」人数
+    # - follower_count  … この人を「フォローしている」人数
+    # 一覧やプロフィールを開くたびに `COUNT(*)` すると重いので、`follows` の
+    # INSERT / DELETE と**同一トランザクション**で ±1 する（app/services/follow.py）。
+    # ズレたときの保険として、実数から数え直す補正ジョブを別に持つ
+    # （app/jobs/recount_counts.py。processing-model.md §8「多層防御」）。
+    following_count: int = Field(default=0, nullable=False)
+    follower_count: int = Field(default=0, nullable=False)
 
     created_at: datetime = Field(default_factory=_utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=_utcnow, nullable=False)

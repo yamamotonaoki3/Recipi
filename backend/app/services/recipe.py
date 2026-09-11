@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, delete, select
 
 from app.errors import validation_error
+from app.models.follow import Follow
 from app.models.ingredient import Ingredient
 from app.models.ingredient_group import IngredientGroup
 from app.models.recipe import Recipe
@@ -653,19 +654,44 @@ def list_my_recipes(
 
 def list_feed(
     session: Session,
+    viewer: User,
     *,
+    feed: str,
     q: str | None,
     cursor: str | None,
     limit: int,
 ) -> RecipeFeedResponse:
-    """ホーム「全体」フィード（features/home-feed.md §5「GET /recipes?feed=all」）。
+    """ホームフィード（features/home-feed.md §5「GET /recipes」）。
 
-    MVP では `feed=all` のみ。**公開レシピだけ**を新着順（created_at DESC, id DESC）で
-    返す。`q` を渡すとタイトル + 材料名で AND 絞り込み（`list_my_recipes` と同じ
-    `apply_search_terms`）。ページングの仕組み（(created_at, id) の複合カーソルで
-    同時刻レコードも重複・抜けなくたどる）も自分のレシピ一覧と共通。
+    **公開レシピだけ**を新着順（created_at DESC, id DESC）で返す。`feed` で対象を絞る:
+
+    | `feed` | 対象 |
+    | --- | --- |
+    | `all` | すべての公開レシピ |
+    | `following` | 自分がフォローしている人の公開レシピ |
+    | `followers` | 自分をフォローしている人の公開レシピ |
+
+    `favorites` はお気に入り機能の Issue で有効化する（それまでは 400。呼び出し元の
+    `app/api/recipes.py` が値を検証する）。
+
+    `q` を渡すとタイトル + 材料名で AND 絞り込み（`list_my_recipes` と同じ
+    `apply_search_terms`）で、**どの `feed` とも併用できる**（home-feed.md §3
+    「表示中のサブタブの集合の中を絞り込む」）。ページングの仕組み（(created_at, id)
+    の複合カーソルで同時刻レコードも重複・抜けなくたどる）も自分のレシピ一覧と共通。
     """
     stmt = select(Recipe).where(Recipe.is_public.is_(True))  # type: ignore[attr-defined]
+
+    # フォロー / フォロワータブは「対象になる投稿者の集合」で絞る。
+    # `follows` を JOIN せずサブクエリの IN にしているのは、JOIN だと
+    # （将来 follows が複数行マッチする形になったとき）同じレシピが重複して
+    # 並ぶ危険があるため。IN なら 1 レシピ 1 行が保証される。
+    if feed == "following":
+        author_ids = select(Follow.followee_id).where(Follow.follower_id == viewer.id)
+        stmt = stmt.where(Recipe.user_id.in_(author_ids))  # type: ignore[attr-defined]
+    elif feed == "followers":
+        author_ids = select(Follow.follower_id).where(Follow.followee_id == viewer.id)
+        stmt = stmt.where(Recipe.user_id.in_(author_ids))  # type: ignore[attr-defined]
+
     stmt = apply_search_terms(stmt, q)
 
     if cursor is not None:

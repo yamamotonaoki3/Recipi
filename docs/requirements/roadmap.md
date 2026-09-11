@@ -41,7 +41,7 @@
 | Phase 5（フォロー） | `follows` 分のカウント列補正ジョブ |
 | Phase 6（お気に入り） | `favorites` 分のカウント列補正ジョブ |
 | Phase 7（感想） | `recipe_comments` 分のカウント列補正ジョブ、感想画像の削除キュー登録（同一トランザクション） |
-| Phase 8（通知） | `notifications` ＋ `notification_outbox` テーブル導入。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）を発火元（フォロー / お気に入り / 感想の書き込み）と**同一トランザクション**に組み込む。`followee_new_recipe` は outbox 経由で **`BackgroundTasks`** が fan-out ＋ **未処理 outbox の定期スイープ**（取りこぼし回収）。古い通知・処理済み outbox の掃除ジョブ。※ Phase 5〜7 では通知行を作らない（[processing-model.md](processing-model.md) §6 の通知列は Phase 8 で有効化） |
+| Phase 8（通知） | `notifications` ＋ `notification_outbox` テーブル導入。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）を発火元（フォロー / お気に入り / 感想の書き込み）と**同一トランザクション**に組み込む。`followee_new_recipe` は outbox 経由で **`BackgroundTasks`** が fan-out ＋ **未処理 outbox の定期スイープ**（取りこぼし回収）。古い通知・処理済み outbox の掃除ジョブ。※ **実装順を変更（2026-09-10 / Issue #66）**: `notifications` テーブルと単一行通知の作成は Phase 5 の先頭で導入し、フォロー / お気に入り / 感想は**実装時に同一トランザクションで通知行まで作る**。後から 3 つの service を書き直す手戻りを避けるため。Phase 8 に残るのは通知の**一覧 API**（`GET /notifications` ほか）と `followee_new_recipe` の fan-out（outbox ＋ スイープ）・掃除ジョブ |
 | Phase 9（アカウント削除） | 削除トランザクション内でのカウント補正 ＋ 画像の削除エンキュー |
 | Phase 10（仕上げ） | ジョブ実行基盤の仕上げ（cron 設定・多重起動防止・監視）、期限切れリフレッシュトークン掃除、専用ジョブキュー（arq 等）の要否を再検討 |
 | Phase 11（AI・MVP 対象外） | `ai_usage` の日次リセット / 集計 |

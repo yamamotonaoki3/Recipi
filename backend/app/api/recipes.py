@@ -41,6 +41,12 @@ def _error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
     return {code: {"model": ErrorEnvelope} for code in status_codes}
 
 
+# ホームのサブタブに対応する `feed` の値（features/home-feed.md §5）。
+# `favorites` はお気に入り機能の Issue で `_SUPPORTED_FEEDS` に移す。
+_SUPPORTED_FEEDS = frozenset({"all", "following", "followers"})
+_PLANNED_FEEDS = frozenset({"favorites"})
+
+
 def _load_for_write(session: Session, user: User, recipe_id: uuid.UUID) -> Recipe:
     """更新 / 削除の対象レシピを取得する。存在しなければ 404、他人のものなら 403。"""
     recipe = session.get(Recipe, recipe_id)
@@ -78,13 +84,21 @@ def list_feed(
 ) -> RecipeFeedResponse:
     """ホームフィード / 検索（features/home-feed.md・search.md）。
 
-    MVP で受け付ける `feed` は `all` のみ。`following` / `followers` / `favorites`
-    は Phase 5・6 で有効化するので、それらを含む `all` 以外の値は 400 にする
-    （home-feed.md §6「不正値は 400」）。
+    受け付ける `feed` は `all` / `following` / `followers`。`favorites` は
+    お気に入り機能の Issue で有効化するので、今はまだ 400 にする
+    （home-feed.md §6「不正値は 400」）。`q` はどの `feed` とも併用できる。
     """
-    if feed != "all":
-        raise validation_error("feed は現在 all のみ対応しています", {"feed": feed})
-    return recipe_service.list_feed(session, q=q, cursor=cursor, limit=limit)
+    if feed not in _SUPPORTED_FEEDS:
+        # 未対応の値と、そもそも定義に無い値を分けてメッセージにする。
+        # 画面側は 4 タブを出すので、「まだ実装していない」ことが分かると調査が早い。
+        if feed in _PLANNED_FEEDS:
+            raise validation_error("feed=favorites はまだ利用できません", {"feed": feed})
+        raise validation_error(
+            "feed は all / following / followers のいずれかを指定してください", {"feed": feed}
+        )
+    return recipe_service.list_feed(
+        session, current_user, feed=feed, q=q, cursor=cursor, limit=limit
+    )
 
 
 @router.get(
