@@ -172,7 +172,7 @@
 
 | 処理 | トリガー | 内容 | 冪等性 | 失敗時 | なぜ非同期か |
 | --- | --- | --- | --- | --- | --- |
-| 通知 fan-out（`followee_new_recipe`） | 公開レシピ作成 Tx 内で **outbox 行**を 1 行 INSERT（`notification_outbox`: event / recipe_id / author_id / created_at / processed_at）。コミット後に `BackgroundTasks` が起動 | 未処理 outbox 行を `FOR UPDATE SKIP LOCKED` で排他確保 → `follows` で `followee_id = 投稿者` を引いて `notifications` に一括 `INSERT ... ON CONFLICT DO NOTHING` → `processed_at` をセット、を 1 Tx | 行の排他確保 ＋ `processed_at` ＋ 通知側の `(user_id, 'followee_new_recipe', recipe_id)` 一意制約（`ON CONFLICT DO NOTHING`）で、`BackgroundTasks` とスイープが同時に走っても二重にならない | `BackgroundTasks` が落ちても outbox 行が残り、**未処理 outbox を拾う定期スイープ**（§8）が後で配布する。**受信者は配布実行時点の `follows` で決まる**（下記） | フォロワー数だけ INSERT するので重い。投稿者を待たせない |
+| 通知 fan-out（`followee_new_recipe`） | 公開レシピ作成 Tx 内で **outbox 行**を 1 行 INSERT（`notification_outbox`: event / recipe_id / author_id / created_at / processed_at）。コミット後に `BackgroundTasks` が起動 | **users（投稿者・`FOR KEY SHARE`）→ recipes（`FOR SHARE`。配布中の非公開化を止める）→ outbox（`FOR UPDATE SKIP LOCKED`）の順にロック**（レシピ削除・アカウント削除の CASCADE と同じ向き）→ 非公開なら配らず処理済みにする → `follows` で `followee_id = 投稿者` を引いて `notifications` に一括 `INSERT ... ON CONFLICT DO NOTHING` → `processed_at` をセット、を 1 Tx | 行の排他確保 ＋ `processed_at` ＋ 通知側の `(user_id, 'followee_new_recipe', recipe_id)` 一意制約（`ON CONFLICT DO NOTHING`）で、`BackgroundTasks` とスイープが同時に走っても二重にならない | `BackgroundTasks` が落ちても outbox 行が残り、**未処理 outbox を拾う定期スイープ**（§8）が後で配布する。**受信者は配布実行時点の `follows` で決まる**（下記） | フォロワー数だけ INSERT するので重い。投稿者を待たせない |
 
 ## 8. 定期バッチの台帳（cron / コンテナスケジューラ → 管理 CLI コマンド）
 
@@ -182,7 +182,7 @@
 | 一時アップロード GC | (a) `stored` で本参照されないまま猶予を過ぎた行、(b) `expires_at` を過ぎた `pending` 行（失敗したアップロード）を回収。各行を `FOR UPDATE SKIP LOCKED` でロック → 状態を再確認（`consumed` は除外）→ **同一 Tx でキーを削除キューに INSERT ＋ `uploads` 行を DELETE**。実 DELETE はストレージ削除ジョブが行う（§9） | 行ロック＋再確認で冪等。GC は外部 I/O をしない | 猶予・`expires_at` → [todo.md](todo.md) #15 | 次回実行で回収 | 「本参照されなかったか」「アップロードが完了したか」は時間が経たないと確定しない。即時判定できない |
 | ストレージ削除ジョブ | 削除キュー（§9）のキーを S3 / MinIO から実削除し、成功した行を消す | 「既に存在しない」を成功扱い | → [todo.md](todo.md)（新規） | `attempts` を増やして再試行。上限超過は `last_error` を残して隔離 | ストレージ障害を削除 API に波及させない。遅延は許容 |
 | 期限切れリフレッシュトークン掃除 | `refresh_tokens` の `expires_at < now()` かつ十分古い行を物理削除 | 対象を都度判定 | → [todo.md](todo.md)（新規） | 次回実行で回収 | 認証の正しさは検証時の期限チェックで担保済み。物理削除は容量最適化なので急がない |
-| 通知 outbox スイープ | `processed_at IS NULL` かつ一定時間以上前の `notification_outbox` 行を処理し、fan-out をやり直す（`BackgroundTasks` の取りこぼし回収） | 通知側の一意制約で重複作成しない。`processed_at` をセット | → [todo.md](todo.md) #18 | 次回実行で回収 | プロセス断でも通知が最終的に届くことを保証する多層防御。数分〜数十分の遅延は許容 |
+| 通知 outbox スイープ（`python -m app.jobs.notification_sweep`） | `processed_at IS NULL` かつ**作成から 5 分以上たった** `notification_outbox` 行を 1 件ずつ別 Tx で処理し（1 件の失敗は次回に回す）、fan-out をやり直す（`BackgroundTasks` の取りこぼし回収） | 通知側の一意制約で重複作成しない。`processed_at` をセット | → [todo.md](todo.md) #18 | 次回実行で回収 | プロセス断でも通知が最終的に届くことを保証する多層防御。数分〜数十分の遅延は許容 |
 | 古い通知の掃除 | 保持期間を超えた既読通知 ＋ 処理済み `notification_outbox` 行を削除 | 対象を都度判定 | 保持期間 → [todo.md](todo.md) #18 | 次回実行で回収 | 通知は履歴。古いものの掃除に即時性は不要 |
 | 閲覧履歴のトリミング | ユーザーあたり上限を超えた `recipe_views` を削除（挿入時トリミングを選ばない場合） | 対象を都度判定 | 方式 → [todo.md](todo.md) #9d | 次回実行で回収 | 上限超過分の掃除で、閲覧体験に影響しない |
 | `ai_usage` の日次処理（Phase 11） | レート制限をアプリ内カウンタで持つ場合の日次リセット / 集計 | 日付キーで冪等 | → [todo.md](todo.md) #45 | 次回実行で回収 | 日次境界の処理でリクエスト経路に乗せる必要がない |
@@ -209,7 +209,7 @@
 
 物理スキーマ（`uploads` の状態列 / 専用テーブルの別立て）の確定は **Phase 3（画像）**（→ [todo.md](todo.md) #32）。
 
-### 通知 outbox（`notification_outbox` 想定・Phase 8）
+### 通知 outbox（`notification_outbox`・Issue #70 で実装）
 
 - fan-out（`followee_new_recipe`）の配布指示を貯める。列の例: `id` / `event` / `recipe_id` / `author_id` / `created_at` / `processed_at`（NULL = 未処理）。
 - 公開レシピ作成トランザクション内で 1 行 INSERT（発火とアトミック）。`BackgroundTasks` が即時処理し、落ちた分は定期スイープ（§8）が拾う。

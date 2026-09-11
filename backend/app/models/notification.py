@@ -16,12 +16,12 @@
 「フォローは成立したのに通知が無い」という食い違いが構造的に起きない）。
 `followee_new_recipe` だけはフォロワー数だけ行が増える **fan-out** なので、
 リクエストの内側では作らず outbox 経由で非同期に配る
-（processing-model.md §3・§7。実装は Phase 8 の Issue）。
+（processing-model.md §3・§7。app/models/notification_outbox.py）。
 
-## この Issue（#66）での範囲
+## 実装の分担
 
-テーブルと「単一行の通知を作るヘルパー」（app/services/notification.py）まで。
-一覧 API（`GET /notifications`）と fan-out は Phase 8 の Issue で足す。
+- #66: テーブルと「単一行の通知を作るヘルパー」（app/services/notification.py）
+- #70: 一覧 API（app/services/notification_feed.py）と fan-out（outbox ＋ 配布 ＋ スイープ）
 `comment_id` 列は Issue #66 の時点では参照先の `recipe_comments` が無く作れなかった
 ため、感想の Issue #69 で追加した。
 
@@ -70,7 +70,23 @@ class Notification(SQLModel, table=True):
             name="ck_notifications_type",
         ),
         # 一覧は「自分あてを新しい順」。並び順まで索引に含めるとソートを省ける。
-        sa.Index("ix_notifications_user_id_created_at", "user_id", sa.text("created_at DESC")),
+        # id まで含めるのは、fan-out が同じ時刻の通知を大量に作るため（id で継いで
+        # ページ境界の抜け・重複を防ぐ。Issue #70）。
+        sa.Index(
+            "ix_notifications_user_id_created_at",
+            "user_id",
+            sa.text("created_at DESC"),
+            sa.text("id DESC"),
+        ),
+        # 新着レシピ通知は「同じ人に同じレシピで 1 件」。配布が二重に走っても
+        # `ON CONFLICT DO NOTHING` で重複しない（Issue #70）。
+        sa.Index(
+            "uq_notifications_followee_new_recipe",
+            "user_id",
+            "recipe_id",
+            unique=True,
+            postgresql_where=sa.text("type = 'followee_new_recipe'"),
+        ),
         # 未読件数（バッジ）用の部分インデックス。既読行を含めないので小さく保てる。
         sa.Index(
             "ix_notifications_user_id_unread",

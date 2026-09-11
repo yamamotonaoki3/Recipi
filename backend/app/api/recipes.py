@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from sqlmodel import Session
 
 from app.db import get_session, run_with_retry
@@ -32,6 +32,7 @@ from app.schemas.recipe import (
 )
 from app.services import favorite as favorite_service
 from app.services import history as history_service
+from app.services import notification as notification_service
 from app.services import recipe as recipe_service
 
 router = APIRouter(prefix="/api/v1", tags=["recipes"])
@@ -64,12 +65,17 @@ def _load_for_write(session: Session, user: User, recipe_id: uuid.UUID) -> Recip
 )
 def create_recipe(
     body: RecipeWriteRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> RecipeResponse:
     recipe = recipe_service.create_recipe(session, current_user, body)
     session.commit()
     session.refresh(recipe)
+    if recipe.is_public:
+        # 応答を返した後に、フォロワーへの新着通知を配る（投稿者を待たせない）。
+        # ここで落ちても配布予定（outbox）は DB に残っているので、スイープが拾い直す。
+        background_tasks.add_task(notification_service.deliver_outbox_for_recipe, recipe.id)
     return recipe_service.serialize_recipe(
         session, recipe, current_user, viewer=current_user, include_image_keys=True
     )

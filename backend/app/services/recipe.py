@@ -49,6 +49,7 @@ from app.schemas.recipe import (
     StepOutput,
 )
 from app.services.image import consume_upload_keys, enqueue_object_deletion, image_url
+from app.services.notification import enqueue_followee_new_recipe
 from app.text_normalize import normalize_search_text, split_search_terms
 
 
@@ -369,6 +370,11 @@ def create_recipe(session: Session, user: User, body: RecipeWriteRequest) -> Rec
 
     upsert_units(session, _collect_unit_values(body))
     _rebuild_children(session, recipe, body, ref_titles, cleaned_steps)
+    if recipe.is_public:
+        # フォロワーへの新着通知は「配る予定」だけを同じ Tx で書く（配るのはコミット後。
+        # app/services/notification.py の fan-out 節）。非公開で作ったレシピは、後で
+        # 公開にしても配らない（replace_recipe では作らない）。
+        enqueue_followee_new_recipe(session, recipe)
     return recipe
 
 

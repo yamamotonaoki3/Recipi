@@ -147,6 +147,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notifications
+         * @description 自分あての通知を新しい順に返す（未読件数を同梱）。
+         */
+        get: operations["list_notifications_api_v1_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Read
+         * @description 既読にする。`ids` 省略（body ごと省略も可）で自分の通知をすべて既読に。
+         */
+        post: operations["mark_read_api_v1_notifications_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Unread Count
+         * @description 未読件数（バッジ用）。一覧の `unreadCount` と同じ値。
+         */
+        get: operations["get_unread_count_api_v1_notifications_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes": {
         parameters: {
             query?: never;
@@ -834,6 +894,77 @@ export interface components {
             /** Refreshtoken */
             refreshToken: string;
         };
+        /**
+         * MarkReadRequest
+         * @description `POST /notifications/read` の body。
+         *
+         *     - `ids` を送る → その ID のうち**自分あて**のものだけ既読にする（他人あて・存在しない
+         *       ID は黙って無視する。notification.md §6）
+         *     - `ids` を省略（`{}`、または body ごと省略）→ 自分の通知をすべて既読にする
+         *     - `ids: null` は 400。全件既読は取り消せないので、明示の null を「全件」の意味に
+         *       しない（送り間違いで全部既読になる事故を防ぐ）。null を型から隠すため
+         *       `SkipJsonSchema[None]` を使う（OpenAPI 上は「任意だが null ではない」）
+         */
+        MarkReadRequest: {
+            /** Ids */
+            ids?: string[];
+        };
+        /**
+         * NotificationComment
+         * @description 感想の通知で、どの感想かを指す（遷移先の特定用。本文は出さない）。
+         */
+        NotificationComment: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** NotificationItem */
+        NotificationItem: {
+            actor: components["schemas"]["RecipeAuthor"];
+            comment: components["schemas"]["NotificationComment"] | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Readat */
+            readAt: string | null;
+            recipe: components["schemas"]["NotificationRecipe"] | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "followed" | "recipe_favorited" | "recipe_commented" | "followee_new_recipe";
+        };
+        /** NotificationListResponse */
+        NotificationListResponse: {
+            /** Items */
+            items: components["schemas"]["NotificationItem"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+            /** Unreadcount */
+            unreadCount: number;
+        };
+        /**
+         * NotificationRecipe
+         * @description 通知の遷移先レシピ（タイトルは本文の「『肉じゃが』を〜」に使う）。
+         */
+        NotificationRecipe: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** PasswordResetConfirmRequest */
         PasswordResetConfirmRequest: {
             /**
@@ -1097,6 +1228,11 @@ export interface components {
         UnitsResponse: {
             /** Units */
             units: components["schemas"]["UnitOption"][];
+        };
+        /** UnreadCountResponse */
+        UnreadCountResponse: {
+            /** Unreadcount */
+            unreadCount: number;
         };
         /**
          * UpdateMeRequest
@@ -1717,6 +1853,116 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_notifications_api_v1_notifications_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationListResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    mark_read_api_v1_notifications_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_unread_count_api_v1_notifications_unread_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCountResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

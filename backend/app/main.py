@@ -30,6 +30,7 @@ from app import storage
 from app.api.auth import router as auth_router
 from app.api.comments import router as comments_router
 from app.api.images import router as images_router
+from app.api.notifications import router as notifications_router
 from app.api.recipes import router as recipes_router
 from app.api.units import router as units_router
 from app.api.users import router as users_router
@@ -114,6 +115,7 @@ app.include_router(recipes_router)
 app.include_router(units_router)
 app.include_router(images_router)
 app.include_router(comments_router)
+app.include_router(notifications_router)
 
 
 def _custom_openapi() -> dict[str, Any]:
