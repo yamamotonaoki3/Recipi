@@ -124,9 +124,9 @@
 
 | メソッド | パス | 認証 | 概要 |
 | --- | --- | --- | --- |
-| GET | `/notifications` | 必要 | 通知一覧（新しい順、カーソルページング）。レスポンスに `unreadCount` も含む |
+| GET | `/notifications` | 必要 | 通知一覧（新しい順、カーソルページング。`limit` 既定 20・1〜50）。レスポンスに `unreadCount` も含む（他人の非公開レシピの通知は一覧・件数とも除く） |
 | GET | `/notifications/unread-count` | 必要 | 未読件数のみ（バッジ更新用、一覧を取らない場面） |
-| POST | `/notifications/read` | 必要 | 既読化（`{ ids?: [...] }`、省略時は全既読） |
+| POST | `/notifications/read` | 必要 | 既読化（`{ ids?: [...] }`、省略時は全既読。最大 100 件、他人の ID は無視、`null` は 400） |
 
 ### AI — [features/ai-proofread.md](features/ai-proofread.md)（Phase 11）
 

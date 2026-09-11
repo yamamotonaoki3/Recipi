@@ -567,6 +567,160 @@
         "title": "LogoutRequest",
         "type": "object"
       },
+      "MarkReadRequest": {
+        "description": "`POST /notifications/read` の body。\n\n- `ids` を送る → その ID のうち**自分あて**のものだけ既読にする（他人あて・存在しない\n  ID は黙って無視する。notification.md §6）\n- `ids` を省略（`{}`、または body ごと省略）→ 自分の通知をすべて既読にする\n- `ids: null` は 400。全件既読は取り消せないので、明示の null を「全件」の意味に\n  しない（送り間違いで全部既読になる事故を防ぐ）。null を型から隠すため\n  `SkipJsonSchema[None]` を使う（OpenAPI 上は「任意だが null ではない」）",
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "title": "MarkReadRequest",
+        "type": "object"
+      },
+      "NotificationComment": {
+        "description": "感想の通知で、どの感想かを指す（遷移先の特定用。本文は出さない）。",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "NotificationComment",
+        "type": "object"
+      },
+      "NotificationItem": {
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/RecipeAuthor"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotificationComment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "readAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readat"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotificationRecipe"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "enum": [
+              "followed",
+              "recipe_favorited",
+              "recipe_commented",
+              "followee_new_recipe"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "readAt",
+          "actor",
+          "recipe",
+          "comment",
+          "createdAt"
+        ],
+        "title": "NotificationItem",
+        "type": "object"
+      },
+      "NotificationListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "unreadCount": {
+            "title": "Unreadcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "unreadCount",
+          "nextCursor"
+        ],
+        "title": "NotificationListResponse",
+        "type": "object"
+      },
+      "NotificationRecipe": {
+        "description": "通知の遷移先レシピ（タイトルは本文の「『肉じゃが』を〜」に使う）。",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "NotificationRecipe",
+        "type": "object"
+      },
       "PasswordResetConfirmRequest": {
         "properties": {
           "email": {
@@ -1212,6 +1366,19 @@
           "units"
         ],
         "title": "UnitsResponse",
+        "type": "object"
+      },
+      "UnreadCountResponse": {
+        "properties": {
+          "unreadCount": {
+            "title": "Unreadcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unreadCount"
+        ],
+        "title": "UnreadCountResponse",
         "type": "object"
       },
       "UpdateMeRequest": {
@@ -2243,6 +2410,169 @@
         "summary": "Upload Image",
         "tags": [
           "images"
+        ]
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "description": "自分あての通知を新しい順に返す（未読件数を同梱）。",
+        "operationId": "list_notifications_api_v1_notifications_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/read": {
+      "post": {
+        "description": "既読にする。`ids` 省略（body ごと省略も可）で自分の通知をすべて既読に。",
+        "operationId": "mark_read_api_v1_notifications_read_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/unread-count": {
+      "get": {
+        "description": "未読件数（バッジ用）。一覧の `unreadCount` と同じ値。",
+        "operationId": "get_unread_count_api_v1_notifications_unread_count_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Unread Count",
+        "tags": [
+          "notifications"
         ]
       }
     },

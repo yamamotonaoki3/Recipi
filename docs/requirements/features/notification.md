@@ -38,7 +38,9 @@
 - `recipe_favorited`: お気に入り成立時のみ。お気に入り解除しても、既存の `recipe_favorited` 通知は削除しない（通知は発生した出来事の履歴であり、後から取り消さない）。
 - `recipe_commented`: 感想の新規投稿時のみ。編集では作らない。
 - `followee_new_recipe`: 公開レシピの新規投稿時のみ作成する。非公開で作成後に公開化した場合は作成しない。
-- 対象（レシピ / 感想 / 行為者）が削除された通知は一覧に表示しない（または削除。[../data-model.md](../data-model.md) の CASCADE）。
+- 対象（レシピ / 感想 / 行為者）が削除された通知は一覧に表示しない（FK の ON DELETE CASCADE で行ごと削除。[../data-model.md](../data-model.md)）。
+- **他人のレシピが非公開になったら、そのレシピの通知は一覧にも未読数にも出さない**（行は消さず、公開に戻れば再び出る）。自分のレシピの通知は非公開でも出る（Issue #70 で確定）。
+- `followee_new_recipe` は、配布の前にレシピが非公開化されていたら配らない（後で公開に戻しても配らない）。
 - アカウント削除時、その人あての通知（`user_id`）とその人が行為者の通知（`actor_id`）は CASCADE で消える。
 
 ## 4. データモデル
@@ -56,9 +58,9 @@
 | `read_at` | timestamptz | NULL 可（NULL = 未読） |
 | `created_at` | timestamptz | |
 
-- index(`user_id`, `created_at` DESC)
+- index(`user_id`, `created_at` DESC, `id` DESC)（一覧の並び・カーソル条件と同じ。fan-out は同時刻の行を大量に作るので id で継ぐ）
 - 未読件数用に部分インデックス: index(`user_id`) WHERE `read_at IS NULL`
-- `followee_new_recipe` の重複作成防止に、`(user_id, type, recipe_id)` の一意制約（`type = 'followee_new_recipe'` の部分一意インデックス等。形は Phase 8 で確定）
+- `followee_new_recipe` の重複作成防止: 部分一意インデックス (`user_id`, `recipe_id`) WHERE `type = 'followee_new_recipe'`（Issue #70 で確定）
 
 `notification_outbox` テーブル（fan-out 配布指示・Phase 8。[../processing-model.md](../processing-model.md) §9）:
 
@@ -71,7 +73,9 @@
 | `created_at` | timestamptz | |
 | `processed_at` | timestamptz | NULL 可（NULL = 未処理） |
 
-- index(`processed_at`)（未処理スイープ用）
+- `processed_at` 以外はすべて NOT NULL。UNIQUE(`event`, `recipe_id`)（1 レシピ 1 行）
+- index(`processed_at`)（未処理スイープ用）/ index(`recipe_id`)・index(`author_id`)（CASCADE 用）
+- 通知の `created_at` には outbox の `created_at`（= レシピの作成時刻）を使う。遅れて配っても投稿時刻に並ぶ
 
 ## 5. API
 
@@ -93,7 +97,8 @@
 }
 ```
 
-- レスポンスに `unreadCount`（自分の未読通知総数）を含める。通知画面を開く際の往復を減らすため（[../non-functional.md](../non-functional.md)）。`GET /notifications/unread-count` はバッジ更新など一覧を取らない場面用。
+- 新しい順（`created_at` DESC, `id` DESC）。`limit` 既定 20・1〜50、壊れたカーソルは 400。`comment` は `{ "id": "…" }`（`recipe_commented` のみ）。
+- レスポンスに `unreadCount`（自分の未読通知のうち**一覧に出るもの**の総数。§3 の非公開ルールで隠れる通知は数えない）を含める。通知画面を開く際の往復を減らすため（[../non-functional.md](../non-functional.md)）。`GET /notifications/unread-count` はバッジ更新など一覧を取らない場面用。
 
 ### GET `/notifications/unread-count`（認証必要）
 
@@ -103,14 +108,16 @@
 
 ### POST `/notifications/read`（認証必要）
 
-- body: `{ "ids": ["…", "…"] }`（省略時は自分の全通知を既読化）
+- body: `{ "ids": ["…", "…"] }`（`ids` 省略・`{}`・body 省略で自分の全通知を既読化）
+- `ids: []` は何もしない。`ids: null` と body が JSON の `null` だけの場合は 400（取り消せない全件既読の誤発動を防ぐ）
+- 既読済みの通知の `read_at` は上書きしない
 - 204
 
 ## 6. バリデーション
 
 | 項目 | ルール |
 | --- | --- |
-| `ids` | 任意。自分あての通知 ID のみ有効（他人の通知 ID は無視 or 403） |
+| `ids` | 任意。最大 100 件（101 件以上は 400）。UUID 以外は 400。自分あての通知 ID のみ有効（他人の通知 ID・存在しない ID は**無視**。Issue #70 で確定） |
 
 ## 7. 受け入れ基準
 
@@ -130,5 +137,5 @@
 - 通知の保持期間・自動削除（古い通知・処理済み `notification_outbox` の掃除）→ [../todo.md](../todo.md)
 - fan-out の受信者は配布処理の実行時点の `follows` で決まる（障害回収が遅れると投稿時点のフォロワーと差が出うる）。厳密な投稿時点スナップショットが要るかは実装時に判断（現状は許容。[../processing-model.md](../processing-model.md) §9）
 - まとめ表示（「〇〇さん他 3 人がフォローしました」）→ 将来
-- 非公開化に伴う通知の取り消し → 実装時に確定
+- 非公開化に伴う通知の取り消し → Issue #70 で確定（行は消さず、他人から見えない間は一覧・未読数から隠す。§3）
 - プッシュ通知・メール通知は対象外（将来）

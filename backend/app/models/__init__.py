@@ -13,6 +13,7 @@ from app.models.follow import Follow
 from app.models.ingredient import Ingredient
 from app.models.ingredient_group import IngredientGroup
 from app.models.notification import Notification
+from app.models.notification_outbox import NotificationOutbox
 from app.models.password_reset_attempt import PasswordResetAttempt
 from app.models.pending_storage_deletion import PendingStorageDeletion
 from app.models.recipe import Recipe
@@ -30,6 +31,7 @@ __all__ = [
     "Ingredient",
     "IngredientGroup",
     "Notification",
+    "NotificationOutbox",
     "PasswordResetAttempt",
     "PendingStorageDeletion",
     "Recipe",
