@@ -23,6 +23,36 @@
         "title": "AuthTokenResponse",
         "type": "object"
       },
+      "AvatarResponse": {
+        "description": "`PUT /users/me/avatar` の結果（features/image.md §5）。\n\nアバターは専用エンドポイントで保存まで完結するので、キーは返さない\n（クライアントがキーを送り返す場面が無い）。表示用 URL だけを返す。",
+        "properties": {
+          "avatarUrl": {
+            "description": "設定したアバターの表示用 URL",
+            "title": "Avatarurl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "avatarUrl"
+        ],
+        "title": "AvatarResponse",
+        "type": "object"
+      },
+      "Body_put_my_avatar_api_v1_users_me_avatar_put": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JPEG / PNG / WebP の画像 1 枚",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_put_my_avatar_api_v1_users_me_avatar_put",
+        "type": "object"
+      },
       "Body_upload_image_api_v1_images_post": {
         "properties": {
           "file": {
@@ -462,6 +492,46 @@
         "title": "PasswordResetRequestResponse",
         "type": "object"
       },
+      "ProfileLinks": {
+        "description": "他人向けプロフィールの SNS リンク。**公開 ON かつ値があるものだけ**入る。\n\nどの項目も既定値 `None` にしておくのが大事。既定値が無いと Pydantic は\nOpenAPI でこれらを「必須」と宣言してしまい、「必須と言いながら実際には\n返さない」契約の矛盾になる（生成される frontend の型も食い違う）。",
+        "properties": {
+          "instagram": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instagram"
+          },
+          "other": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          }
+        },
+        "title": "ProfileLinks",
+        "type": "object"
+      },
       "RecipeAuthor": {
         "properties": {
           "avatarUrl": {
@@ -695,12 +765,19 @@
         "type": "object"
       },
       "RecipeSummary": {
-        "description": "自分のレシピ一覧のカード 1 枚分（features/recipe.md §2「自分のレシピ一覧」）。",
+        "description": "ユーザーごとのレシピ一覧のカード 1 枚分。\n\n`GET /users/me/recipes`（自分のレシピ一覧）と `GET /users/{id}/recipes`\n（ユーザープロフィールのレシピ一覧）で共通。\n\nレシピカード（screens/components.md）は全一覧で投稿者（アバター ＋ 表示名）と\nお気に入り数を出すため、`author` と `favorite_count` を Issue #67 で足した。\nfrontend はこの型を名前で参照している（`features/recipe/api.ts`）ので、\n**名前と既存の項目は変えず、項目を足すだけ**にしている。\n`is_public` は本人が見るときに「非公開」バッジを出すのに使う。",
         "properties": {
+          "author": {
+            "$ref": "#/components/schemas/RecipeAuthor"
+          },
           "createdAt": {
             "format": "date-time",
             "title": "Createdat",
             "type": "string"
+          },
+          "favoriteCount": {
+            "title": "Favoritecount",
+            "type": "integer"
           },
           "id": {
             "format": "uuid",
@@ -732,7 +809,9 @@
           "title",
           "thumbnailUrl",
           "isPublic",
-          "createdAt"
+          "createdAt",
+          "author",
+          "favoriteCount"
         ],
         "title": "RecipeSummary",
         "type": "object"
@@ -998,46 +1077,107 @@
         "type": "object"
       },
       "UpdateMeRequest": {
+        "description": "`PATCH /users/me` の body（features/profile.md §5）。\n\n## 「送られた項目だけ更新する」の作り方\n\nすべての項目を任意にし、**既定値を `None` にする**。Pydantic v2 では\n`str | None` と書くだけだと「null も入れられる必須項目」になってしまい、\n表示名だけ送る、といった部分更新ができない。\n\nそのうえで、「送られなかった」と「null が送られた」を区別する必要がある\n（どちらも値は `None` になる）。区別には Pydantic が記録している\n`model_fields_set`（＝リクエストに実際に含まれていた項目名）を使う。\n- 送られなかった → 変更しない\n- URL に null → 削除する\n- 表示名・トグルに null → 400（DB では NOT NULL の列なので、ここで弾く）",
         "properties": {
           "displayName": {
-            "maxLength": 30,
-            "minLength": 1,
-            "title": "Displayname",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Displayname"
+          },
+          "emailPublic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emailpublic"
+          },
+          "instagramPublic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instagrampublic"
+          },
+          "instagramUrl": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instagramurl"
+          },
+          "otherPublic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Otherpublic"
+          },
+          "otherUrl": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Otherurl"
+          },
+          "xPublic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xpublic"
+          },
+          "xUrl": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xurl"
           }
         },
-        "required": [
-          "displayName"
-        ],
         "title": "UpdateMeRequest",
         "type": "object"
       },
       "UserMeResponse": {
-        "properties": {
-          "displayName": {
-            "title": "Displayname",
-            "type": "string"
-          },
-          "email": {
-            "title": "Email",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "email",
-          "displayName"
-        ],
-        "title": "UserMeResponse",
-        "type": "object"
-      },
-      "UserProfileResponse": {
-        "description": "`GET /users/{id}` の最小版（features/profile.md §5）。\n\nアバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。",
+        "description": "本人のプロフィール設定（`PATCH /users/me` の応答）。\n\nid / email / displayName は Phase 1 からある項目で、frontend が名前で\n参照している（`features/auth/api.ts`）。**名前と既存の項目は変えずに**\nプロフィール拡張の項目を足している。",
         "properties": {
           "avatarUrl": {
             "anyOf": [
@@ -1054,39 +1194,79 @@
             "title": "Displayname",
             "type": "string"
           },
-          "followerCount": {
-            "title": "Followercount",
-            "type": "integer"
+          "email": {
+            "title": "Email",
+            "type": "string"
           },
-          "followingCount": {
-            "title": "Followingcount",
-            "type": "integer"
+          "emailPublic": {
+            "title": "Emailpublic",
+            "type": "boolean"
           },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
           },
-          "isFollowing": {
+          "instagramPublic": {
+            "title": "Instagrampublic",
+            "type": "boolean"
+          },
+          "instagramUrl": {
             "anyOf": [
               {
-                "type": "boolean"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Isfollowing"
+            "title": "Instagramurl"
+          },
+          "otherPublic": {
+            "title": "Otherpublic",
+            "type": "boolean"
+          },
+          "otherUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Otherurl"
+          },
+          "xPublic": {
+            "title": "Xpublic",
+            "type": "boolean"
+          },
+          "xUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xurl"
           }
         },
         "required": [
           "id",
+          "email",
           "displayName",
-          "followingCount",
-          "followerCount",
-          "isFollowing"
+          "avatarUrl",
+          "emailPublic",
+          "xUrl",
+          "xPublic",
+          "instagramUrl",
+          "instagramPublic",
+          "otherUrl",
+          "otherPublic"
         ],
-        "title": "UserProfileResponse",
+        "title": "UserMeResponse",
         "type": "object"
       },
       "UserPublic": {
@@ -1106,6 +1286,68 @@
           "displayName"
         ],
         "title": "UserPublic",
+        "type": "object"
+      },
+      "UserPublicProfileResponse": {
+        "description": "`GET /users/{id}` で**他人**を取得したときの形（features/profile.md §5）。\n\n## 公開 OFF の項目は「null」ではなく「キーごと無し」\n\nnon-functional.md「データの可視性ルール」は、公開トグル OFF の項目を\n**レスポンスに含めない**ことを求めている。`\"email\": null` と返すと\n「メールは設定されているが非公開」という事実まで伝わってしまうため、\nキーそのものを落とす。\n- `email`: `emailPublic` が ON のときだけキーを出す\n- `links`: 常に返す（空なら `{}`）。中身は公開 ON かつ値ありの SNS だけ\n- 公開トグルの状態（`emailPublic` など）や URL の生の項目は、他人には一切返さない\n\n`avatarUrl` は公開トグルの対象ではないので、無いときも null で常に返す。",
+        "properties": {
+          "avatarUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatarurl"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "followerCount": {
+            "title": "Followercount",
+            "type": "integer"
+          },
+          "followingCount": {
+            "title": "Followingcount",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isFollowing": {
+            "title": "Isfollowing",
+            "type": "boolean"
+          },
+          "links": {
+            "$ref": "#/components/schemas/ProfileLinks"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "avatarUrl",
+          "followingCount",
+          "followerCount",
+          "isFollowing",
+          "links"
+        ],
+        "title": "UserPublicProfileResponse",
         "type": "object"
       },
       "UserRow": {
@@ -1170,6 +1412,114 @@
           "nextCursor"
         ],
         "title": "UserRowListResponse",
+        "type": "object"
+      },
+      "UserSelfProfileResponse": {
+        "description": "`GET /users/{id}` で**自分自身**を取得したときの形（features/profile.md §5）。\n\n本人には全項目 ＋ 各公開トグルの状態を返す（プロフィール編集画面で使う）。\n設定項目は `UserMeResponse` と同じなので継承し、フォロー数を足す。",
+        "properties": {
+          "avatarUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatarurl"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "emailPublic": {
+            "title": "Emailpublic",
+            "type": "boolean"
+          },
+          "followerCount": {
+            "title": "Followercount",
+            "type": "integer"
+          },
+          "followingCount": {
+            "title": "Followingcount",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "instagramPublic": {
+            "title": "Instagrampublic",
+            "type": "boolean"
+          },
+          "instagramUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instagramurl"
+          },
+          "isFollowing": {
+            "title": "Isfollowing",
+            "type": "null"
+          },
+          "otherPublic": {
+            "title": "Otherpublic",
+            "type": "boolean"
+          },
+          "otherUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Otherurl"
+          },
+          "xPublic": {
+            "title": "Xpublic",
+            "type": "boolean"
+          },
+          "xUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xurl"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "avatarUrl",
+          "emailPublic",
+          "xUrl",
+          "xPublic",
+          "instagramUrl",
+          "instagramPublic",
+          "otherUrl",
+          "otherPublic",
+          "followingCount",
+          "followerCount",
+          "isFollowing"
+        ],
+        "title": "UserSelfProfileResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -2068,6 +2418,7 @@
     },
     "/api/v1/users/me": {
       "patch": {
+        "description": "自分のプロフィール設定を**送られた項目だけ**更新する（features/profile.md §5）。",
         "operationId": "update_me_api_v1_users_me_patch",
         "requestBody": {
           "content": {
@@ -2117,6 +2468,101 @@
           }
         ],
         "summary": "Update Me",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/avatar": {
+      "delete": {
+        "description": "アバターを外す。設定していなくても 204（冪等）。",
+        "operationId": "delete_my_avatar_api_v1_users_me_avatar_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete My Avatar",
+        "tags": [
+          "users"
+        ]
+      },
+      "put": {
+        "description": "アバターを設定 / 差し替えする（features/image.md §3・§5）。\n\n保存の手順（管理行 → ストレージ → 確定）は `services/user.py` の `set_avatar`。\n最後の確定のトランザクションをここで commit してから URL を返す。",
+        "operationId": "put_my_avatar_api_v1_users_me_avatar_put",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_put_my_avatar_api_v1_users_me_avatar_put"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put My Avatar",
         "tags": [
           "users"
         ]
@@ -2475,7 +2921,7 @@
     },
     "/api/v1/users/{user_id}": {
       "get": {
-        "description": "ユーザープロフィール（features/profile.md §5 の最小版）。\n\nアバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。",
+        "description": "ユーザープロフィール（features/profile.md §5）。\n\n自分自身なら全項目 ＋ 公開トグルの状態、他人なら公開 ON の項目だけを返す\n（non-functional.md「データの可視性ルール」。組み立ては `services/user.py`）。",
         "operationId": "get_user_api_v1_users__user_id__get",
         "parameters": [
           {
@@ -2494,7 +2940,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserProfileResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/UserSelfProfileResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UserPublicProfileResponse"
+                    }
+                  ],
+                  "title": "Response Get User Api V1 Users  User Id  Get"
                 }
               }
             },
@@ -2845,6 +3299,103 @@
         "summary": "List User Following",
         "tags": [
           "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/recipes": {
+      "get": {
+        "description": "あるユーザーのレシピ一覧（features/profile.md §5）。\n\n他人が見れば公開レシピだけ、本人が見れば非公開も含む。存在しないユーザーは 404。",
+        "operationId": "list_user_recipes_api_v1_users__user_id__recipes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List User Recipes",
+        "tags": [
+          "recipes"
         ]
       }
     },

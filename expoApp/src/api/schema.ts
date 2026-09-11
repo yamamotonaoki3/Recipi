@@ -220,8 +220,38 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Me */
+        /**
+         * Update Me
+         * @description 自分のプロフィール設定を**送られた項目だけ**更新する（features/profile.md §5）。
+         */
         patch: operations["update_me_api_v1_users_me_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put My Avatar
+         * @description アバターを設定 / 差し替えする（features/image.md §3・§5）。
+         *
+         *     保存の手順（管理行 → ストレージ → 確定）は `services/user.py` の `set_avatar`。
+         *     最後の確定のトランザクションをここで commit してから URL を返す。
+         */
+        put: operations["put_my_avatar_api_v1_users_me_avatar_put"];
+        post?: never;
+        /**
+         * Delete My Avatar
+         * @description アバターを外す。設定していなくても 204（冪等）。
+         */
+        delete: operations["delete_my_avatar_api_v1_users_me_avatar_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/users/me/followers": {
@@ -323,9 +353,10 @@ export interface paths {
         };
         /**
          * Get User
-         * @description ユーザープロフィール（features/profile.md §5 の最小版）。
+         * @description ユーザープロフィール（features/profile.md §5）。
          *
-         *     アバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。
+         *     自分自身なら全項目 ＋ 公開トグルの状態、他人なら公開 ON の項目だけを返す
+         *     （non-functional.md「データの可視性ルール」。組み立ては `services/user.py`）。
          */
         get: operations["get_user_api_v1_users__user_id__get"];
         put?: never;
@@ -405,6 +436,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{user_id}/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List User Recipes
+         * @description あるユーザーのレシピ一覧（features/profile.md §5）。
+         *
+         *     他人が見れば公開レシピだけ、本人が見れば非公開も含む。存在しないユーザーは 404。
+         */
+        get: operations["list_user_recipes_api_v1_users__user_id__recipes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -456,6 +509,28 @@ export interface components {
             /** Refreshtoken */
             refreshToken: string;
             user: components["schemas"]["UserPublic"];
+        };
+        /**
+         * AvatarResponse
+         * @description `PUT /users/me/avatar` の結果（features/image.md §5）。
+         *
+         *     アバターは専用エンドポイントで保存まで完結するので、キーは返さない
+         *     （クライアントがキーを送り返す場面が無い）。表示用 URL だけを返す。
+         */
+        AvatarResponse: {
+            /**
+             * Avatarurl
+             * @description 設定したアバターの表示用 URL
+             */
+            avatarUrl: string;
+        };
+        /** Body_put_my_avatar_api_v1_users_me_avatar_put */
+        Body_put_my_avatar_api_v1_users_me_avatar_put: {
+            /**
+             * File
+             * @description JPEG / PNG / WebP の画像 1 枚
+             */
+            file: string;
         };
         /** Body_upload_image_api_v1_images_post */
         Body_upload_image_api_v1_images_post: {
@@ -619,6 +694,22 @@ export interface components {
             /** Securityquestion */
             securityQuestion: string;
         };
+        /**
+         * ProfileLinks
+         * @description 他人向けプロフィールの SNS リンク。**公開 ON かつ値があるものだけ**入る。
+         *
+         *     どの項目も既定値 `None` にしておくのが大事。既定値が無いと Pydantic は
+         *     OpenAPI でこれらを「必須」と宣言してしまい、「必須と言いながら実際には
+         *     返さない」契約の矛盾になる（生成される frontend の型も食い違う）。
+         */
+        ProfileLinks: {
+            /** Instagram */
+            instagram?: string | null;
+            /** Other */
+            other?: string | null;
+            /** X */
+            x?: string | null;
+        };
         /** RecipeAuthor */
         RecipeAuthor: {
             /** Avatarurl */
@@ -711,14 +802,26 @@ export interface components {
         };
         /**
          * RecipeSummary
-         * @description 自分のレシピ一覧のカード 1 枚分（features/recipe.md §2「自分のレシピ一覧」）。
+         * @description ユーザーごとのレシピ一覧のカード 1 枚分。
+         *
+         *     `GET /users/me/recipes`（自分のレシピ一覧）と `GET /users/{id}/recipes`
+         *     （ユーザープロフィールのレシピ一覧）で共通。
+         *
+         *     レシピカード（screens/components.md）は全一覧で投稿者（アバター ＋ 表示名）と
+         *     お気に入り数を出すため、`author` と `favorite_count` を Issue #67 で足した。
+         *     frontend はこの型を名前で参照している（`features/recipe/api.ts`）ので、
+         *     **名前と既存の項目は変えず、項目を足すだけ**にしている。
+         *     `is_public` は本人が見るときに「非公開」バッジを出すのに使う。
          */
         RecipeSummary: {
+            author: components["schemas"]["RecipeAuthor"];
             /**
              * Createdat
              * Format: date-time
              */
             createdAt: string;
+            /** Favoritecount */
+            favoriteCount: number;
             /**
              * Id
              * Format: uuid
@@ -825,45 +928,75 @@ export interface components {
             /** Units */
             units: components["schemas"]["UnitOption"][];
         };
-        /** UpdateMeRequest */
+        /**
+         * UpdateMeRequest
+         * @description `PATCH /users/me` の body（features/profile.md §5）。
+         *
+         *     ## 「送られた項目だけ更新する」の作り方
+         *
+         *     すべての項目を任意にし、**既定値を `None` にする**。Pydantic v2 では
+         *     `str | None` と書くだけだと「null も入れられる必須項目」になってしまい、
+         *     表示名だけ送る、といった部分更新ができない。
+         *
+         *     そのうえで、「送られなかった」と「null が送られた」を区別する必要がある
+         *     （どちらも値は `None` になる）。区別には Pydantic が記録している
+         *     `model_fields_set`（＝リクエストに実際に含まれていた項目名）を使う。
+         *     - 送られなかった → 変更しない
+         *     - URL に null → 削除する
+         *     - 表示名・トグルに null → 400（DB では NOT NULL の列なので、ここで弾く）
+         */
         UpdateMeRequest: {
             /** Displayname */
-            displayName: string;
+            displayName?: string | null;
+            /** Emailpublic */
+            emailPublic?: boolean | null;
+            /** Instagrampublic */
+            instagramPublic?: boolean | null;
+            /** Instagramurl */
+            instagramUrl?: string | null;
+            /** Otherpublic */
+            otherPublic?: boolean | null;
+            /** Otherurl */
+            otherUrl?: string | null;
+            /** Xpublic */
+            xPublic?: boolean | null;
+            /** Xurl */
+            xUrl?: string | null;
         };
-        /** UserMeResponse */
+        /**
+         * UserMeResponse
+         * @description 本人のプロフィール設定（`PATCH /users/me` の応答）。
+         *
+         *     id / email / displayName は Phase 1 からある項目で、frontend が名前で
+         *     参照している（`features/auth/api.ts`）。**名前と既存の項目は変えずに**
+         *     プロフィール拡張の項目を足している。
+         */
         UserMeResponse: {
+            /** Avatarurl */
+            avatarUrl: string | null;
             /** Displayname */
             displayName: string;
             /** Email */
             email: string;
+            /** Emailpublic */
+            emailPublic: boolean;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-        };
-        /**
-         * UserProfileResponse
-         * @description `GET /users/{id}` の最小版（features/profile.md §5）。
-         *
-         *     アバター・メール・SNS リンク・公開トグルはプロフィール拡張の Issue で足す。
-         */
-        UserProfileResponse: {
-            /** Avatarurl */
-            avatarUrl?: string | null;
-            /** Displayname */
-            displayName: string;
-            /** Followercount */
-            followerCount: number;
-            /** Followingcount */
-            followingCount: number;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Isfollowing */
-            isFollowing: boolean | null;
+            /** Instagrampublic */
+            instagramPublic: boolean;
+            /** Instagramurl */
+            instagramUrl: string | null;
+            /** Otherpublic */
+            otherPublic: boolean;
+            /** Otherurl */
+            otherUrl: string | null;
+            /** Xpublic */
+            xPublic: boolean;
+            /** Xurl */
+            xUrl: string | null;
         };
         /** UserPublic */
         UserPublic: {
@@ -874,6 +1007,42 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /**
+         * UserPublicProfileResponse
+         * @description `GET /users/{id}` で**他人**を取得したときの形（features/profile.md §5）。
+         *
+         *     ## 公開 OFF の項目は「null」ではなく「キーごと無し」
+         *
+         *     non-functional.md「データの可視性ルール」は、公開トグル OFF の項目を
+         *     **レスポンスに含めない**ことを求めている。`"email": null` と返すと
+         *     「メールは設定されているが非公開」という事実まで伝わってしまうため、
+         *     キーそのものを落とす。
+         *     - `email`: `emailPublic` が ON のときだけキーを出す
+         *     - `links`: 常に返す（空なら `{}`）。中身は公開 ON かつ値ありの SNS だけ
+         *     - 公開トグルの状態（`emailPublic` など）や URL の生の項目は、他人には一切返さない
+         *
+         *     `avatarUrl` は公開トグルの対象ではないので、無いときも null で常に返す。
+         */
+        UserPublicProfileResponse: {
+            /** Avatarurl */
+            avatarUrl: string | null;
+            /** Displayname */
+            displayName: string;
+            /** Email */
+            email?: string | null;
+            /** Followercount */
+            followerCount: number;
+            /** Followingcount */
+            followingCount: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Isfollowing */
+            isFollowing: boolean;
+            links: components["schemas"]["ProfileLinks"];
         };
         /**
          * UserRow
@@ -898,6 +1067,46 @@ export interface components {
             items: components["schemas"]["UserRow"][];
             /** Nextcursor */
             nextCursor: string | null;
+        };
+        /**
+         * UserSelfProfileResponse
+         * @description `GET /users/{id}` で**自分自身**を取得したときの形（features/profile.md §5）。
+         *
+         *     本人には全項目 ＋ 各公開トグルの状態を返す（プロフィール編集画面で使う）。
+         *     設定項目は `UserMeResponse` と同じなので継承し、フォロー数を足す。
+         */
+        UserSelfProfileResponse: {
+            /** Avatarurl */
+            avatarUrl: string | null;
+            /** Displayname */
+            displayName: string;
+            /** Email */
+            email: string;
+            /** Emailpublic */
+            emailPublic: boolean;
+            /** Followercount */
+            followerCount: number;
+            /** Followingcount */
+            followingCount: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Instagrampublic */
+            instagramPublic: boolean;
+            /** Instagramurl */
+            instagramUrl: string | null;
+            /** Isfollowing */
+            isFollowing: null;
+            /** Otherpublic */
+            otherPublic: boolean;
+            /** Otherurl */
+            otherUrl: string | null;
+            /** Xpublic */
+            xPublic: boolean;
+            /** Xurl */
+            xUrl: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1590,6 +1799,84 @@ export interface operations {
             };
         };
     };
+    put_my_avatar_api_v1_users_me_avatar_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_put_my_avatar_api_v1_users_me_avatar_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_my_avatar_api_v1_users_me_avatar_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_my_followers_api_v1_users_me_followers_get: {
         parameters: {
             query?: {
@@ -1799,7 +2086,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserProfileResponse"];
+                    "application/json": components["schemas"]["UserSelfProfileResponse"] | components["schemas"]["UserPublicProfileResponse"];
                 };
             };
             /** @description リクエストの内容が不正です */
@@ -1989,6 +2276,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRowListResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_user_recipes_api_v1_users__user_id__recipes_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeListResponse"];
                 };
             };
             /** @description リクエストの内容が不正です */

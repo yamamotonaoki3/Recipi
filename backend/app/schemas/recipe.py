@@ -138,7 +138,9 @@ class RecipeWriteRequest(CamelModel):
 class RecipeAuthor(CamelModel):
     id: uuid.UUID
     display_name: str
-    avatar_url: str | None = None  # アバターは Phase 5。当面 null。
+    # `users.avatar_key` から組み立てた表示用 URL。アバターが無ければ null
+    # （組み立ては app/services/recipe.py の `author_of`）。
+    avatar_url: str | None = None
 
 
 class RefRecipe(CamelModel):
@@ -192,13 +194,25 @@ class RecipeResponse(CamelModel):
 
 
 class RecipeSummary(CamelModel):
-    """自分のレシピ一覧のカード 1 枚分（features/recipe.md §2「自分のレシピ一覧」）。"""
+    """ユーザーごとのレシピ一覧のカード 1 枚分。
+
+    `GET /users/me/recipes`（自分のレシピ一覧）と `GET /users/{id}/recipes`
+    （ユーザープロフィールのレシピ一覧）で共通。
+
+    レシピカード（screens/components.md）は全一覧で投稿者（アバター ＋ 表示名）と
+    お気に入り数を出すため、`author` と `favorite_count` を Issue #67 で足した。
+    frontend はこの型を名前で参照している（`features/recipe/api.ts`）ので、
+    **名前と既存の項目は変えず、項目を足すだけ**にしている。
+    `is_public` は本人が見るときに「非公開」バッジを出すのに使う。
+    """
 
     id: uuid.UUID
     title: str
     thumbnail_url: str | None
     is_public: bool
     created_at: datetime
+    author: RecipeAuthor
+    favorite_count: int
 
 
 class RecipeListResponse(CamelModel):

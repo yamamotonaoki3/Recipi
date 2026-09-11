@@ -62,5 +62,23 @@ class User(SQLModel, table=True):
     following_count: int = Field(default=0, nullable=False)
     follower_count: int = Field(default=0, nullable=False)
 
+    # --- プロフィール（Issue #67・features/profile.md §4） -------------------
+    #
+    # アバター画像のオブジェクトキー。無ければ None（クライアントはプレースホルダを出す）。
+    # 表示用 URL はキーから組み立てる派生値なので DB には持たない（image.md §4）。
+    avatar_key: str | None = Field(default=None, nullable=True)
+
+    # 連絡先・SNS と、それぞれを「他の人に公開するか」のトグル。
+    # **既定はすべて非公開（False）**。公開 OFF の項目は、他人がプロフィールを
+    # 取得したときのレスポンスにキーごと含めない（non-functional.md「データの
+    # 可視性ルール」。組み立ては app/services/user.py）。本人にだけ全項目を返す。
+    email_public: bool = Field(default=False, nullable=False)
+    x_url: str | None = Field(default=None, max_length=2048, nullable=True)
+    x_public: bool = Field(default=False, nullable=False)
+    instagram_url: str | None = Field(default=None, max_length=2048, nullable=True)
+    instagram_public: bool = Field(default=False, nullable=False)
+    other_url: str | None = Field(default=None, max_length=2048, nullable=True)
+    other_public: bool = Field(default=False, nullable=False)
+
     created_at: datetime = Field(default_factory=_utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=_utcnow, nullable=False)
