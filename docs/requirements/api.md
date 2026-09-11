@@ -58,7 +58,7 @@
 | DELETE | `/recipes/{id}` | 必要 | 削除（本人のみ）。自分の他レシピの材料がこのレシピを `ref_recipe_id` で参照していたら SET NULL |
 | GET | `/users/me/recipes` | 必要 | 自分の投稿一覧（公開 / 非公開）。query: `q`（任意。タイトル + 材料名。マッチ規則は通常検索と同じ）, `limit`, `cursor`。材料の「レシピから選ぶ」ピッカーはこれを使う（自分のレシピ限定） |
 
-一覧レスポンスの各要素には `favoriteCount`（`recipes.favorite_count`）/ `author`（id・表示名・アバター URL）/ `thumbnailUrl` を含める。
+一覧レスポンスの各要素には `favoriteCount`（`recipes.favorite_count`）/ `isFavorited`（閲覧者から見た状態）/ `author`（id・表示名・アバター URL）/ `thumbnailUrl` を含める。
 
 **材料グループ**: レシピは 1 個以上の材料グループを持つ（グループ未使用 = 名前なしグループ 1 つ = 見出しなしのフラット表示）。詳細は [features/recipe.md](features/recipe.md)。
 
@@ -107,9 +107,9 @@
 
 | メソッド | パス | 認証 | 概要 |
 | --- | --- | --- | --- |
-| POST | `/recipes/{id}/favorite` | 必要 | お気に入り登録（冪等）。公開レシピ or 自分の非公開レシピのみ |
-| DELETE | `/recipes/{id}/favorite` | 必要 | お気に入り解除（冪等） |
-| GET | `/users/me/favorites` | 必要 | お気に入り一覧（登録日時の新しい順）。`GET /recipes?feed=favorites` と同内容 |
+| POST | `/recipes/{id}/favorite` | 必要 | お気に入り登録（冪等・204）。公開レシピ or 自分の非公開レシピのみ。他人の非公開・存在しないレシピは 404 |
+| DELETE | `/recipes/{id}/favorite` | 必要 | お気に入り解除（冪等・204）。未登録・存在しないレシピ・後から非公開化された他人のレシピでも 204 |
+| GET | `/users/me/favorites` | 必要 | お気に入り一覧（登録日時の新しい順）。query: `q`, `limit`, `cursor`。`GET /recipes?feed=favorites` と同内容 |
 
 ### 感想（コメント） — [features/comment.md](features/comment.md)
 

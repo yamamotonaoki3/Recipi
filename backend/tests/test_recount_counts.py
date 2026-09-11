@@ -16,10 +16,12 @@ from sqlalchemy import text, update
 from sqlmodel import Session, select
 
 from app.db import engine
-from app.jobs.recount_counts import main, recount_follow_counts
+from app.jobs.recount_counts import main, recount_favorite_counts, recount_follow_counts
+from app.models.favorite import Favorite
 from app.models.follow import Follow
+from app.models.recipe import Recipe
 from app.models.user import User
-from tests.helpers import signup
+from tests.helpers import recipe_payload, signup
 
 pytestmark = pytest.mark.integration
 
@@ -182,3 +184,114 @@ def test_recount_retries_after_concurrent_follow_commit(
         raise thread_errors[0]
     assert _counts(db_session, a_id) == (1, 0)
     assert _counts(db_session, b_id) == (0, 1)
+
+
+# --- お気に入り数（Issue #68） -------------------------------------------------
+
+
+def _create_recipe(client: TestClient, headers: dict[str, str]) -> uuid.UUID:
+    res = client.post("/api/v1/recipes", json=recipe_payload(isPublic=True), headers=headers)
+    assert res.status_code == 201, res.text
+    return uuid.UUID(res.json()["id"])
+
+
+def _favorite_count(session: Session, recipe_id: uuid.UUID) -> int:
+    session.expire_all()
+    recipe = session.get(Recipe, recipe_id)
+    assert recipe is not None
+    return recipe.favorite_count
+
+
+def test_recount_fixes_drifted_favorite_count(client: TestClient, db_session: Session) -> None:
+    """`recipes.favorite_count` がずれていたら `favorites` の実数に戻す。"""
+    owner_headers, _ = _make_user(client)
+    rid = _create_recipe(client, owner_headers)
+    for _ in range(2):
+        fan_headers, _ = _make_user(client)
+        res = client.post(f"/api/v1/recipes/{rid}/favorite", headers=fan_headers)
+        assert res.status_code == 204, res.text
+
+    db_session.execute(update(Recipe).where(Recipe.id == rid).values(favorite_count=99))  # type: ignore[arg-type]
+    db_session.commit()
+
+    fixed = recount_favorite_counts(db_session)
+    db_session.commit()
+
+    assert fixed >= 1
+    assert _favorite_count(db_session, rid) == 2
+
+
+def _recount_is_waiting_for_recipe_lock() -> bool:
+    """補正の `UPDATE recipes` がレシピ行のロック待ちになったかを確かめる。"""
+    with engine.connect() as connection:
+        row = connection.execute(
+            text(
+                """
+                SELECT pid
+                FROM pg_stat_activity
+                WHERE pid <> pg_backend_pid()
+                  AND state = 'active'
+                  AND wait_event_type = 'Lock'
+                  AND query ILIKE '%UPDATE recipes%'
+                """
+            )
+        ).first()
+    return row is not None
+
+
+def test_recount_retries_after_concurrent_favorite_commit(
+    client: TestClient, db_session: Session
+) -> None:
+    """お気に入り処理の `recipes` ロックを待っても、コミット後の実数で補正し直す。
+
+    #66 のフォロー（`test_recount_retries_after_concurrent_follow_commit`）と同じ形。
+    READ COMMITTED のままだと、補正はお気に入り処理が正しく +1 した値を、待つ前の
+    古い実数で上書きしてしまう。
+    """
+    owner_headers, _ = _make_user(client)
+    _, fan_id = _make_user(client)
+    rid = _create_recipe(client, owner_headers)
+
+    # このレシピを補正の対象にする（実数 0 に対して 99）。
+    db_session.execute(update(Recipe).where(Recipe.id == rid).values(favorite_count=99))  # type: ignore[arg-type]
+    db_session.commit()
+
+    thread_errors: list[BaseException] = []
+
+    def run_recount() -> None:
+        try:
+            main()
+        except BaseException as exc:  # noqa: BLE001  スレッド内の失敗を親へ渡す
+            thread_errors.append(exc)
+
+    with Session(engine) as fav_session:
+        # 本物のお気に入り処理と同じ順序・ロックの種類で、先にレシピ行をロックする。
+        fav_session.exec(
+            select(Recipe.id).where(Recipe.id == rid).with_for_update(key_share=True)
+        ).one()
+        fav_session.add(Favorite(user_id=fan_id, recipe_id=rid))
+        fav_session.flush()
+        fav_session.execute(
+            update(Recipe)
+            .where(Recipe.id == rid)  # type: ignore[arg-type]
+            .values(favorite_count=Recipe.favorite_count + 1)
+        )
+
+        recount_thread = Thread(target=run_recount)
+        recount_thread.start()
+        try:
+            deadline = monotonic() + 10
+            while not _recount_is_waiting_for_recipe_lock() and monotonic() < deadline:
+                sleep(0.01)
+            assert _recount_is_waiting_for_recipe_lock()
+            fav_session.commit()
+        finally:
+            if fav_session.in_transaction():
+                fav_session.rollback()
+
+        recount_thread.join(timeout=10)
+
+    assert not recount_thread.is_alive()
+    if thread_errors:
+        raise thread_errors[0]
+    assert _favorite_count(db_session, rid) == 1

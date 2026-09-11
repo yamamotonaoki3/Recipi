@@ -29,18 +29,25 @@
 ```sql
 -- 登録
 BEGIN;
-INSERT INTO favorites (user_id, recipe_id) VALUES (:u, :r) ON CONFLICT DO NOTHING;
+-- ① 親の recipes 行を「先に」ロックする（FOR UPDATE ではなく FOR NO KEY UPDATE）
+SELECT * FROM recipes WHERE id = :r FOR NO KEY UPDATE;   -- 無い / 他人の非公開なら 404
+INSERT INTO favorites (user_id, recipe_id) VALUES (:u, :r)
+  ON CONFLICT DO NOTHING RETURNING recipe_id;             -- 返れば 1 行入った
 -- 1行入ったときだけ
 UPDATE recipes SET favorite_count = favorite_count + 1 WHERE id = :r;
 COMMIT;
 
 -- 解除
 BEGIN;
-DELETE FROM favorites WHERE user_id = :u AND recipe_id = :r;  -- 削除件数を確認
+SELECT * FROM recipes WHERE id = :r FOR NO KEY UPDATE;   -- 無ければ何もせず 204
+DELETE FROM favorites WHERE user_id = :u AND recipe_id = :r RETURNING recipe_id;
 -- 1行消えたときだけ
 UPDATE recipes SET favorite_count = favorite_count - 1 WHERE id = :r;
 COMMIT;
 ```
+
+- ロックを `favorites` への INSERT / DELETE より**先に**、`FOR NO KEY UPDATE` で取る理由は [../non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」（`FOR UPDATE` を後から取るとデッドロックする。Issue #66 で実際に起きた）。
+- 実際に増減したかは `RETURNING` の有無で判定する（ORM 経由の `rowcount` は -1 になることがある）。
 
 - 同一レシピへの同時お気に入りは `recipes` 行のロックで直列化される（クライアントにエラーは返さない・再試行不要）。
 - お気に入り成立時、レシピ投稿者に通知（[notification.md](notification.md) `recipe_favorited`）。ただし自分のレシピを自分でお気に入りしたときは通知しない。
@@ -56,7 +63,8 @@ COMMIT;
 | `created_at` | timestamptz | |
 
 - PK(`user_id`, `recipe_id`)
-- index(`recipe_id`)（逆引き・補正ジョブ用）
+- index(`recipe_id`)（逆引き・補正ジョブ・レシピ削除時の CASCADE 用）
+- index(`user_id`, `created_at` DESC, `recipe_id` DESC)（お気に入り一覧の並び・カーソル用。Issue #68）
 
 関連: `recipes.favorite_count`（NOT NULL DEFAULT 0, CHECK >= 0。[../data-model.md](../data-model.md)）
 
@@ -68,11 +76,11 @@ COMMIT;
 
 ### DELETE `/recipes/{id}/favorite`（認証必要）
 
-- お気に入り解除。冪等。204。
+- お気に入り解除。冪等。204。未登録・存在しないレシピでも 204。**公開中にお気に入りした他人のレシピが後から非公開化されても解除できる**（登録時の可視性チェックは解除には使わない）。
 
 ### GET `/users/me/favorites`（認証必要）
 
-- お気に入り一覧（登録日時の新しい順）。ページング。
+- お気に入り一覧（登録日時の新しい順）。ページング（`limit` / `cursor`）。`q` でタイトル + 材料名を絞り込める（`feed=favorites` と同じ）。
 - 自分の非公開レシピは含む。他人のレシピで非公開化 / 削除済みのものは除外。
 - レスポンス各要素はレシピカード相当（`id` / `title` / `thumbnailUrl` / `author` / `favoriteCount`）。
 - ホームの「お気に入りレシピ」タブは `GET /recipes?feed=favorites` でも取得可（[home-feed.md](home-feed.md)）。同じ内容。

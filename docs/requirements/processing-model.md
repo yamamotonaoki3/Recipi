@@ -127,7 +127,7 @@
 
 1. **1 リクエスト = 1 DB トランザクション**を原則とする。1 回の API 呼び出しで複数テーブルを書くときは同一トランザクション（レシピ CRUD、カウント列の増減、アカウント削除、トークンローテーション）。
 2. **外部サービスへの呼び出し（S3 / MinIO への PUT / DELETE・AI プロバイダ・将来のメール等）をトランザクション内に入れない。** ストレージの実 DELETE・fan-out・AI 呼び出しはトランザクション外。**ただし DB だけで完結する処理（削除キューへの行 INSERT、通知行の INSERT）はトランザクション内に入れる** — 外部待ちが無く軽いうえ、コミットと運命を共にできるので取りこぼしが起きない。
-3. **トランザクションは短く。** ロック保持時間を最小化する（カウント列は対象行だけを `FOR UPDATE`。[non-functional.md](non-functional.md)）。
+3. **トランザクションは短く。** ロック保持時間を最小化する（カウント列は対象行だけを `FOR NO KEY UPDATE` でロックする。種類とタイミングは [non-functional.md](non-functional.md)「カウント列キャッシュのトランザクション方針」）。
 4. **`BackgroundTasks` は「失われても整合性を壊さないもの」限定。** 壊れると困る整合は「同期でトランザクション内」か「定期バッチの多層防御」で守る。
 5. `deadlock` / `serialization_failure` はサーバー側でトランザクションを数回リトライ（[non-functional.md](non-functional.md)。上限は → [todo.md](todo.md) #10）。クライアントには見せない。
 6. **楽観的更新は ♡ / フォローのボタンとその数に限る**（即時 ±1・失敗時ロールバック。[screens/recipe-detail.md](screens/recipe-detail.md)）。フィードの並び・件数や他画面のカウントは再取得まで更新しない（[home-feed.md](features/home-feed.md)）。サーバーのカウント列が正。
@@ -156,8 +156,8 @@
 | ホーム / 検索 | GET /recipes | 読み取りのみ。`isFollowing` / `isFavorited` / 各カウントはまとめて取得（N+1 回避。[non-functional.md](non-functional.md)） | 同期 | — |
 | 閲覧履歴 | POST /recipes/{id}/view | `recipe_views` の upsert を 1 Tx | サーバーは同期・**クライアントは詳細取得成功後に fire-and-forget** | 保持件数トリミング（→ [todo.md](todo.md) #9d） |
 | 閲覧履歴 | GET / DELETE /users/me/history | 読み取り / 全削除 | 同期 | — |
-| フォロー | POST / DELETE follow | **1 Tx**: `follows` INSERT（`ON CONFLICT DO NOTHING`）/ DELETE（削除件数チェック）＋ 実際に増減したときだけ関与 2 行を id 昇順で `FOR UPDATE` → `following_count` / `follower_count` 更新。成立時は `followed` 通知を同一 Tx で INSERT（[follow.md](features/follow.md)） | 同期 | カウント補正ジョブ |
-| お気に入り | POST / DELETE favorite | **1 Tx**: `favorites` INSERT / DELETE ＋ `recipes.favorite_count` 増減。成立かつ他人のレシピなら `recipe_favorited` 通知を同一 Tx で INSERT（[favorite.md](features/favorite.md)） | 同期 | カウント補正ジョブ |
+| フォロー | POST / DELETE follow | **1 Tx**: 関与 2 行を id 昇順で `FOR NO KEY UPDATE` でロック → `follows` INSERT（`ON CONFLICT DO NOTHING ... RETURNING`）/ DELETE（`RETURNING`）→ 実際に増減したときだけ `following_count` / `follower_count` 更新。成立時は `followed` 通知を同一 Tx で INSERT（[follow.md](features/follow.md)） | 同期 | カウント補正ジョブ |
+| お気に入り | POST / DELETE favorite | **1 Tx**: `recipes` 行を `FOR NO KEY UPDATE` でロック → `favorites` INSERT（`ON CONFLICT DO NOTHING ... RETURNING`）/ DELETE（`RETURNING`）→ 実際に増減したときだけ `recipes.favorite_count` 増減。成立かつ他人のレシピなら `recipe_favorited` 通知を同一 Tx で INSERT（[favorite.md](features/favorite.md)） | 同期 | カウント補正ジョブ |
 | 感想 | POST / DELETE comment | **1 Tx**: `recipe_comments` INSERT / DELETE ＋ `recipes.comment_count` 増減。新規投稿時は `recipe_commented` 通知を同一 Tx で INSERT。削除で外れた画像キーは同一 Tx で削除キューに登録（[comment.md](features/comment.md)） | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
 | 感想 | PATCH comment | `recipe_comments` UPDATE のみ（カウント不変・通知なし）。差し替え / 削除で外れた旧画像キーは同一 Tx で削除キューに登録 | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
 | 通知 | GET /notifications, GET /notifications/unread-count | 読み取りのみ（`unreadCount` も同時に返す。[non-functional.md](non-functional.md)） | 同期 | 古い通知の掃除（→ [todo.md](todo.md) #18） |

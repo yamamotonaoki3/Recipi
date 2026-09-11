@@ -92,10 +92,19 @@ def test_feed_shows_only_public_recipes_newest_first(client: TestClient) -> None
     bob_items = _feed_items_by_author(client, viewer, bob_name)
     assert [i["title"] for i in bob_items] == ["ボブ公開"]
 
-    # カード形状: id / title / thumbnailUrl / author / favoriteCount のみ。
+    # カード形状: id / title / thumbnailUrl / author / favoriteCount / isFavorited のみ
+    # （isFavorited は Issue #68 で追加。閲覧者はまだ何もお気に入りしていないので false）。
     sample = bob_items[0]
-    assert set(sample) == {"id", "title", "thumbnailUrl", "author", "favoriteCount"}
+    assert set(sample) == {
+        "id",
+        "title",
+        "thumbnailUrl",
+        "author",
+        "favoriteCount",
+        "isFavorited",
+    }
     assert sample["favoriteCount"] == 0
+    assert sample["isFavorited"] is False
     assert sample["thumbnailUrl"] is None
     assert sample["author"]["displayName"] == bob_name
 
@@ -119,11 +128,13 @@ def test_feed_requires_auth(client: TestClient) -> None:
     assert client.get(RECIPES_URL).status_code == 401
 
 
-@pytest.mark.parametrize("feed", ["favorites", "bogus", "ALL", ""])
+# `favorites` は Issue #68 で解禁したので、ここには定義に無い値だけを並べる。
+@pytest.mark.parametrize("feed", ["bogus", "ALL", ""])
 def test_feed_unsupported_values_are_rejected(client: TestClient, feed: str) -> None:
-    """`favorites`（未実装）と定義に無い値は 400（home-feed.md §6）。
+    """定義に無い値は 400（home-feed.md §6）。
 
-    `following` / `followers` は Issue #66 で有効化したので、ここには含めない。
+    `following` / `followers` は Issue #66、`favorites` は Issue #68 で有効化したので、
+    ここには含めない。
     """
     headers = auth_headers(client)
     res = client.get(RECIPES_URL, params={"feed": feed}, headers=headers)

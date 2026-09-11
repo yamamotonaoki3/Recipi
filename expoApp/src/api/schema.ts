@@ -134,9 +134,8 @@ export interface paths {
          * List Feed
          * @description ホームフィード / 検索（features/home-feed.md・search.md）。
          *
-         *     受け付ける `feed` は `all` / `following` / `followers`。`favorites` は
-         *     お気に入り機能の Issue で有効化するので、今はまだ 400 にする
-         *     （home-feed.md §6「不正値は 400」）。`q` はどの `feed` とも併用できる。
+         *     受け付ける `feed` は `all` / `following` / `followers` / `favorites`。
+         *     それ以外は 400（home-feed.md §6）。`q` はどの `feed` とも併用できる。
          */
         get: operations["list_feed_api_v1_recipes_get"];
         put?: never;
@@ -162,6 +161,34 @@ export interface paths {
         post?: never;
         /** Delete Recipe */
         delete: operations["delete_recipe_api_v1_recipes__recipe_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Favorite Recipe
+         * @description お気に入りに登録する（冪等・204。features/favorite.md §5）。
+         *
+         *     公開レシピと自分の非公開レシピだけが対象。他人の非公開・存在しないレシピは 404。
+         *     同じレシピへの同時登録で起きうるデッドロック等は `run_with_retry` がやり直し、
+         *     commit まで済ませてから返す。
+         */
+        post: operations["favorite_recipe_api_v1_recipes__recipe_id__favorite_post"];
+        /**
+         * Unfavorite Recipe
+         * @description お気に入りを解除する（冪等・204）。未登録・存在しないレシピでも 204。
+         */
+        delete: operations["unfavorite_recipe_api_v1_recipes__recipe_id__favorite_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -249,6 +276,29 @@ export interface paths {
          * @description アバターを外す。設定していなくても 204（冪等）。
          */
         delete: operations["delete_my_avatar_api_v1_users_me_avatar_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Favorites
+         * @description 自分のお気に入り一覧（features/favorite.md §5）。
+         *
+         *     お気に入りした日時の新しい順。自分の非公開レシピは含み、他人のレシピで
+         *     非公開化されたものは含まない。`GET /recipes?feed=favorites` と同じ内容。
+         */
+        get: operations["list_my_favorites_api_v1_users_me_favorites_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -576,6 +626,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Isfavorited */
+            isFavorited: boolean;
             /** Thumbnailurl */
             thumbnailUrl: string | null;
             /** Title */
@@ -726,10 +778,11 @@ export interface components {
          * RecipeFeedItem
          * @description ホームフィードのレシピカード 1 枚分（features/home-feed.md §5）。
          *
-         *     自分のレシピ一覧（`RecipeSummary`）と違い、他人のレシピも並ぶので
-         *     投稿者情報（`author`）を含める。`is_public` は公開レシピしか出さないため
+         *     ホームフィード（全体 / フォロー / フォロワー / お気に入りレシピ）・
+         *     `GET /users/me/favorites`・閲覧履歴（`HistoryItem` が継承）で共通。
+         *     `is_public` は公開レシピ（とお気に入りでは自分の非公開）しか出さないため
          *     持たせない。`favorite_count` は `recipes.favorite_count`（カウント列
-         *     キャッシュ）をそのまま返す（Phase 6 でお気に入り機能が入るまでは 0）。
+         *     キャッシュ）をそのまま返す。
          */
         RecipeFeedItem: {
             author: components["schemas"]["RecipeAuthor"];
@@ -740,6 +793,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Isfavorited */
+            isFavorited: boolean;
             /** Thumbnailurl */
             thumbnailUrl: string | null;
             /** Title */
@@ -827,6 +882,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Isfavorited */
+            isFavorited: boolean;
             /** Ispublic */
             isPublic: boolean;
             /** Thumbnailurl */
@@ -1690,6 +1747,91 @@ export interface operations {
             };
         };
     };
+    favorite_recipe_api_v1_recipes__recipe_id__favorite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    unfavorite_recipe_api_v1_recipes__recipe_id__favorite_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     record_recipe_view_api_v1_recipes__recipe_id__view_post: {
         parameters: {
             query?: never;
@@ -1865,6 +2007,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_my_favorites_api_v1_users_me_favorites_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeFeedResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
             };
             /** @description Unauthorized */
             401: {

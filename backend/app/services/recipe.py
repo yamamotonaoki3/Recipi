@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, delete, select
 
 from app.errors import not_found, validation_error
+from app.models.favorite import Favorite
 from app.models.follow import Follow
 from app.models.ingredient import Ingredient
 from app.models.ingredient_group import IngredientGroup
@@ -67,6 +68,29 @@ def author_of(user: User) -> RecipeAuthor:
         display_name=user.display_name,
         avatar_url=image_url(user.avatar_key),
     )
+
+
+def resolve_favorited_flags(
+    session: Session, viewer: User | None, recipe_ids: list[uuid.UUID]
+) -> set[uuid.UUID]:
+    """閲覧者がお気に入り済みのレシピ id を、まとめて 1 クエリで返す（N+1 回避）。
+
+    一覧のカードごとに「お気に入り済みか」を問い合わせると件数ぶんクエリが飛ぶ
+    ので、表示する id を全部まとめて `IN` で 1 回引く（non-functional.md）。
+    未ログイン（`viewer` が None）なら何もお気に入りしていない扱いで空を返す。
+
+    お気に入りの登録・解除（app/services/favorite.py）はこのモジュールの関数を
+    使う側なので、ここから favorite.py を import しない（循環 import を作らない）。
+    """
+    if viewer is None or not recipe_ids:
+        return set()
+    rows = session.exec(
+        select(Favorite.recipe_id).where(
+            Favorite.user_id == viewer.id,
+            Favorite.recipe_id.in_(recipe_ids),  # type: ignore[attr-defined]
+        )
+    ).all()
+    return set(rows)
 
 
 # --- 単位の自動 upsert -------------------------------------------------
@@ -459,9 +483,18 @@ def delete_recipe(session: Session, recipe: Recipe) -> None:
 
 
 def serialize_recipe(
-    session: Session, recipe: Recipe, author: User, *, include_image_keys: bool = False
+    session: Session,
+    recipe: Recipe,
+    author: User,
+    *,
+    viewer: User | None,
+    include_image_keys: bool = False,
 ) -> RecipeResponse:
     """レシピをレスポンスへ整形する。
+
+    `author` はレシピの投稿者、`viewer` はこのレスポンスを受け取る閲覧者
+    （未ログインなら None）。詳細を他人が見るときは 2 人が別人になる。
+    `is_favorited` は閲覧者から見た状態なので `viewer` で決める。
 
     `include_image_keys` は「サムネ / 手順画像のオブジェクトキー」を含めるか。
     キーは編集画面が PUT で既存画像を維持するためだけに必要で、内部のストレージ
@@ -516,7 +549,7 @@ def serialize_recipe(
         is_public=recipe.is_public,
         thumbnail_url=image_url(recipe.thumbnail_key),
         thumbnail_key=recipe.thumbnail_key if include_image_keys else None,
-        is_favorited=False,
+        is_favorited=recipe.id in resolve_favorited_flags(session, viewer, [recipe.id]),
         favorite_count=recipe.favorite_count,
         comment_count=recipe.comment_count,
         ingredient_groups=group_outputs,
@@ -665,6 +698,7 @@ def list_recipes_by_owner(
     page = rows[:limit]
     # 1 ページのレシピはすべて同じ投稿者なので、投稿者は 1 回だけ組み立てる。
     author = author_of(owner)
+    favorited = resolve_favorited_flags(session, viewer, [r.id for r in page])
     return RecipeListResponse(
         items=[
             RecipeSummary(
@@ -675,6 +709,7 @@ def list_recipes_by_owner(
                 created_at=r.created_at,
                 author=author,
                 favorite_count=r.favorite_count,
+                is_favorited=r.id in favorited,
             )
             for r in page
         ],
@@ -701,8 +736,10 @@ def list_feed(
     | `following` | 自分がフォローしている人の公開レシピ |
     | `followers` | 自分をフォローしている人の公開レシピ |
 
-    `favorites` はお気に入り機能の Issue で有効化する（それまでは 400。呼び出し元の
-    `app/api/recipes.py` が値を検証する）。
+    `favorites`（お気に入りレシピ）は並びも対象も違う（お気に入りの登録日時順・
+    自分の非公開も含む）ので、この関数では扱わない。`app/api/recipes.py` が
+    `app/services/favorite.py` の `list_favorites` に振り分ける（この関数から
+    favorite.py を呼ばないのは循環 import を作らないため）。
 
     `q` を渡すとタイトル + 材料名で AND 絞り込み（`list_my_recipes` と同じ
     `apply_search_terms`）で、**どの `feed` とも併用できる**（home-feed.md §3
@@ -740,6 +777,7 @@ def list_feed(
     has_more = len(rows) > limit
     page = rows[:limit]
     authors = resolve_authors(session, page)
+    favorited = resolve_favorited_flags(session, viewer, [r.id for r in page])
     return RecipeFeedResponse(
         items=[
             RecipeFeedItem(
@@ -748,6 +786,7 @@ def list_feed(
                 thumbnail_url=image_url(r.thumbnail_key),
                 author=author_of(authors[r.user_id]),
                 favorite_count=r.favorite_count,
+                is_favorited=r.id in favorited,
             )
             for r in page
         ],
