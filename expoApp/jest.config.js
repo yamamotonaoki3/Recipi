@@ -16,6 +16,8 @@
 // 通信の分岐を本物に近い形で検証できる。
 //
 // coverageThreshold: 行・分岐カバレッジの下限。割ると CI が失敗する（testing.md §3）。
+// MVP 完成時の目標値（行 75% / 分岐 65%）。Issue #76 で Phase 1 開始時の値から引き上げた。
+// `npm test` だけではカバレッジを計測しないので判定されない。CI と同じ `npm test -- --coverage` で確かめる。
 /** @type {import('jest').Config} */
 module.exports = {
   projects: [
@@ -58,8 +60,8 @@ module.exports = {
   ],
   coverageThreshold: {
     global: {
-      lines: 60,
-      branches: 50,
+      lines: 75,
+      branches: 65,
     },
   },
   // 1 テストの制限時間。

@@ -109,6 +109,12 @@ jobs:
           APP_ENV: test
 
       - name: pytest（単体 ＋ 結合、行・分岐カバレッジ）
-        run: pytest --cov-report=xml --cov-fail-under=70
+        # coverage.xml は PR コメント用（投稿は未実装・Issue #86）、coverage.json は下の判定用。
+        run: pytest --cov-report=xml --cov-report=json
         env:
           APP_ENV: test
+
+      - name: カバレッジの下限を判定（行・分岐を別々に）
+        # `--cov-fail-under` は行と分岐の合算しか見ないので、行と分岐をそれぞれ下限と
+        # 比べるスクリプトで判定する（testing.md §3。MVP 目標値。Issue #76）。
+        run: python -m scripts.check_coverage coverage.json --lines 85 --branches 75
