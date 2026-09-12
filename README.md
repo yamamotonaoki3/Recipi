@@ -69,8 +69,10 @@ uvicorn app.main:app --reload   # http://localhost:8000
 ruff check .
 ruff format --check .
 mypy .
-pytest                          # 単体 ＋ 結合。pytest 設定が APP_ENV=test を
+pytest --cov-report=json        # 単体 ＋ 結合。pytest 設定が APP_ENV=test を
                                 # 強制し .env.test の使い捨て DB を使う
+python -m scripts.check_coverage coverage.json --lines 85 --branches 75
+                                # 行・分岐カバレッジの下限（testing.md §3）
 ```
 
 **4. フロントエンド（`expoApp/`）** — コマンドは OS 共通
@@ -83,12 +85,14 @@ npm run tauri dev               # デスクトップアプリとして起動
 
 # チェック（CI と同じ内容）
 npm run lint
+npm run format                  # Prettier（--check）
 npm run typecheck
-npm test                        # jest（単体・結合。API は MSW でモック）
+npm test -- --coverage          # jest（単体・結合。API は MSW でモック）。
+                                # --coverage を付けると行・分岐の下限も判定する
 
-# E2E（Phase 1 以降・Maestro CLI が必要）
-#   インストール: https://maestro.mobile.dev/getting-started/installing-maestro
-maestro test .maestro/
+# E2E（バックエンド一式を compose で起動してから）
+npm run e2e:web                 # Web（Playwright）
+npm run e2e:android             # Android（Appium + WebdriverIO。Appium サーバーとエミュレータが必要）
 ```
 
 ### テストの方針

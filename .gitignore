@@ -24,6 +24,7 @@ expoApp/web-build/
 # テストのカバレッジ出力
 **/coverage/
 coverage.xml
+coverage.json
 .coverage
 
 # pytest / ツールの一時ディレクトリ

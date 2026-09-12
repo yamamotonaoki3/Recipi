@@ -48,10 +48,12 @@
 
 ## 3. カバレッジ
 
-- PR ごとに計測し、結果を PR にコメント表示する。
-- **行カバレッジと分岐カバレッジの両方**でゲートする（`pytest-cov --cov-branch` / jest の `coverageThreshold.branches`）。下限を割ったら CI を失敗させる。
-- **下限（開始 = Phase 1）**: backend 行 70% / 分岐 60%、frontend 行 60% / 分岐 50%。
-- Phase ごとに引き上げ、**MVP 完成時の目標**: backend 行 85% / 分岐 75%、frontend 行 75% / 分岐 65%。
+- PR ごとに計測する。結果を PR にコメント表示するのは**未実装**（#86。CI は `coverage.xml` / `coverage.json` を出力するだけ）。
+- **行カバレッジと分岐カバレッジの両方**でゲートする。下限を割ったら CI を失敗させる。
+  - backend: `pytest --cov-report=json` の結果を `backend/scripts/check_coverage.py` が行・分岐それぞれ下限と比べる（`--cov-fail-under` は行と分岐の合算しか見ないため使わない。Issue #76）
+  - frontend: jest の `coverageThreshold`（`lines` / `branches` を別々に判定）。`npm test -- --coverage` のときだけ判定される
+- **現行の下限（Issue #76 で MVP 完成時の目標値に確定）**: backend 行 85% / 分岐 75%、frontend 行 75% / 分岐 65%。
+- 開始時の下限（履歴。Phase 1）: backend 合算 70%（`--cov-fail-under`）、frontend 行 60% / 分岐 50%。
 - 数値は実装しながら現実に合わせて調整してよい（下げる場合は PR にその理由を書く）。カバレッジは目安であって、**BB/WB の観点で必要なケースが書けているか**を優先する。
 
 ## 4. テストデータ規約
@@ -70,16 +72,16 @@
 
 | ワークフロー | トリガー | 内容 |
 | --- | --- | --- |
-| `backend.yml` | `backend/**` を含む push / PR | ruff → mypy → pytest（単体）→ pytest（結合。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ カバレッジ集計・PR コメント |
-| `frontend-ts.yml` | `expoApp/**` を含む push / PR | ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、カバレッジ）→ `expo export`（Web）＋ `tauri build` スモーク |
+| `backend.yml` | `backend/**` を含む push / PR | ruff（lint・format）→ mypy → Alembic マイグレーション → pytest（単体 ＋ 結合を 1 回で実行。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ `check_coverage.py` で行・分岐の下限を判定（PR へのコメントは未実装・#86） |
+| `frontend-ts.yml` | `expoApp/**` を含む push / PR | `checks` ジョブ: ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、`--coverage` で行・分岐の下限を判定）→ Web ビルド（`npm run build:web`）。`tauri` ジョブ: Tauri の Rust を `cargo check` |
 | `contract.yml` | backend / `openapi.json` / 生成設定の変更 | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後） |
 | `e2e.yml` | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行 |
 | `e2e-android.yml` | **`expoApp/**` / `infra/**` の PR ／ 手動のみ**（backend / openapi だけの変更では回さない。Issue #50） | docker-compose でフルスタック起動 → `expo prebuild` → release APK ビルド（Gradle cache）→ エミュレータ（AVD snapshot cache）→ **Android（Appium + WebdriverIO）** の E2E フロー実行。実行時間が長い（十数分）ため PR のパスフィルタを絞っているが、品質ゲート（`continue-on-error` なし。Issue #57 で id ロケータ問題を解消） |
 
 - **トリガー**: `pull_request`（→ `main`。マージの必須チェックにする）＋ feature ブランチへの `push`。
 - **パスフィルタ**: `backend/**` の変更で frontend ジョブを回さない（逆も同様）。共通ファイル（`openapi.json` 等）は両方を回す。
-- **ブランチ保護**: `main` への直接 push 禁止（既存ルール）＋ 上記チェックを必須にする（有効化は Phase 0 着手前にユーザーへ確認）。
-- **ローカルでの再現**: `backend/` は `pytest` / `ruff check` / `mypy`、`expoApp/` は `npm test` / `npm run lint` / `npm run typecheck`。E2E は `npm run e2e:web`（Playwright）/ `npm run e2e:android`（要 Appium サーバー起動・エミュレータ）。手順はルート `README.md`（Issue で作成）。
+- **ブランチ保護**: `main` への直接 push 禁止（既存ルール）＋ 上記チェックを必須にする（**未設定。#87 で対応**。それまではマージ前に `gh pr checks` で、期待するチェック名がそろっていて全部 pass であることを確かめる）。
+- **ローカルでの再現**（CI と同じ内容）: `backend/` は `ruff check .` / `ruff format --check .` / `mypy .` / `pytest --cov-report=json` → `python -m scripts.check_coverage coverage.json --lines 85 --branches 75`、`expoApp/` は `npm run lint` / `npm run format` / `npm run typecheck` / `npm test -- --coverage`。E2E は `npm run e2e:web`（Playwright）/ `npm run e2e:android`（要 Appium サーバー起動・エミュレータ）。手順はルート `README.md`（Issue で作成）。
 
 ## 6. CD（継続的デリバリー）
 
@@ -111,4 +113,3 @@
 - JWT ライブラリ（PyJWT 予定・[todo.md](todo.md) #41）、PostgreSQL メジャーバージョン（[todo.md](todo.md) #5）
 - フロントの状態管理ライブラリ（Zustand / Jotai・[todo.md](todo.md) #7）
 - E2E をどのプラットフォームまで CI で回すか（Android エミュレータ ＋ Web は必須。iOS シミュレータは macOS ランナーが要るため要検討）
-- カバレッジの最終的な下限値
