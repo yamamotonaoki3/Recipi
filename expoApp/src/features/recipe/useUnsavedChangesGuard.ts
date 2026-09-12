@@ -24,21 +24,28 @@ export type UnsavedChangesGuard = {
   cancelLeave: () => void;
 };
 
-export function useUnsavedChangesGuard(dirty: boolean, onLeave: () => void): UnsavedChangesGuard {
+export function useUnsavedChangesGuard(
+  dirty: boolean,
+  onLeave: () => void,
+  disabled = false,
+): UnsavedChangesGuard {
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   const requestClose = useCallback(() => {
+    // 保存中は、入力内容を送信し終わるまで画面を閉じない。
+    if (disabled) return;
     if (dirty) {
       setConfirmVisible(true);
     } else {
       onLeave();
     }
-  }, [dirty, onLeave]);
+  }, [disabled, dirty, onLeave]);
 
   const confirmLeave = useCallback(() => {
+    if (disabled) return;
     setConfirmVisible(false);
     onLeave();
-  }, [onLeave]);
+  }, [disabled, onLeave]);
 
   const cancelLeave = useCallback(() => setConfirmVisible(false), []);
 
@@ -51,5 +58,10 @@ export function useUnsavedChangesGuard(dirty: boolean, onLeave: () => void): Uns
     return () => sub.remove();
   }, [requestClose]);
 
-  return { confirmVisible, requestClose, confirmLeave, cancelLeave };
+  return {
+    confirmVisible: confirmVisible && !disabled,
+    requestClose,
+    confirmLeave,
+    cancelLeave,
+  };
 }

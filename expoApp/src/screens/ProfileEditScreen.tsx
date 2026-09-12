@@ -63,14 +63,20 @@ export function ProfileEditScreen() {
 
   return (
     <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
-      {profileQuery.data ? (
+      {profileQuery.data && (profileQuery.isFetchedAfterMount || profileQuery.isError) ? (
         // フォームは取得できた値で 1 回だけ初期化したいので、取得後に
         // 別コンポーネントとしてマウントする（effect で setState しなくて済む）。
         <ProfileEditForm profile={profileQuery.data} onLeave={leave} />
       ) : (
         <>
           <AppBar onBack={leave} />
-          {profileQuery.isError ? (
+          {profileQuery.missingUser ? (
+            <View className="flex-1 items-center justify-center p-6">
+              <Text className="text-center text-neutral-600">
+                読み込みに失敗しました。ログインし直してください。
+              </Text>
+            </View>
+          ) : profileQuery.isError ? (
             <View className="flex-1 items-center justify-center gap-3 p-6">
               <Text className="text-neutral-600">読み込みに失敗しました</Text>
               <Pressable
@@ -157,8 +163,9 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const updateProfile = useUpdateProfile();
+  const saving = updateProfile.isPending;
   const dirty = isDirty(initial, values);
-  const guard = useUnsavedChangesGuard(dirty, onLeave);
+  const guard = useUnsavedChangesGuard(dirty, onLeave, saving);
 
   function setField<K extends keyof ProfileFormValues>(field: K, value: ProfileFormValues[K]) {
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -167,6 +174,8 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
   }
 
   function handleSave() {
+    // 前回の確認ダイアログが残っていても、保存開始時は閉じておく。
+    guard.cancelLeave();
     setErrorMessage(null);
     const errors = validateProfileForm(values);
     setFieldErrors(errors);
@@ -199,9 +208,9 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
       {/* 未保存の変更がある間は iOS のスワイプバックを無効にする。
           スワイプで閉じると requestClose を通らず、確認ダイアログが出ないため。
           Android の戻るボタンは useUnsavedChangesGuard が処理する。 */}
-      <Stack.Screen options={{ gestureEnabled: !dirty }} />
+      <Stack.Screen options={{ gestureEnabled: !dirty && !saving }} />
 
-      <AppBar onBack={guard.requestClose} onSave={handleSave} saving={updateProfile.isPending} />
+      <AppBar onBack={guard.requestClose} onSave={handleSave} saving={saving} />
 
       <ScrollView contentContainerClassName="gap-5 p-6">
         {/* `profile` は親の取得結果そのもの。アバターの設定 / 削除でキャッシュが
@@ -217,6 +226,7 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
             testID="profile-edit-display-name"
             value={values.displayName}
             onChangeText={(text) => setField("displayName", text)}
+            editable={!saving}
             placeholder="表示名"
             className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
           />
@@ -236,6 +246,7 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
             testID="profile-edit-email-public"
             value={values.emailPublic}
             onChange={(v) => setField("emailPublic", v)}
+            disabled={saving}
           />
         </View>
 
@@ -246,6 +257,7 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
               testID={`${row.testID}-url`}
               value={values[row.field]}
               onChangeText={(text) => setField(row.field, text)}
+              editable={!saving}
               placeholder="https://"
               autoCapitalize="none"
               autoCorrect={false}
@@ -261,6 +273,7 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
               testID={`${row.testID}-public`}
               value={values[row.toggle]}
               onChange={(v) => setField(row.toggle, v)}
+              disabled={saving}
             />
           </View>
         ))}
@@ -273,7 +286,7 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
       </ScrollView>
 
       <ConfirmDialog
-        visible={guard.confirmVisible}
+        visible={guard.confirmVisible && !saving}
         title="変更を破棄しますか？"
         message="保存していない変更は失われます。"
         confirmLabel="破棄する"
@@ -290,15 +303,17 @@ function PublicToggle({
   testID,
   value,
   onChange,
+  disabled = false,
 }: {
   testID: string;
   value: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <View className="flex-row items-center justify-between">
       <Text className="text-sm text-neutral-600">プロフィールに表示する</Text>
-      <Switch testID={testID} value={value} onValueChange={onChange} />
+      <Switch testID={testID} value={value} onValueChange={onChange} disabled={disabled} />
     </View>
   );
 }

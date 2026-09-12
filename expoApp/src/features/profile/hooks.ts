@@ -55,11 +55,17 @@ export function useMyProfile() {
   const isAuthenticated = useSession((s) => s.isAuthenticated);
   const userId = useSession((s) => s.user?.id);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: profileKeys.detail(userId ?? ""),
     queryFn: () => getMyProfile(userId as string),
     enabled: hydrated && isAuthenticated && Boolean(userId),
   });
+
+  // ログイン済みなのに user だけ無いと、enabled が false のままになって
+  // いつまでも「読み込み中」に見える。保存済みのユーザー情報が欠けた状態として
+  // 画面側でログインし直しを案内できるようにする。
+  const missingUser = hydrated && isAuthenticated && !userId;
+  return { ...query, missingUser };
 }
 
 /**
@@ -90,12 +96,18 @@ export function useUpdateProfile() {
 }
 
 /** 取得済みの自分のプロフィールの `avatarUrl` だけを書き換える（再取得を待たず即時に反映）。 */
-function setCachedAvatar(queryClient: QueryClient, avatarUrl: string | null) {
-  const userId = useSession.getState().user?.id;
-  if (!userId) return;
-  queryClient.setQueryData<UserSelfProfile>(profileKeys.detail(userId), (old) =>
+function setCachedAvatar(
+  queryClient: QueryClient,
+  userIdAtStart: string | undefined,
+  avatarUrl: string | null,
+) {
+  // 途中で別のユーザーへ切り替わっていたら、前のユーザーの結果を今のユーザーへ
+  // 混ぜない。書き込みだけでなく、関連画面の再取得も行わない。
+  if (!userIdAtStart || useSession.getState().user?.id !== userIdAtStart) return false;
+  queryClient.setQueryData<UserSelfProfile>(profileKeys.detail(userIdAtStart), (old) =>
     old ? { ...old, avatarUrl } : old,
   );
+  return true;
 }
 
 /**
@@ -108,9 +120,12 @@ export function useAvatarUpload() {
   const queryClient = useQueryClient();
   const send = useCallback(
     async (file: UploadFile) => {
+      // 完了時ではなく、アップロードを開始する直前のユーザーを覚えておく。
+      const userIdAtStart = useSession.getState().user?.id;
       const { avatarUrl } = await putAvatar(file);
-      setCachedAvatar(queryClient, avatarUrl);
-      invalidateAuthorAppearance(queryClient);
+      if (setCachedAvatar(queryClient, userIdAtStart, avatarUrl)) {
+        invalidateAuthorAppearance(queryClient);
+      }
       return avatarUrl;
     },
     [queryClient],
@@ -123,9 +138,11 @@ export function useDeleteAvatar() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteAvatar,
-    onSuccess: () => {
-      setCachedAvatar(queryClient, null);
-      invalidateAuthorAppearance(queryClient);
+    onMutate: () => ({ userIdAtStart: useSession.getState().user?.id }),
+    onSuccess: (_data, _variables, context) => {
+      if (setCachedAvatar(queryClient, context?.userIdAtStart, null)) {
+        invalidateAuthorAppearance(queryClient);
+      }
     },
   });
 }

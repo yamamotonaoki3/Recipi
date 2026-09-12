@@ -43,7 +43,11 @@ export function MyPageScreen({ basePath }: { basePath: string }) {
             {displayName}
           </Text>
           {/* 概要の取得に失敗してもメニューは使えるようにする（my-page.md §4）。 */}
-          {profileQuery.isError && (
+          {profileQuery.missingUser ? (
+            <Text className="text-sm text-neutral-500">
+              読み込みに失敗しました。ログインし直してください。
+            </Text>
+          ) : profileQuery.isError ? (
             <View className="flex-row items-center gap-3">
               <Text className="text-sm text-neutral-500">読み込みに失敗しました</Text>
               <Pressable
@@ -54,7 +58,7 @@ export function MyPageScreen({ basePath }: { basePath: string }) {
                 <Text className="text-sm text-blue-600">再試行</Text>
               </Pressable>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
 

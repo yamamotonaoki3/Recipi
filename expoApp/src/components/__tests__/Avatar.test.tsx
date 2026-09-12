@@ -24,6 +24,15 @@ describe("Avatar", () => {
     expect(queryByTestId("av")).toBeNull();
   });
 
+  it("絵文字で始まる名前は絵文字全体を頭文字にする", async () => {
+    const { getByTestId, getByText } = await render(
+      <Avatar url={null} displayName="🍣太郎" size={40} testID="av" />,
+    );
+
+    expect(getByTestId("av-placeholder")).toBeTruthy();
+    expect(getByText("🍣")).toBeTruthy();
+  });
+
   it("testID が無くても描画できる", async () => {
     const { getByText } = await render(<Avatar url={null} displayName="A" size={8} />);
     expect(getByText("A")).toBeTruthy();

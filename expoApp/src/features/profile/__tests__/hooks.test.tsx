@@ -77,6 +77,21 @@ describe("useMyProfile", () => {
     await waitFor(() => expect(result.current.data).toEqual(selfProfile));
     expect(mockGetMyProfile).toHaveBeenCalledWith("u1");
   });
+
+  it("ログイン済みで復元後なのに user が無ければ missingUser を返す", async () => {
+    useSession.getState().setAuth({
+      accessToken: "a",
+      refreshToken: "r",
+      user: null,
+      rememberMe: false,
+    });
+    useSession.getState().setHydrated(true);
+
+    const { result } = await renderHook(() => useMyProfile(), { wrapper });
+
+    expect(result.current.missingUser).toBe(true);
+    expect(mockGetMyProfile).not.toHaveBeenCalled();
+  });
 });
 
 describe("useUpdateProfile", () => {
@@ -149,6 +164,40 @@ describe("アバター", () => {
     );
   });
 
+  it("アップロード中にユーザーが変わったらキャッシュを書き換えない", async () => {
+    login();
+    client.setQueryData(profileKeys.detail("u1"), selfProfile);
+    mockPickImage.mockResolvedValue({ uri: "file://a", file: new Blob(["x"]) });
+    let resolveUpload: (value: { avatarUrl: string }) => void = () => {};
+    mockPutAvatar.mockReturnValue(
+      new Promise<{ avatarUrl: string }>((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+    const invalidateSpy = jest.spyOn(client, "invalidateQueries");
+
+    const { result } = await renderHook(() => useAvatarUpload(), { wrapper });
+    let pending: Promise<string | null> = Promise.resolve(null);
+    await act(async () => {
+      pending = result.current.pickAndSend();
+      await Promise.resolve();
+    });
+
+    useSession.getState().setAuth({
+      accessToken: "a2",
+      refreshToken: "r2",
+      user: { id: "u2", displayName: "別の名前" },
+      rememberMe: false,
+    });
+    await act(async () => {
+      resolveUpload({ avatarUrl: "https://example.com/new.jpg" });
+      await pending;
+    });
+
+    expect(client.getQueryData<typeof selfProfile>(profileKeys.detail("u1"))?.avatarUrl).toBeNull();
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
   it("削除するとキャッシュの avatarUrl を null にする", async () => {
     login();
     client.setQueryData(profileKeys.detail("u1"), { ...selfProfile, avatarUrl: "https://a" });
@@ -160,6 +209,41 @@ describe("アバター", () => {
     });
 
     expect(client.getQueryData<typeof selfProfile>(profileKeys.detail("u1"))?.avatarUrl).toBeNull();
+  });
+
+  it("削除中にユーザーが変わったらキャッシュを書き換えない", async () => {
+    login();
+    client.setQueryData(profileKeys.detail("u1"), { ...selfProfile, avatarUrl: "https://a" });
+    let resolveDelete: () => void = () => {};
+    mockDeleteAvatar.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      }),
+    );
+    const invalidateSpy = jest.spyOn(client, "invalidateQueries");
+
+    const { result } = await renderHook(() => useDeleteAvatar(), { wrapper });
+    let pending: Promise<void> = Promise.resolve();
+    await act(async () => {
+      pending = result.current.mutateAsync();
+      await Promise.resolve();
+    });
+
+    useSession.getState().setAuth({
+      accessToken: "a2",
+      refreshToken: "r2",
+      user: { id: "u2", displayName: "別の名前" },
+      rememberMe: false,
+    });
+    await act(async () => {
+      resolveDelete();
+      await pending;
+    });
+
+    expect(client.getQueryData<typeof selfProfile>(profileKeys.detail("u1"))?.avatarUrl).toBe(
+      "https://a",
+    );
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
   it("ログアウト後に成功が返っても例外にならない（キャッシュは触らない）", async () => {

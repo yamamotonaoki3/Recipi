@@ -13,6 +13,7 @@ import { AVATAR_TOAST_MS, ProfileEditScreen } from "../ProfileEditScreen";
 import { ApiError } from "@/features/auth/api";
 import { pickImage } from "@/features/image/pickImage";
 import { deleteAvatar, getMyProfile, putAvatar, updateMe } from "@/features/profile/api";
+import { profileKeys } from "@/features/profile/hooks";
 import { useSession } from "@/store/session";
 
 const mockBack = jest.fn();
@@ -68,6 +69,12 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
+function wrapperWithClient(client: QueryClient) {
+  return function QueryWrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  };
+}
+
 /** 画面を描画し、フォームが表示されるまで待つ。 */
 async function renderLoaded() {
   const utils = await render(<ProfileEditScreen />, { wrapper });
@@ -106,6 +113,45 @@ describe("読み込み", () => {
     expect(mockGetMyProfile).toHaveBeenCalledTimes(2);
   });
 
+  it("古いキャッシュがあっても再取得の結果でフォームを初期化する", async () => {
+    let resolveProfile: (value: typeof profile) => void = () => {};
+    mockGetMyProfile.mockReturnValue(
+      new Promise<typeof profile>((resolve) => {
+        resolveProfile = resolve;
+      }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(profileKeys.detail("u1"), { ...profile, displayName: "古いキャッシュ" });
+
+    const { getByTestId, queryByTestId } = await render(<ProfileEditScreen />, {
+      wrapper: wrapperWithClient(client),
+    });
+    expect(getByTestId("profile-edit-skeleton")).toBeTruthy();
+    expect(queryByTestId("profile-edit-display-name")).toBeNull();
+
+    await act(async () => {
+      resolveProfile({ ...profile, displayName: "再取得した名前" });
+    });
+    await waitFor(() => {
+      expect(getByTestId("profile-edit-display-name").props.value).toBe("再取得した名前");
+    });
+  });
+
+  it("ログイン済みなのにユーザー情報が無ければログインし直しを案内する", async () => {
+    useSession.getState().setAuth({
+      accessToken: "a",
+      refreshToken: "r",
+      user: null,
+      rememberMe: false,
+    });
+    const { getByText, queryByTestId } = await render(<ProfileEditScreen />, { wrapper });
+
+    expect(getByText("読み込みに失敗しました。ログインし直してください。")).toBeTruthy();
+    expect(queryByTestId("profile-edit-retry")).toBeNull();
+    expect(queryByTestId("profile-edit-skeleton")).toBeNull();
+    expect(mockGetMyProfile).not.toHaveBeenCalled();
+  });
+
   it("サーバーの値を初期値として表示する", async () => {
     const { getByTestId } = await renderLoaded();
     expect(getByTestId("profile-edit-display-name").props.value).toBe("旧名前");
@@ -140,6 +186,41 @@ describe("保存", () => {
       emailPublic: true,
       xUrl: null,
     });
+  });
+
+  it("保存中は入力と戻る操作を無効にする", async () => {
+    let resolveUpdate: (value: typeof profile) => void = () => {};
+    mockUpdateMe.mockReturnValue(
+      new Promise<typeof profile>((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    const { getByTestId, queryByTestId } = await renderLoaded();
+
+    await fireEvent.changeText(getByTestId("profile-edit-display-name"), "新名前");
+    await fireEvent.press(getByTestId("profile-edit-save"));
+
+    await waitFor(() =>
+      expect(getByTestId("profile-edit-display-name").props.editable).toBe(false),
+    );
+    expect(getByTestId("profile-edit-x-url").props.editable).toBe(false);
+    for (const testID of [
+      "profile-edit-email-public",
+      "profile-edit-x-public",
+      "profile-edit-instagram-public",
+      "profile-edit-other-public",
+    ]) {
+      expect(getByTestId(testID).props.disabled).toBe(true);
+    }
+
+    await fireEvent.press(getByTestId("profile-edit-back"));
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(queryByTestId("profile-edit-discard")).toBeNull();
+
+    await act(async () => {
+      resolveUpdate({ ...profile, displayName: "新名前" });
+    });
+    await waitFor(() => expect(mockBack).toHaveBeenCalledTimes(1));
   });
 
   it("変更が無ければ送らずに戻る", async () => {

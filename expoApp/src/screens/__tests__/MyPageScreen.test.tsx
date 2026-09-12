@@ -12,7 +12,12 @@ import { useSession } from "@/store/session";
 const mockPush = jest.fn();
 const mockLogoutMutate = jest.fn();
 const mockRefetch = jest.fn();
-let mockProfileQuery: { data?: unknown; isError: boolean; refetch: jest.Mock };
+let mockProfileQuery: {
+  data?: unknown;
+  isError: boolean;
+  missingUser: boolean;
+  refetch: jest.Mock;
+};
 
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
 
@@ -27,7 +32,7 @@ jest.mock("@/features/profile/hooks", () => ({
 beforeEach(() => {
   jest.clearAllMocks();
   useSession.getState().clear();
-  mockProfileQuery = { data: undefined, isError: false, refetch: mockRefetch };
+  mockProfileQuery = { data: undefined, isError: false, missingUser: false, refetch: mockRefetch };
 });
 
 describe("MyPageScreen", () => {
@@ -54,6 +59,17 @@ describe("MyPageScreen", () => {
     expect(getByText("読み込みに失敗しました")).toBeTruthy();
     await fireEvent.press(getByTestId("my-page-retry"));
     expect(mockRefetch).toHaveBeenCalledTimes(1);
+    expect(getByTestId("my-page-profile-edit")).toBeTruthy();
+  });
+
+  it("ログイン済みなのにユーザー情報が無ければログインし直しを案内し、メニューは使える", async () => {
+    mockProfileQuery.missingUser = true;
+    const { getByTestId, getByText, queryByTestId } = await render(
+      <MyPageScreen basePath="/my-page" />,
+    );
+
+    expect(getByText("読み込みに失敗しました。ログインし直してください。")).toBeTruthy();
+    expect(queryByTestId("my-page-retry")).toBeNull();
     expect(getByTestId("my-page-profile-edit")).toBeTruthy();
   });
 

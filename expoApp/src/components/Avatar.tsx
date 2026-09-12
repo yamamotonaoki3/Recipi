@@ -40,7 +40,7 @@ export function Avatar({ url, displayName, size, testID }: AvatarProps) {
     >
       {/* 文字の大きさは丸の半分くらいにする（小さい丸でもはみ出さないように）。 */}
       <Text className="text-neutral-500" style={{ fontSize: Math.max(8, size / 2) }}>
-        {displayName.slice(0, 1)}
+        {Array.from(displayName)[0] ?? ""}
       </Text>
     </View>
   );
