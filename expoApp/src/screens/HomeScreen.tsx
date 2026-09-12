@@ -2,8 +2,8 @@
  * ホーム（screens/home.md）。
  *
  * 上から「ロゴ → 常時固定の検索窓 → サブタブ → レシピカードの縦リスト」。
- * 機能するのは「全体」「フォロー」「フォロワー」＋ 検索（Issue #98 で
- * フォロー / フォロワーを有効化）。「お気に入りレシピ」は F4 まで「準備中」を出す。
+ * 4 つのサブタブ「全体」「フォロー」「フォロワー」「♡ お気に入りレシピ」＋ 検索。
+ * フォロー / フォロワーは Issue #98、お気に入りレシピは Issue #100 で有効化した。
  *
  * `basePath` は「この画面が属する destination のスタックの根」。
  * ナビゲーションバーを出したまま詳細などを push するため、destination ごとに
@@ -30,9 +30,10 @@ import type { FeedKind } from "@/features/feed/api";
 import { useFeed } from "@/features/feed/hooks";
 
 /**
- * サブタブ（home-feed.md §2）。`feed` があるタブは一覧を取得し、
- * 無いタブ（お気に入りレシピ）は F4 まで「準備中」を出す。
+ * サブタブ（home-feed.md §2）。どのタブも `feed` の一覧を取得する。
  * `empty` は検索語が無いときの空状態の文言（home.md §4）。
+ * `heart` のタブはラベルの頭に、レシピ詳細の ♡ ボタンと同じ色のハートを付ける
+ * （♡ を押したレシピがここに並ぶと気づきやすくするため。home.md §3）。
  */
 const SUB_TABS = [
   { key: "all", label: "全体", feed: "all", empty: "まだレシピがありません" },
@@ -48,12 +49,19 @@ const SUB_TABS = [
     feed: "followers",
     empty: "フォロワーが増えると、その人のレシピがここに並びます",
   },
-  { key: "favorites", label: "お気に入りレシピ", feed: null, empty: "" },
+  {
+    key: "favorites",
+    label: "お気に入りレシピ",
+    feed: "favorites",
+    empty: "お気に入りに追加したレシピがここに表示されます",
+    heart: true,
+  },
 ] as const satisfies readonly {
   key: string;
   label: string;
-  feed: FeedKind | null;
+  feed: FeedKind;
   empty: string;
+  heart?: boolean;
 }[];
 
 type SubTabKey = (typeof SUB_TABS)[number]["key"];
@@ -80,7 +88,6 @@ export function HomeScreen({ basePath }: { basePath: string }) {
     setVisitedTabs((prev) => (prev.includes(key) ? prev : [...prev, key]));
   };
 
-  const active = SUB_TABS.find((t) => t.key === activeTab) ?? SUB_TABS[0];
   const hasQuery = submittedQuery !== "";
 
   const clearSearch = () => {
@@ -199,6 +206,11 @@ export function HomeScreen({ basePath }: { basePath: string }) {
               <Text
                 className={`text-sm ${focused ? "font-semibold text-orange-600" : "text-neutral-500"}`}
               >
+                {"heart" in tab && tab.heart ? (
+                  <Text testID={`home-subtab-${tab.key}-heart`} className="text-red-500">
+                    ♡{" "}
+                  </Text>
+                ) : null}
                 {tab.label}
               </Text>
             </Pressable>
@@ -223,7 +235,7 @@ export function HomeScreen({ basePath }: { basePath: string }) {
 
       {/* 一度開いたタブの一覧は、隠すだけで残す（スクロール位置を保つため）。 */}
       {SUB_TABS.map((tab) =>
-        tab.feed !== null && visitedTabs.includes(tab.key) ? (
+        visitedTabs.includes(tab.key) ? (
           <FeedList
             key={tab.key}
             feed={tab.feed}
@@ -233,14 +245,6 @@ export function HomeScreen({ basePath }: { basePath: string }) {
             basePath={basePath}
           />
         ) : null,
-      )}
-
-      {active.feed === null && (
-        <View className="flex-1 items-center justify-center p-6">
-          <Text testID="home-tab-not-ready" className="text-center text-neutral-500">
-            この機能は準備中です
-          </Text>
-        </View>
       )}
     </View>
   );

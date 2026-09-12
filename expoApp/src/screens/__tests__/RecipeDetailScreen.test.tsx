@@ -2,10 +2,11 @@
  * レシピ詳細画面の BB テスト（レイアウト・参照材料リンク・404・本人操作）。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import { RecipeDetailScreen } from "../RecipeDetailScreen";
+import * as favoriteApi from "@/features/favorite/api";
 import * as historyApi from "@/features/history/api";
 import * as recipeApi from "@/features/recipe/api";
 import type { RecipeResponse } from "@/features/recipe/api";
@@ -41,7 +42,15 @@ jest.mock("@/features/history/api", () => {
   return { ...actual, recordRecipeView: jest.fn() };
 });
 
+// お気に入り（Issue #100）。♡ ボタンの押下で呼ばれるので実通信させない。
+jest.mock("@/features/favorite/api", () => ({
+  favoriteRecipe: jest.fn(),
+  unfavoriteRecipe: jest.fn(),
+}));
+
 const mockGetRecipe = recipeApi.getRecipe as jest.Mock;
+const mockFavoriteRecipe = favoriteApi.favoriteRecipe as jest.Mock;
+const mockUnfavoriteRecipe = favoriteApi.unfavoriteRecipe as jest.Mock;
 const mockRecordView = historyApi.recordRecipeView as jest.Mock;
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -95,6 +104,8 @@ beforeEach(() => {
       isAuthenticated: true,
       accessToken: "test-token",
       refreshToken: "test-refresh",
+      // お気に入りの楽観更新は「操作したユーザー」が分かるときだけ書き換える。
+      user: { id: "viewer-1", displayName: "閲覧者" },
     });
   }
 
@@ -128,6 +139,68 @@ describe("RecipeDetailScreen", () => {
     await fireEvent.press(await findByTestId("recipe-detail-author"));
     expect(mockNavigate).toHaveBeenCalledWith("/my-page");
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("♡ ボタンにお気に入り数を出し、押すと返事を待たずにハートと数が変わる（Issue #100）", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe({ favoriteCount: 2 }));
+    mockFavoriteRecipe.mockReturnValue(new Promise(() => undefined));
+    const { findByTestId, getByTestId } = await render(<RecipeDetailScreen basePath="/home" />, {
+      wrapper,
+    });
+
+    const button = await findByTestId("recipe-detail-favorite");
+    expect(getByTestId("recipe-detail-favorite-count").props.children).toBe(2);
+    expect(button.props.accessibilityState.selected).toBe(false);
+
+    await fireEvent.press(button);
+
+    await waitFor(() => expect(getByTestId("recipe-detail-favorite-count").props.children).toBe(3));
+    expect(getByTestId("recipe-detail-favorite").props.accessibilityState).toMatchObject({
+      selected: true,
+      // 送信中は二重に押せない。
+      disabled: true,
+    });
+    expect(mockFavoriteRecipe).toHaveBeenCalledWith("r1");
+  });
+
+  it("お気に入り済みなら ♡ で解除の API を呼ぶ", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe({ isFavorited: true, favoriteCount: 1 }));
+    mockUnfavoriteRecipe.mockReturnValue(new Promise(() => undefined));
+    const { findByTestId, getByTestId } = await render(<RecipeDetailScreen basePath="/home" />, {
+      wrapper,
+    });
+
+    await fireEvent.press(await findByTestId("recipe-detail-favorite"));
+
+    await waitFor(() => expect(getByTestId("recipe-detail-favorite-count").props.children).toBe(0));
+    expect(mockUnfavoriteRecipe).toHaveBeenCalledWith("r1");
+  });
+
+  it("お気に入りに失敗したら、ハートと数を元に戻す", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe({ favoriteCount: 2 }));
+    mockFavoriteRecipe.mockRejectedValue(new Error("network"));
+    const { findByTestId, getByTestId } = await render(<RecipeDetailScreen basePath="/home" />, {
+      wrapper,
+    });
+
+    await fireEvent.press(await findByTestId("recipe-detail-favorite"));
+
+    await waitFor(() =>
+      expect(getByTestId("recipe-detail-favorite").props.accessibilityState.disabled).toBe(false),
+    );
+    expect(getByTestId("recipe-detail-favorite-count").props.children).toBe(2);
+    expect(getByTestId("recipe-detail-favorite").props.accessibilityState.selected).toBe(false);
+  });
+
+  it("自分の非公開レシピにも ♡ を付けられる（favorite.md §3）", async () => {
+    useSession.setState({ user: { id: "author-1", displayName: "投稿者太郎" } });
+    mockGetRecipe.mockResolvedValue(makeRecipe({ isPublic: false }));
+    mockFavoriteRecipe.mockReturnValue(new Promise(() => undefined));
+    const { findByTestId } = await render(<RecipeDetailScreen basePath="/home" />, { wrapper });
+
+    await fireEvent.press(await findByTestId("recipe-detail-favorite"));
+
+    expect(mockFavoriteRecipe).toHaveBeenCalledWith("r1");
   });
 
   it("グループ名ありなら見出しを出す", async () => {

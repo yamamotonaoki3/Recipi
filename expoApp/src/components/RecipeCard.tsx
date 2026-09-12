@@ -66,6 +66,14 @@ export function RecipeCard({ recipe, onPress, testID }: RecipeCardProps) {
         </View>
         <View className="flex-row items-center gap-2">
           <Text className="text-xs text-neutral-400">{formatDate(recipe.createdAt)}</Text>
+          {/* お気に入り数（components.md §レシピカード「♡ + favorite_count」）。
+              カードでは表示だけで、登録 / 解除はレシピ詳細の ♡ ボタンで行う。 */}
+          <Text
+            testID={testID ? `${testID}-favorite-count` : undefined}
+            className="text-xs text-neutral-400"
+          >
+            ♡ {recipe.favoriteCount}
+          </Text>
           {!recipe.isPublic && (
             <Text
               testID={testID ? `${testID}-private-badge` : undefined}

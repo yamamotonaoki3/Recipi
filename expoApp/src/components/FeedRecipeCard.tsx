@@ -61,8 +61,8 @@ export function FeedRecipeCard({ recipe, onPress, testID }: FeedRecipeCardProps)
           >
             {recipe.author.displayName}
           </Text>
-          {/* お気に入り数は Phase 6 まで 0 のままだが、サーバーの値をそのまま出す
-              （0 固定にせず、機能が入った時点で自動的に正しくなるようにする）。 */}
+          {/* お気に入り数（サーバーの値）。カードでは表示だけで、登録 / 解除は
+              レシピ詳細の ♡ ボタンで行う（favorite.md §2。Issue #100）。 */}
           <Text className="text-xs text-neutral-400">♡ {recipe.favoriteCount}</Text>
         </View>
       </View>

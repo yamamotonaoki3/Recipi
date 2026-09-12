@@ -143,19 +143,57 @@ describe("HomeScreen", () => {
     expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ q: undefined }));
   });
 
-  it("「お気に入りレシピ」は準備中のまま API を呼ばない（F4 で有効化）", async () => {
-    mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
+  it("「お気に入りレシピ」タブは feed=favorites で取得し、空なら専用の文言を出す（Issue #100）", async () => {
+    mockListFeed.mockImplementation(({ feed }: { feed: string }) =>
+      Promise.resolve(
+        feed === "all" ? { items: [card("1")], nextCursor: null } : { items: [], nextCursor: null },
+      ),
+    );
     const { findByText, getByTestId, findByTestId } = await render(
       <HomeScreen basePath="/home" />,
       { wrapper },
     );
     await findByText("レシピ1");
-    mockListFeed.mockClear();
 
     await fireEvent.press(getByTestId("home-subtab-favorites"));
 
-    expect(await findByTestId("home-tab-not-ready")).toBeTruthy();
-    expect(mockListFeed).not.toHaveBeenCalled();
+    expect((await findByTestId("home-feed-empty-favorites")).props.children).toBe(
+      "お気に入りに追加したレシピがここに表示されます",
+    );
+    expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ feed: "favorites" }));
+  });
+
+  it("「お気に入りレシピ」タブのラベルには ♡ が付き、他のタブには付かない", async () => {
+    mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
+    const { findByText, getByTestId, queryByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+
+    expect(getByTestId("home-subtab-favorites-heart")).toBeTruthy();
+    for (const tab of ["all", "following", "followers"]) {
+      expect(queryByTestId(`home-subtab-${tab}-heart`)).toBeNull();
+    }
+  });
+
+  it("「お気に入りレシピ」タブのカードをタップすると詳細へ", async () => {
+    mockListFeed.mockImplementation(({ feed }: { feed: string }) =>
+      Promise.resolve({
+        items: [card(feed === "favorites" ? "7" : "1", "お気に入りのレシピ")],
+        nextCursor: null,
+      }),
+    );
+    const { findAllByText, getByTestId, findByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findAllByText("お気に入りのレシピ");
+
+    await fireEvent.press(getByTestId("home-subtab-favorites"));
+    await fireEvent.press(await findByTestId("feed-favorites-recipe-7"));
+
+    expect(mockPush).toHaveBeenCalledWith("/home/recipes/7");
   });
 
   it("「全体」は feed=all で取得する", async () => {

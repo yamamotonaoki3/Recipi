@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/components/Avatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ApiError } from "@/features/auth/api";
+import { useToggleFavorite } from "@/features/favorite/hooks";
 import { useRecordView } from "@/features/history/hooks";
 import { formatQuantity, type Placement } from "@/features/recipe/formatQuantity";
 import { useDeleteRecipe, useRecipe } from "@/features/recipe/hooks";
@@ -25,6 +26,7 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
   const insets = useSafeAreaInsets();
   const recipeQuery = useRecipe(id);
   const deleteRecipe = useDeleteRecipe();
+  const toggleFavorite = useToggleFavorite();
   const currentUserId = useSession((s) => s.user?.id);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -172,6 +174,30 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
 
         <Text className="text-sm text-neutral-500">{recipe.servings} 人分</Text>
 
+        {/* ♡ ボタン＋お気に入り数（recipe-detail.md §3-6・§5）。押した瞬間にハートと
+            数が変わる（楽観更新。失敗したら元に戻る）。送信中は二重に押せない。
+            自分の非公開レシピにも付けられる（favorite.md §3）。 */}
+        <Pressable
+          testID="recipe-detail-favorite"
+          onPress={() =>
+            toggleFavorite.mutate({ recipeId: recipe.id, favorite: !recipe.isFavorited })
+          }
+          disabled={toggleFavorite.isPending}
+          accessibilityRole="button"
+          accessibilityLabel={recipe.isFavorited ? "お気に入りを解除" : "お気に入りに追加"}
+          accessibilityState={{ selected: recipe.isFavorited, disabled: toggleFavorite.isPending }}
+          className={`flex-row items-center gap-1 self-start rounded-full border border-neutral-200 px-3 py-1.5 ${
+            toggleFavorite.isPending ? "opacity-60" : ""
+          }`}
+        >
+          <Text className={`text-lg ${recipe.isFavorited ? "text-red-500" : "text-neutral-400"}`}>
+            {recipe.isFavorited ? "♥" : "♡"}
+          </Text>
+          <Text testID="recipe-detail-favorite-count" className="text-sm text-neutral-700">
+            {recipe.favoriteCount}
+          </Text>
+        </Pressable>
+
         {recipe.description !== "" && (
           <Text className="text-base text-neutral-800">{recipe.description}</Text>
         )}
@@ -250,8 +276,8 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
           ))}
         </View>
 
-        {/* ♡ / フォロー / 感想は Phase 5〜7。ここではプレースホルダのみ。 */}
-        <Text className="text-xs text-neutral-300">お気に入り・感想は今後のフェーズで追加</Text>
+        {/* 感想は F5 で追加する。ここではプレースホルダのみ。 */}
+        <Text className="text-xs text-neutral-300">感想は今後のフェーズで追加</Text>
       </ScrollView>
 
       <ConfirmDialog
