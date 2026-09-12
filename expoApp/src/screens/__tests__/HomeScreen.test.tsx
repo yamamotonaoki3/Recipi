@@ -143,7 +143,7 @@ describe("HomeScreen", () => {
     expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ q: undefined }));
   });
 
-  it("準備中のサブタブを選ぶと API を呼ばずに「準備中」を出す", async () => {
+  it("「お気に入りレシピ」は準備中のまま API を呼ばない（F4 で有効化）", async () => {
     mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
     const { findByText, getByTestId, findByTestId } = await render(
       <HomeScreen basePath="/home" />,
@@ -152,10 +152,155 @@ describe("HomeScreen", () => {
     await findByText("レシピ1");
     mockListFeed.mockClear();
 
-    await fireEvent.press(getByTestId("home-subtab-following"));
+    await fireEvent.press(getByTestId("home-subtab-favorites"));
 
     expect(await findByTestId("home-tab-not-ready")).toBeTruthy();
     expect(mockListFeed).not.toHaveBeenCalled();
+  });
+
+  it("「全体」は feed=all で取得する", async () => {
+    mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
+    const { findByText } = await render(<HomeScreen basePath="/home" />, { wrapper });
+    await findByText("レシピ1");
+    expect(mockListFeed).toHaveBeenCalledWith(expect.objectContaining({ feed: "all" }));
+  });
+
+  it.each([
+    ["following", "気になる投稿者をフォローすると、ここに新着レシピが並びます"],
+    ["followers", "フォロワーが増えると、その人のレシピがここに並びます"],
+  ] as const)("「%s」タブはその feed で取得し、空ならタブごとの文言を出す", async (tab, empty) => {
+    mockListFeed.mockImplementation(({ feed }: { feed: string }) =>
+      Promise.resolve(
+        feed === "all" ? { items: [card("1")], nextCursor: null } : { items: [], nextCursor: null },
+      ),
+    );
+    const { findByText, getByTestId, findByTestId, queryByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+
+    await fireEvent.press(getByTestId(`home-subtab-${tab}`));
+
+    expect((await findByTestId(`home-feed-empty-${tab}`)).props.children).toBe(empty);
+    expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ feed: tab }));
+    expect(queryByTestId("home-tab-not-ready")).toBeNull();
+  });
+
+  it("「フォロー」タブのカードはその feed の中身を出し、タップで詳細へ", async () => {
+    mockListFeed.mockImplementation(({ feed }: { feed: string }) =>
+      Promise.resolve(
+        feed === "following"
+          ? { items: [card("9", "フォロー中の人のレシピ")], nextCursor: null }
+          : { items: [card("1")], nextCursor: null },
+      ),
+    );
+    const { findByText, getByTestId, findByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+
+    await fireEvent.press(getByTestId("home-subtab-following"));
+    await fireEvent.press(await findByTestId("feed-following-recipe-9"));
+
+    expect(mockPush).toHaveBeenCalledWith("/home/recipes/9");
+  });
+
+  it("検索語は表示中のタブの feed と一緒に送る", async () => {
+    mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
+    const { findByText, getByTestId, findByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+
+    await fireEvent.press(getByTestId("home-subtab-followers"));
+    await findByTestId("feed-followers-recipe-1");
+    await fireEvent.changeText(getByTestId("home-search-input"), "玉ねぎ");
+    await fireEvent.press(getByTestId("home-search-submit"));
+
+    expect(mockListFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ feed: "followers", q: "玉ねぎ" }),
+    );
+  });
+
+  it("タブを行き来しても、前のタブの一覧は取り直さずに残る（スクロール位置の保持）", async () => {
+    mockListFeed.mockImplementation(({ feed }: { feed: string }) =>
+      Promise.resolve({ items: [card(feed === "all" ? "1" : "9")], nextCursor: null }),
+    );
+    // アプリの QueryProvider と同じく「30 秒は新しいまま」にする。これが無いと、
+    // タブに戻っただけで「古い」と見なされて取り直してしまい、アプリと挙動が変わる。
+    const freshWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
+        }
+      >
+        {children}
+      </QueryClientProvider>
+    );
+    const { findByText, getByTestId, findByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper: freshWrapper },
+    );
+    await findByText("レシピ1");
+    const allList = getByTestId("home-feed-list");
+
+    await fireEvent.press(getByTestId("home-subtab-following"));
+    await findByTestId("feed-following-recipe-9");
+    // 「全体」の一覧は消えずに隠れているだけ（同じ要素がそのまま残る）。
+    // 隠れた要素は既定では検索対象から外れる（display: none）ので、含めて探す。
+    expect(getByTestId("home-feed-list", { includeHiddenElements: true })).toBe(allList);
+    // 隠れている間は、画面上からは見えない（押せない）。
+    expect(() => getByTestId("home-feed-list")).toThrow();
+
+    const callsBefore = mockListFeed.mock.calls.length;
+    await fireEvent.press(getByTestId("home-subtab-all"));
+
+    expect(getByTestId("home-feed-list")).toBe(allList);
+    expect(mockListFeed.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("隠れているタブは検索語を変えても取得しない（表示中のタブだけが取り直す）", async () => {
+    mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
+    const { findByText, getByTestId, findByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+    await fireEvent.press(getByTestId("home-subtab-following"));
+    await findByTestId("feed-following-recipe-1");
+    mockListFeed.mockClear();
+
+    await fireEvent.changeText(getByTestId("home-search-input"), "玉ねぎ");
+    await fireEvent.press(getByTestId("home-search-submit"));
+    await findByTestId("home-search-chip");
+
+    const feeds = mockListFeed.mock.calls.map(([arg]) => (arg as { feed: string }).feed);
+    expect(feeds.length).toBeGreaterThan(0);
+    expect(feeds.every((f) => f === "following")).toBe(true);
+  });
+
+  it("フォロー / フォロワーのタブでも失敗したら再試行できる", async () => {
+    mockListFeed.mockImplementation(({ feed }: { feed: string }) =>
+      feed === "following"
+        ? Promise.reject(new Error("boom"))
+        : Promise.resolve({ items: [card("1")], nextCursor: null }),
+    );
+    const { findByText, getByTestId, findByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+    await fireEvent.press(getByTestId("home-subtab-following"));
+
+    mockListFeed.mockImplementation(() =>
+      Promise.resolve({ items: [card("9")], nextCursor: null }),
+    );
+    await fireEvent.press(await findByTestId("home-retry-following"));
+
+    expect(await findByTestId("feed-following-recipe-9")).toBeTruthy();
   });
 
   it("空なら空状態メッセージを出す", async () => {

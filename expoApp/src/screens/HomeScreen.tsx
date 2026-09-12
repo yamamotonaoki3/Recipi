@@ -2,8 +2,8 @@
  * ホーム（screens/home.md）。
  *
  * 上から「ロゴ → 常時固定の検索窓 → サブタブ → レシピカードの縦リスト」。
- * MVP で機能するのは「全体」タブ ＋ 検索だけで、他 3 タブは「準備中」を出す
- * （Issue #42 の確定事項。サーバーも `feed=all` 以外を 400 で弾く）。
+ * 機能するのは「全体」「フォロー」「フォロワー」＋ 検索（Issue #98 で
+ * フォロー / フォロワーを有効化）。「お気に入りレシピ」は F4 まで「準備中」を出す。
  *
  * `basePath` は「この画面が属する destination のスタックの根」。
  * ナビゲーションバーを出したまま詳細などを push するため、destination ごとに
@@ -26,20 +26,39 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FeedRecipeCard } from "@/components/FeedRecipeCard";
+import type { FeedKind } from "@/features/feed/api";
 import { useFeed } from "@/features/feed/hooks";
 
-/** サブタブ。`ready: false` は Phase 5・6 で有効化する（home-feed.md §1）。 */
+/**
+ * サブタブ（home-feed.md §2）。`feed` があるタブは一覧を取得し、
+ * 無いタブ（お気に入りレシピ）は F4 まで「準備中」を出す。
+ * `empty` は検索語が無いときの空状態の文言（home.md §4）。
+ */
 const SUB_TABS = [
-  { key: "all", label: "全体", ready: true },
-  { key: "following", label: "フォロー", ready: false },
-  { key: "followers", label: "フォロワー", ready: false },
-  { key: "favorites", label: "お気に入りレシピ", ready: false },
-] as const;
+  { key: "all", label: "全体", feed: "all", empty: "まだレシピがありません" },
+  {
+    key: "following",
+    label: "フォロー",
+    feed: "following",
+    empty: "気になる投稿者をフォローすると、ここに新着レシピが並びます",
+  },
+  {
+    key: "followers",
+    label: "フォロワー",
+    feed: "followers",
+    empty: "フォロワーが増えると、その人のレシピがここに並びます",
+  },
+  { key: "favorites", label: "お気に入りレシピ", feed: null, empty: "" },
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  feed: FeedKind | null;
+  empty: string;
+}[];
 
 type SubTabKey = (typeof SUB_TABS)[number]["key"];
 
 export function HomeScreen({ basePath }: { basePath: string }) {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   // 検索窓の「入力中の文字」と「確定した検索語」は別物。
@@ -48,11 +67,20 @@ export function HomeScreen({ basePath }: { basePath: string }) {
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [activeTab, setActiveTab] = useState<SubTabKey>("all");
 
-  const isReadyTab = SUB_TABS.find((t) => t.key === activeTab)?.ready ?? false;
-  // 準備中タブを選んでいる間は API を呼ばない（呼ぶと 400 になる）。
-  const feed = useFeed(submittedQuery, { enabled: isReadyTab });
+  /**
+   * 一度でも開いたサブタブ。開いたタブの一覧は、別のタブに切り替えても
+   * **消さずに隠すだけ**にする。消すとスクロール位置が失われるため
+   * （home.md §5「切替時にスクロール位置はサブタブごとに保持」）。
+   * まだ開いていないタブは作らない（最初に開いたときに取得する）。
+   */
+  const [visitedTabs, setVisitedTabs] = useState<SubTabKey[]>(["all"]);
 
-  const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
+  const selectTab = (key: SubTabKey) => {
+    setActiveTab(key);
+    setVisitedTabs((prev) => (prev.includes(key) ? prev : [...prev, key]));
+  };
+
+  const active = SUB_TABS.find((t) => t.key === activeTab) ?? SUB_TABS[0];
   const hasQuery = submittedQuery !== "";
 
   const clearSearch = () => {
@@ -163,7 +191,7 @@ export function HomeScreen({ basePath }: { basePath: string }) {
             <Pressable
               key={tab.key}
               testID={`home-subtab-${tab.key}`}
-              onPress={() => setActiveTab(tab.key)}
+              onPress={() => selectTab(tab.key)}
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
               className={`px-3 py-2 ${focused ? "border-b-2 border-orange-500" : ""}`}
@@ -193,22 +221,73 @@ export function HomeScreen({ basePath }: { basePath: string }) {
         </View>
       )}
 
-      {!isReadyTab ? (
+      {/* 一度開いたタブの一覧は、隠すだけで残す（スクロール位置を保つため）。 */}
+      {SUB_TABS.map((tab) =>
+        tab.feed !== null && visitedTabs.includes(tab.key) ? (
+          <FeedList
+            key={tab.key}
+            feed={tab.feed}
+            query={submittedQuery}
+            emptyText={tab.empty}
+            visible={tab.key === activeTab}
+            basePath={basePath}
+          />
+        ) : null,
+      )}
+
+      {active.feed === null && (
         <View className="flex-1 items-center justify-center p-6">
           <Text testID="home-tab-not-ready" className="text-center text-neutral-500">
             この機能は準備中です
           </Text>
         </View>
-      ) : feed.isPending ? (
+      )}
+    </View>
+  );
+}
+
+/**
+ * 1 つのサブタブの一覧（loading / error / 空 / 無限スクロール / 引っぱって更新）。
+ *
+ * **隠れている間（`visible: false`）は取得しない**。検索語を変えても、
+ * 取り直すのは表示中のタブだけ（隠れたタブは次に表示したときに取得する）。
+ * 隠すのは `display: "none"` で、画面から消えるので押すこともできない。
+ *
+ * testID は「全体」タブだけ従来どおり（`home-feed-list` / `feed-recipe-{id}` 等）に
+ * して、既存のテストと E2E をそのまま使えるようにする。他のタブはタブ名を入れる
+ * （隠れた一覧と testID が重ならないように）。
+ */
+function FeedList({
+  feed,
+  query,
+  emptyText,
+  visible,
+  basePath,
+}: {
+  feed: FeedKind;
+  query: string;
+  emptyText: string;
+  visible: boolean;
+  basePath: string;
+}) {
+  const router = useRouter();
+  const result = useFeed(feed, query, { enabled: visible });
+  const items = result.data?.pages.flatMap((p) => p.items) ?? [];
+  const suffix = feed === "all" ? "" : `-${feed}`;
+  const cardPrefix = feed === "all" ? "feed-recipe" : `feed-${feed}-recipe`;
+
+  return (
+    <View className="flex-1" style={{ display: visible ? "flex" : "none" }}>
+      {result.isPending ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
-      ) : feed.isError ? (
+      ) : result.isError ? (
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text className="text-neutral-600">読み込みに失敗しました</Text>
           <Pressable
-            testID="home-retry"
-            onPress={() => void feed.refetch()}
+            testID={`home-retry${suffix}`}
+            onPress={() => void result.refetch()}
             accessibilityRole="button"
             className="rounded-lg border border-neutral-300 px-4 py-2"
           >
@@ -217,33 +296,37 @@ export function HomeScreen({ basePath }: { basePath: string }) {
         </View>
       ) : (
         <FlatList
-          testID="home-feed-list"
+          testID={`home-feed-list${suffix}`}
           data={items}
           keyExtractor={(r) => r.id}
           contentContainerClassName="gap-2 p-4"
           renderItem={({ item }) => (
             <FeedRecipeCard
-              testID={`feed-recipe-${item.id}`}
+              testID={`${cardPrefix}-${item.id}`}
               recipe={item}
               onPress={() => router.push(`${basePath}/recipes/${item.id}` as never)}
             />
           )}
           ListEmptyComponent={
-            <Text testID="home-feed-empty" className="mt-10 text-center text-neutral-500">
-              {hasQuery
-                ? `「${submittedQuery}」に一致するレシピは見つかりませんでした`
-                : "まだレシピがありません"}
+            <Text
+              testID={`home-feed-empty${suffix}`}
+              className="mt-10 text-center text-neutral-500"
+            >
+              {query !== "" ? `「${query}」に一致するレシピは見つかりませんでした` : emptyText}
             </Text>
           }
           refreshControl={
-            <RefreshControl refreshing={feed.isRefetching} onRefresh={() => void feed.refetch()} />
+            <RefreshControl
+              refreshing={result.isRefetching}
+              onRefresh={() => void result.refetch()}
+            />
           }
           onEndReached={() => {
-            if (feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage();
+            if (result.hasNextPage && !result.isFetchingNextPage) void result.fetchNextPage();
           }}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
-            feed.isFetchingNextPage ? <ActivityIndicator className="my-4" /> : null
+            result.isFetchingNextPage ? <ActivityIndicator className="my-4" /> : null
           }
         />
       )}
