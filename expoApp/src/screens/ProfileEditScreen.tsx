@@ -43,6 +43,7 @@ import {
   type ProfileFieldErrors,
   type ProfileFormValues,
 } from "@/features/profile/profileForm";
+import { useUnsavedChangesStore } from "@/features/navigation/unsavedChanges";
 import { useUnsavedChangesGuard } from "@/features/recipe/useUnsavedChangesGuard";
 
 /** アバター設定完了の通知を出しておく時間（ミリ秒）。 */
@@ -63,7 +64,8 @@ export function ProfileEditScreen() {
 
   return (
     <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
-      {profileQuery.data && (profileQuery.isFetchedAfterMount || profileQuery.isError) ? (
+      {profileQuery.data &&
+      (profileQuery.isFetchedAfterMount || !profileQuery.isFetching || profileQuery.isError) ? (
         // フォームは取得できた値で 1 回だけ初期化したいので、取得後に
         // 別コンポーネントとしてマウントする（effect で setState しなくて済む）。
         <ProfileEditForm profile={profileQuery.data} onLeave={leave} />
@@ -166,6 +168,15 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
   const saving = updateProfile.isPending;
   const dirty = isDirty(initial, values);
   const guard = useUnsavedChangesGuard(dirty, onLeave, saving);
+
+  useEffect(() => {
+    if (!dirty) return;
+
+    // タブをもう一度押したときも、画面内の戻るボタンと同じ確認を出す。
+    // 保存中は guard.requestClose 自身が何もしないため、入力内容を守ったまま待つ。
+    useUnsavedChangesStore.getState().registerRequestClose(guard.requestClose);
+    return () => useUnsavedChangesStore.getState().clearRequestClose(guard.requestClose);
+  }, [dirty, guard.requestClose]);
 
   function setField<K extends keyof ProfileFormValues>(field: K, value: ProfileFormValues[K]) {
     setValues((prev) => ({ ...prev, [field]: value }));

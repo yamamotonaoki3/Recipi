@@ -13,6 +13,10 @@ import { useSession } from "@/store/session";
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: jest.fn() }),
   useLocalSearchParams: () => ({ id: "r1" }),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const React = jest.requireActual<typeof import("react")>("react");
+    React.useEffect(effect, [effect]);
+  },
   Stack: { Screen: () => null },
 }));
 

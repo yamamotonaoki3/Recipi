@@ -23,6 +23,10 @@ let mockCanGoBack = true;
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: mockBack, replace: mockReplace, canGoBack: () => mockCanGoBack }),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const React = jest.requireActual<typeof import("react")>("react");
+    React.useEffect(effect, [effect]);
+  },
   Stack: {
     Screen: (props: unknown) => {
       mockStackScreen(props);
@@ -135,6 +139,20 @@ describe("読み込み", () => {
     await waitFor(() => {
       expect(getByTestId("profile-edit-display-name").props.value).toBe("再取得した名前");
     });
+  });
+
+  it("新しいキャッシュがあって再取得が起きないときはすぐフォームを出す", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+    });
+    client.setQueryData(profileKeys.detail("u1"), { ...profile, displayName: "新しいキャッシュ" });
+
+    const { getByTestId } = await render(<ProfileEditScreen />, {
+      wrapper: wrapperWithClient(client),
+    });
+
+    expect(getByTestId("profile-edit-display-name").props.value).toBe("新しいキャッシュ");
+    expect(mockGetMyProfile).not.toHaveBeenCalled();
   });
 
   it("ログイン済みなのにユーザー情報が無ければログインし直しを案内する", async () => {

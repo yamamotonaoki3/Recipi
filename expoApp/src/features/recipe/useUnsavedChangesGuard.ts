@@ -10,7 +10,8 @@
  *
  * dirty 判定そのもの（`isDirty`）は recipeForm.ts の純粋関数。
  */
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { BackHandler } from "react-native";
 
 export type UnsavedChangesGuard = {
@@ -50,13 +51,17 @@ export function useUnsavedChangesGuard(
   const cancelLeave = useCallback(() => setConfirmVisible(false), []);
 
   // Android のハードウェアバックも同じ入口に流す。
-  useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      requestClose();
-      return true; // イベントを消費してデフォルトの「前の画面へ戻る」を止める
-    });
-    return () => sub.remove();
-  }, [requestClose]);
+  // 画面がフォーカスされている間だけ登録する。タブを切り替えて裏に残った
+  // 編集画面が、表示中の画面の戻るキーを横取りしないようにする。
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        requestClose();
+        return true; // イベントを消費してデフォルトの「前の画面へ戻る」を止める
+      });
+      return () => sub.remove();
+    }, [requestClose]),
+  );
 
   return {
     confirmVisible: confirmVisible && !disabled,
