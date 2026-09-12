@@ -46,7 +46,7 @@ export function validatePasswordMatch(password: string, confirm: string): string
 
 export function validateDisplayName(displayName: string): string | undefined {
   if (isBlank(displayName)) return "表示名を入力してください";
-  if (displayName.length > DISPLAY_NAME_MAX_LENGTH) {
+  if (Array.from(displayName).length > DISPLAY_NAME_MAX_LENGTH) {
     return `表示名は${DISPLAY_NAME_MAX_LENGTH}文字以内で入力してください`;
   }
   return undefined;

@@ -1,14 +1,13 @@
 /**
  * レシピカード（screens/components.md §レシピカード）。
  *
- * Issue #38 の「自分のレシピ一覧」で使う版。`GET /users/me/recipes` の
- * `RecipeSummary` は id / title / thumbnailUrl / isPublic / createdAt しか
- * 持たないため、投稿者・お気に入り数は出さない（フィード用のフルカードは
- * Phase 4 / #42 で拡張する）。サムネイルが無いレシピはプレースホルダ。
+ * Issue #38 の「自分のレシピ一覧」で使う版。サムネイルが無いレシピは
+ * プレースホルダ。投稿者はアバターと表示名を表示する。
  */
 import { Image } from "expo-image";
 import { Pressable, Text, View } from "react-native";
 
+import { Avatar } from "@/components/Avatar";
 import type { RecipeSummary } from "@/features/recipe/api";
 
 type RecipeCardProps = {
@@ -48,6 +47,23 @@ export function RecipeCard({ recipe, onPress, testID }: RecipeCardProps) {
         <Text numberOfLines={2} className="text-base font-semibold text-neutral-900">
           {recipe.title}
         </Text>
+        <View className="flex-row items-center gap-2">
+          {/* 投稿者は「アバター ＋ 表示名」（screens/components.md §レシピカード）。
+              アバター未設定なら、Avatar 部品が表示名の頭文字を出す。 */}
+          <Avatar
+            url={recipe.author.avatarUrl}
+            displayName={recipe.author.displayName}
+            size={16}
+            testID={testID ? `${testID}-avatar` : undefined}
+          />
+          <Text
+            testID={testID ? `${testID}-author` : undefined}
+            numberOfLines={1}
+            className="flex-1 text-xs text-neutral-500"
+          >
+            {recipe.author.displayName}
+          </Text>
+        </View>
         <View className="flex-row items-center gap-2">
           <Text className="text-xs text-neutral-400">{formatDate(recipe.createdAt)}</Text>
           {!recipe.isPublic && (

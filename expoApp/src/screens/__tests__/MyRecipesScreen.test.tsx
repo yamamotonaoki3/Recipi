@@ -26,8 +26,20 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-function card(id: string, isPublic: boolean, title = `レシピ${id}`) {
-  return { id, title, thumbnailUrl: null, isPublic, createdAt: "2026-09-06T00:00:00Z" };
+function card(
+  id: string,
+  isPublic: boolean,
+  title = `レシピ${id}`,
+  avatarUrl: string | null = null,
+) {
+  return {
+    id,
+    title,
+    thumbnailUrl: null,
+    author: { id: `author-${id}`, displayName: `投稿者${id}`, avatarUrl },
+    isPublic,
+    createdAt: "2026-09-06T00:00:00Z",
+  };
 }
 
 /**
@@ -64,6 +76,28 @@ describe("MyRecipesScreen", () => {
     expect(await findByText("レシピ1")).toBeTruthy();
     expect(getByTestId("my-recipe-2-private-badge")).toBeTruthy();
     expect(queryByTestId("my-recipe-1-private-badge")).toBeNull();
+  });
+
+  it("投稿者の表示名とアバターを表示し、未設定なら頭文字を出す", async () => {
+    mockList.mockResolvedValue({
+      items: [
+        card("1", true, "画像あり", "https://example.com/avatar.jpg"),
+        card("2", true, "画像なし"),
+      ],
+      nextCursor: null,
+    });
+    const { findByTestId, getByTestId, queryByTestId } = await render(
+      <MyRecipesScreen basePath="/my-page" />,
+      { wrapper },
+    );
+
+    expect((await findByTestId("my-recipe-1-avatar")).props.source).toEqual([
+      { uri: "https://example.com/avatar.jpg" },
+    ]);
+    expect(getByTestId("my-recipe-1-author").props.children).toBe("投稿者1");
+    expect(getByTestId("my-recipe-2-avatar-placeholder")).toBeTruthy();
+    expect(queryByTestId("my-recipe-2-avatar")).toBeNull();
+    expect(getByTestId("my-recipe-2-author").props.children).toBe("投稿者2");
   });
 
   it("カードタップで詳細へ push する", async () => {

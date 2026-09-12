@@ -10,7 +10,7 @@
  *
  * アカウント削除ボタン（区切り線の下）は F7 で追加する。
  */
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -196,6 +196,11 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
 
   return (
     <>
+      {/* 未保存の変更がある間は iOS のスワイプバックを無効にする。
+          スワイプで閉じると requestClose を通らず、確認ダイアログが出ないため。
+          Android の戻るボタンは useUnsavedChangesGuard が処理する。 */}
+      <Stack.Screen options={{ gestureEnabled: !dirty }} />
+
       <AppBar onBack={guard.requestClose} onSave={handleSave} saving={updateProfile.isPending} />
 
       <ScrollView contentContainerClassName="gap-5 p-6">

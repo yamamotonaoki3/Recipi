@@ -65,6 +65,12 @@ describe("validateDisplayName（境界値: 0/1/30/31文字）", () => {
   it("31文字はエラー", () => {
     expect(validateDisplayName("あ".repeat(31))).toBeDefined();
   });
+  it("絵文字30個はOK", () => {
+    expect(validateDisplayName("😀".repeat(30))).toBeUndefined();
+  });
+  it("絵文字31個はエラー", () => {
+    expect(validateDisplayName("😀".repeat(31))).toBeDefined();
+  });
 });
 
 describe("validateSecurityQuestion / validateSecurityAnswer", () => {

@@ -17,10 +17,17 @@ import { useSession } from "@/store/session";
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
+const mockStackScreen = jest.fn((_props: unknown) => null);
 let mockCanGoBack = true;
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: mockBack, replace: mockReplace, canGoBack: () => mockCanGoBack }),
+  Stack: {
+    Screen: (props: unknown) => {
+      mockStackScreen(props);
+      return null;
+    },
+  },
 }));
 jest.mock("@/features/profile/api", () => ({
   getMyProfile: jest.fn(),
@@ -197,6 +204,23 @@ describe("保存", () => {
 });
 
 describe("未保存ガード", () => {
+  it("未保存の変更がある間は iOS のスワイプバックを無効にする", async () => {
+    const { getByTestId } = await renderLoaded();
+    expect(mockStackScreen).toHaveBeenLastCalledWith({
+      options: { gestureEnabled: true },
+    });
+
+    await fireEvent(getByTestId("profile-edit-x-public"), "valueChange", false);
+    expect(mockStackScreen).toHaveBeenLastCalledWith({
+      options: { gestureEnabled: false },
+    });
+
+    await fireEvent(getByTestId("profile-edit-x-public"), "valueChange", true);
+    expect(mockStackScreen).toHaveBeenLastCalledWith({
+      options: { gestureEnabled: true },
+    });
+  });
+
   it("変更があるまま戻ると確認を出し、キャンセルで留まり、破棄で戻る", async () => {
     const { getByTestId } = await renderLoaded();
     await fireEvent(getByTestId("profile-edit-x-public"), "valueChange", false);
