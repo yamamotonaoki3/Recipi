@@ -81,9 +81,3 @@ export async function confirmPasswordReset(body: {
   const { error, response } = await api.POST("/api/v1/auth/password-reset/confirm", { body });
   if (error) throw toApiError(error, response.status);
 }
-
-export async function updateMe(body: { displayName: string }): Promise<UserMeResponse> {
-  const { data, error, response } = await api.PATCH("/api/v1/users/me", { body });
-  if (error || !data) throw toApiError(error, response.status);
-  return data;
-}

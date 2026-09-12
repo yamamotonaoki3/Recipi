@@ -10,7 +10,8 @@
  *
  * dirty 判定そのもの（`isDirty`）は recipeForm.ts の純粋関数。
  */
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { BackHandler } from "react-native";
 
 export type UnsavedChangesGuard = {
@@ -24,32 +25,48 @@ export type UnsavedChangesGuard = {
   cancelLeave: () => void;
 };
 
-export function useUnsavedChangesGuard(dirty: boolean, onLeave: () => void): UnsavedChangesGuard {
+export function useUnsavedChangesGuard(
+  dirty: boolean,
+  onLeave: () => void,
+  disabled = false,
+): UnsavedChangesGuard {
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   const requestClose = useCallback(() => {
+    // 保存中は、入力内容を送信し終わるまで画面を閉じない。
+    if (disabled) return;
     if (dirty) {
       setConfirmVisible(true);
     } else {
       onLeave();
     }
-  }, [dirty, onLeave]);
+  }, [disabled, dirty, onLeave]);
 
   const confirmLeave = useCallback(() => {
+    if (disabled) return;
     setConfirmVisible(false);
     onLeave();
-  }, [onLeave]);
+  }, [disabled, onLeave]);
 
   const cancelLeave = useCallback(() => setConfirmVisible(false), []);
 
   // Android のハードウェアバックも同じ入口に流す。
-  useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      requestClose();
-      return true; // イベントを消費してデフォルトの「前の画面へ戻る」を止める
-    });
-    return () => sub.remove();
-  }, [requestClose]);
+  // 画面がフォーカスされている間だけ登録する。タブを切り替えて裏に残った
+  // 編集画面が、表示中の画面の戻るキーを横取りしないようにする。
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        requestClose();
+        return true; // イベントを消費してデフォルトの「前の画面へ戻る」を止める
+      });
+      return () => sub.remove();
+    }, [requestClose]),
+  );
 
-  return { confirmVisible, requestClose, confirmLeave, cancelLeave };
+  return {
+    confirmVisible: confirmVisible && !disabled,
+    requestClose,
+    confirmLeave,
+    cancelLeave,
+  };
 }

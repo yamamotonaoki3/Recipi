@@ -3,15 +3,7 @@
  * `@/api/client` を jest.mock で差し替え、成功/エラー分岐を確認する。
  */
 import { api } from "@/api/client";
-import {
-  ApiError,
-  confirmPasswordReset,
-  login,
-  logout,
-  requestPasswordReset,
-  signup,
-  updateMe,
-} from "./api";
+import { ApiError, confirmPasswordReset, login, logout, requestPasswordReset, signup } from "./api";
 
 jest.mock("@/api/client", () => ({ api: { POST: jest.fn(), PATCH: jest.fn() } }));
 
@@ -147,25 +139,5 @@ describe("confirmPasswordReset", () => {
         newPassword: "NewTestPass456!",
       }),
     ).rejects.toMatchObject({ status: 429 });
-  });
-});
-
-describe("updateMe", () => {
-  it("成功するとデータを返す", async () => {
-    mockPatch.mockResolvedValue({
-      data: { id: "u1", email: "a@example.com", displayName: "新" },
-      error: undefined,
-      response: { status: 200 },
-    });
-    const result = await updateMe({ displayName: "新" });
-    expect(result.displayName).toBe("新");
-  });
-
-  it("失敗時、error に details/code が無くても既定メッセージになる", async () => {
-    mockPatch.mockResolvedValue({ data: undefined, error: undefined, response: { status: 500 } });
-    await expect(updateMe({ displayName: "" })).rejects.toMatchObject({
-      status: 500,
-      message: "通信エラーが発生しました",
-    });
   });
 });

@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Avatar } from "@/components/Avatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ApiError } from "@/features/auth/api";
 import { useRecordView } from "@/features/history/hooks";
@@ -143,6 +144,12 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
         </Text>
 
         <View className="flex-row items-center gap-2">
+          <Avatar
+            url={recipe.author.avatarUrl}
+            displayName={recipe.author.displayName}
+            size={24}
+            testID="recipe-detail-author-avatar"
+          />
           <Text className="text-sm text-neutral-500">{recipe.author.displayName}</Text>
           {!recipe.isPublic && (
             <Text className="rounded bg-neutral-200 px-1.5 py-0.5 text-xs text-neutral-600">

@@ -23,11 +23,12 @@
  */
 import { usePathname, useRouter } from "expo-router";
 import { TabList, TabSlot, TabTrigger, Tabs } from "expo-router/ui";
-import { Pressable } from "react-native";
+import { Pressable, type GestureResponderEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NavCreateButton, NavItemLabel, useIsNavRail } from "@/components/AppNavBar";
 import { DESTINATIONS_WITH_RECIPE_STACK } from "@/features/navigation/destinations";
+import { useUnsavedChangesStore } from "@/features/navigation/unsavedChanges";
 
 /** タブの定義（並び順は navigation.md: ホーム / 履歴 / ＋ / 通知 / マイページ）。 */
 const LEFT_TABS = [
@@ -63,8 +64,16 @@ export default function TabsLayout() {
    * （Codex #42 レビュー指摘）。`TabTrigger` に渡した `onPress` は
    * 本体の処理より先に呼ばれるので、ここで自前に戻す。
    */
-  const popToDestinationRoot = (href: string) => {
+  const popToDestinationRoot = (href: string, event?: GestureResponderEvent) => {
     if (pathname !== href && pathname.startsWith(`${href}/`)) {
+      const requestClose = useUnsavedChangesStore.getState().requestClose;
+      if (requestClose) {
+        // TabTrigger は onPress の後に tabPress を送り、スタックを戻してしまう。
+        // 確認ダイアログを出す前に既定動作を止めないと、編集画面まで閉じてしまう。
+        event?.preventDefault();
+        requestClose();
+        return;
+      }
       router.dismissTo(href as never);
     }
   };
@@ -126,7 +135,7 @@ export default function TabsLayout() {
             name={tab.name}
             href={tab.href}
             testID={tab.testID}
-            onPress={() => popToDestinationRoot(tab.href)}
+            onPress={(event) => popToDestinationRoot(tab.href, event)}
             asChild
           >
             <NavTabButton icon={tab.icon} label={tab.label} />
@@ -149,7 +158,7 @@ export default function TabsLayout() {
             name={tab.name}
             href={tab.href}
             testID={tab.testID}
-            onPress={() => popToDestinationRoot(tab.href)}
+            onPress={(event) => popToDestinationRoot(tab.href, event)}
             asChild
           >
             <NavTabButton icon={tab.icon} label={tab.label} />

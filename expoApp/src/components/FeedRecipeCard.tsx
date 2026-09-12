@@ -11,6 +11,7 @@
 import { Image } from "expo-image";
 import { Pressable, Text, View } from "react-native";
 
+import { Avatar } from "@/components/Avatar";
 import type { RecipeFeedItem } from "@/features/feed/api";
 
 type FeedRecipeCardProps = {
@@ -46,25 +47,13 @@ export function FeedRecipeCard({ recipe, onPress, testID }: FeedRecipeCardProps)
         </Text>
         <View className="flex-row items-center gap-2">
           {/* 投稿者は「アバター ＋ 表示名」（screens/components.md §レシピカード）。
-              アバター画像は Phase 5 まで常に null なので、そのあいだは
-              表示名の頭文字を入れた丸をプレースホルダとして出す。 */}
-          {recipe.author.avatarUrl ? (
-            <Image
-              testID={testID ? `${testID}-avatar` : undefined}
-              source={{ uri: recipe.author.avatarUrl }}
-              style={{ width: 16, height: 16, borderRadius: 8 }}
-              contentFit="cover"
-            />
-          ) : (
-            <View
-              testID={testID ? `${testID}-avatar-placeholder` : undefined}
-              className="h-4 w-4 items-center justify-center rounded-full bg-neutral-200"
-            >
-              <Text className="text-[8px] text-neutral-500">
-                {recipe.author.displayName.slice(0, 1)}
-              </Text>
-            </View>
-          )}
+              未設定なら頭文字の丸になる（Avatar 部品の中で出し分ける）。 */}
+          <Avatar
+            url={recipe.author.avatarUrl}
+            displayName={recipe.author.displayName}
+            size={16}
+            testID={testID ? `${testID}-avatar` : undefined}
+          />
           <Text
             testID={testID ? `${testID}-author` : undefined}
             numberOfLines={1}
