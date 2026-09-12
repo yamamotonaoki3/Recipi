@@ -90,37 +90,76 @@ describe("選択して成功したとき", () => {
     await act(async () => {});
   });
 
+  // 親（フォーム）が onChange を受けて props を更新する動きを再現する。
+  function Host() {
+    const [image, setImage] = useState<{ key: string | null; url: string | null }>({
+      key: null,
+      url: null,
+    });
+    return (
+      <ImagePickerField
+        testID="f"
+        imageKey={image.key}
+        imageUrl={image.url}
+        onChange={(key, url) => setImage({ key, url })}
+      />
+    );
+  }
+
+  // 完了のポップアップは本物の時計で 2 秒後に消える。本物の時計のままだと、CI の
+  // ランナーが遅いときに確かめる前に消えて落ちる（PR #84 の CI で発生）。
+  // 偽のタイマーではテストが進めない限り時間が経たないので、ランナーの速さに左右されない。
+  // （waitFor は偽のタイマーを検出すると、確かめるたびに偽の時間を 50ms ずつ進める。）
+  // 書き方は RecipeEditor.test.tsx と同じく、テストの中で有効にして finally で戻す。
+
   // サーバーは `POST /images` で表示用 URL も返す。これを捨てていたため
   // 「選んだのに画像が出ず『画像を設定しました』の文字だけ」だった（#40 で修正）。
   it("選んだ画像がその場でプレビューに出る", async () => {
-    pickSucceeds();
-    mockUpload.mockResolvedValue({ key: "uploads/new.jpg", url: "https://x/new.jpg" });
+    jest.useFakeTimers();
+    try {
+      pickSucceeds();
+      mockUpload.mockResolvedValue({ key: "uploads/new.jpg", url: "https://x/new.jpg" });
 
-    // 親（フォーム）が onChange を受けて props を更新する動きを再現する。
-    function Host() {
-      const [image, setImage] = useState<{ key: string | null; url: string | null }>({
-        key: null,
-        url: null,
-      });
-      return (
-        <ImagePickerField
-          testID="f"
-          imageKey={image.key}
-          imageUrl={image.url}
-          onChange={(key, url) => setImage({ key, url })}
-        />
-      );
+      const { getByTestId } = await render(<Host />);
+      await fireEvent.press(getByTestId("f-pick"));
+
+      const preview = await waitFor(() => getByTestId("f-preview"));
+      // expo-image は source を配列に正規化するので、中身を取り出して比べる。
+      expect(preview.props.source).toEqual([{ uri: "https://x/new.jpg" }]);
+      // 完了を知らせるポップアップも出る（プレビューに重ねて表示し、自動で消える）。
+      expect(getByTestId("f-toast")).toBeTruthy();
+      await act(async () => {});
+    } finally {
+      jest.useRealTimers();
     }
+  });
 
-    const { getByTestId } = await render(<Host />);
-    await fireEvent.press(getByTestId("f-pick"));
+  it("完了のポップアップは 2 秒で自動的に消える", async () => {
+    jest.useFakeTimers();
+    try {
+      pickSucceeds();
+      mockUpload.mockResolvedValue({ key: "uploads/new.jpg", url: "https://x/new.jpg" });
 
-    const preview = await waitFor(() => getByTestId("f-preview"));
-    // expo-image は source を配列に正規化するので、中身を取り出して比べる。
-    expect(preview.props.source).toEqual([{ uri: "https://x/new.jpg" }]);
-    // 完了を知らせるポップアップも出る（プレビューに重ねて表示し、自動で消える）。
-    expect(getByTestId("f-toast")).toBeTruthy();
-    await act(async () => {});
+      const { getByTestId, queryByTestId } = await render(<Host />);
+      await fireEvent.press(getByTestId("f-pick"));
+      await waitFor(() => getByTestId("f-toast"));
+
+      // 2000ms は ImagePickerField.tsx の TOAST_MS。waitFor はポップアップを見つけるまでに
+      // 偽の時間を最大 50ms 進めるので、境界の前後に余裕を持たせて確かめる。
+      // 表示から 1900〜1950ms 経った時点ではまだ出ている。
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1900);
+      });
+      expect(getByTestId("f-toast")).toBeTruthy();
+
+      // 表示から 2000〜2050ms 経ったら消えている。
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(100);
+      });
+      expect(queryByTestId("f-toast")).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("アップロード中はスピナーを出し、終わったら消える", async () => {
