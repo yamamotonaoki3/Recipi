@@ -15,6 +15,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
 
@@ -24,6 +25,16 @@ def _utcnow() -> datetime:
 
 class RefreshToken(SQLModel, table=True):
     __tablename__ = "refresh_tokens"
+    __table_args__ = (
+        # チェーン単位の検索（再利用検知でチェーン全体を失効させる・掃除ジョブが
+        # 「チェーンの全トークンが期限切れから日数がたったか」を調べる）に使う。
+        # 先頭列が chain_id なので、chain_id だけの検索にも使える（Issue #72 で
+        # 単独索引から置き換え）。
+        sa.Index("ix_refresh_tokens_chain_id_expires_at", "chain_id", "expires_at"),
+        # 掃除ジョブが最初に「期限切れの行」だけに候補を絞るため（上は先頭が chain_id
+        # なので、期限だけの条件には使えない）。
+        sa.Index("ix_refresh_tokens_expires_at", "expires_at"),
+    )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
 
@@ -41,7 +52,7 @@ class RefreshToken(SQLModel, table=True):
 
     # ローテーションの連鎖を識別する ID（同じログインセッション由来の
     # トークンはすべて同じ chain_id を持つ）。
-    chain_id: uuid.UUID = Field(nullable=False, index=True)
+    chain_id: uuid.UUID = Field(nullable=False)
 
     expires_at: datetime = Field(nullable=False)
 

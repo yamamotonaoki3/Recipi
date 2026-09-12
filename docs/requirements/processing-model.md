@@ -181,10 +181,10 @@
 | カウント列補正ジョブ | `follows` / `favorites` / `recipe_comments` を実数集計し `users.*_count` / `recipes.*_count` のズレを補正 | 何度流しても同じ（実数に寄せるだけ） | → [todo.md](todo.md) #10 | 次回実行で回収。多層防御なので 1 回の失敗は許容 | 通常はトランザクション内で正しく増減される。これは残余のズレを直す保険で、リアルタイム性は不要 |
 | 一時アップロード GC | (a) `stored` で本参照されないまま猶予を過ぎた行、(b) `expires_at` を過ぎた `pending` 行（失敗したアップロード）を回収。各行を `FOR UPDATE SKIP LOCKED` でロック → 状態を再確認（`consumed` は除外）→ **同一 Tx でキーを削除キューに INSERT ＋ `uploads` 行を DELETE**。実 DELETE はストレージ削除ジョブが行う（§9） | 行ロック＋再確認で冪等。GC は外部 I/O をしない | 猶予・`expires_at` → [todo.md](todo.md) #15 | 次回実行で回収 | 「本参照されなかったか」「アップロードが完了したか」は時間が経たないと確定しない。即時判定できない |
 | ストレージ削除ジョブ | 削除キュー（§9）のキーを S3 / MinIO から実削除し、成功した行を消す | 「既に存在しない」を成功扱い | → [todo.md](todo.md)（新規） | `attempts` を増やして再試行。上限超過は `last_error` を残して隔離 | ストレージ障害を削除 API に波及させない。遅延は許容 |
-| 期限切れリフレッシュトークン掃除 | `refresh_tokens` の `expires_at < now()` かつ十分古い行を物理削除 | 対象を都度判定 | → [todo.md](todo.md)（新規） | 次回実行で回収 | 認証の正しさは検証時の期限チェックで担保済み。物理削除は容量最適化なので急がない |
+| 期限切れリフレッシュトークン掃除（`python -m app.jobs.cleanup_refresh_tokens`） | **チェーン単位**: 同じ `chain_id` の全トークンが `expires_at <= now - 30 日`（`REFRESH_TOKEN_EXPIRED_RETENTION_DAYS`）になったチェーンの行だけを物理削除（まだ使えるトークンがある間は再利用検知の証拠として残す）。`BATCH_SIZE` 行ずつ・`FOR UPDATE SKIP LOCKED`（Issue #72） | 対象を都度判定 | 30 日（Issue #72 で確定） | 次回実行で回収 | 認証の正しさは検証時の期限チェックで担保済み。物理削除は容量最適化なので急がない |
 | 通知 outbox スイープ（`python -m app.jobs.notification_sweep`） | `processed_at IS NULL` かつ**作成から 5 分以上たった** `notification_outbox` 行を 1 件ずつ別 Tx で処理し（1 件の失敗は次回に回す）、fan-out をやり直す（`BackgroundTasks` の取りこぼし回収） | 通知側の一意制約で重複作成しない。`processed_at` をセット | → [todo.md](todo.md) #18 | 次回実行で回収 | プロセス断でも通知が最終的に届くことを保証する多層防御。数分〜数十分の遅延は許容 |
-| 古い通知の掃除 | 保持期間を超えた既読通知 ＋ 処理済み `notification_outbox` 行を削除 | 対象を都度判定 | 保持期間 → [todo.md](todo.md) #18 | 次回実行で回収 | 通知は履歴。古いものの掃除に即時性は不要 |
-| 閲覧履歴のトリミング | ユーザーあたり上限を超えた `recipe_views` を削除（挿入時トリミングを選ばない場合） | 対象を都度判定 | 方式 → [todo.md](todo.md) #9d | 次回実行で回収 | 上限超過分の掃除で、閲覧体験に影響しない |
+| 古い通知の掃除（`python -m app.jobs.cleanup_notifications`） | 既読から 90 日（`NOTIFICATION_READ_RETENTION_DAYS`）を過ぎた通知 ＋ 処理済みから 7 日（`OUTBOX_PROCESSED_RETENTION_DAYS`）を過ぎた `notification_outbox` 行を削除（未読・未処理は残す。境界は `<=`）。`BATCH_SIZE` 行ずつ・`SKIP LOCKED`（Issue #72） | 対象を都度判定 | 90 日 / 7 日（Issue #72 で確定） | 次回実行で回収 | 通知は履歴。古いものの掃除に即時性は不要 |
+| 閲覧履歴のトリミング（`python -m app.jobs.trim_recipe_views`） | ユーザーあたり 200 件（`RECIPE_VIEWS_MAX_PER_USER`）を超えた `recipe_views` を古い順に削除（定期ジョブ方式で確定）。ユーザー単位の advisory lock で同じユーザーを 2 本で削らない。境界の行を読んでから「境界より古い行」を条件付きで消すので、削除中の閲覧で新しくなった行は消えない（Issue #72） | 対象を都度判定 | 200 件（Issue #72 で確定） | 次回実行で回収 | 上限超過分の掃除で、閲覧体験に影響しない |
 | `ai_usage` の日次処理（Phase 11） | レート制限をアプリ内カウンタで持つ場合の日次リセット / 集計 | 日付キーで冪等 | → [todo.md](todo.md) #45 | 次回実行で回収 | 日次境界の処理でリクエスト経路に乗せる必要がない |
 
 ## 9. アップロード管理と削除キュー（物理スキーマは Phase 3 で確定）
@@ -241,5 +241,6 @@
 - 本番のジョブ実行基盤（cron / コンテナスケジューラ / 将来の専用ジョブキュー）の具体と、多重起動防止の方法
 - 各定期バッチの実行頻度
 - ストレージ削除キューの物理スキーマ（Phase 3）
-- 通知・期限切れリフレッシュトークンの保持期間
+- ~~通知・期限切れリフレッシュトークンの保持期間~~ → Issue #72 で確定（§8。通知 90 日・outbox 7 日・トークン 30 日・閲覧履歴 200 件。`app/config.py` の設定値）
+- 各ジョブを何分おきに動かすか・多重起動防止・監視 → 本番のデプロイ先が決まってから別 Issue（todo.md #50）
 - 大量フォロワー時の fan-out 性能測定と、専用ジョブキュー導入の判断（Phase 10 以降）

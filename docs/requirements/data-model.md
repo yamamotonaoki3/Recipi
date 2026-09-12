@@ -162,7 +162,7 @@ erDiagram
 
 > **通知 fan-out の outbox**: `followee_new_recipe` の配布は、公開レシピ作成トランザクション内で `notification_outbox` に 1 行書き（発火とアトミック）、コミット後に `BackgroundTasks` が配布、落ちた分を定期スイープが回収する（Phase 8。[processing-model.md](processing-model.md) §7・§9、[features/notification.md](features/notification.md)）。
 
-> **定期バッチが掃除するもの**: 期限切れの `refresh_tokens`、保持期間を超えた既読 `notifications` と処理済み `notification_outbox`、上限超過の `recipe_views`。方針は [processing-model.md](processing-model.md) §8、頻度・保持期間は [todo.md](todo.md)。
+> **定期バッチが掃除するもの**（Issue #72 で実装）: 全トークンが期限切れから 30 日を過ぎたチェーンの `refresh_tokens`、既読から 90 日を過ぎた `notifications` と処理済みから 7 日を過ぎた `notification_outbox`、1 ユーザー 200 件を超えた `recipe_views`。掃除用の索引: `refresh_tokens(chain_id, expires_at)`（単独の `chain_id` 索引を置き換え）、`notifications(read_at) WHERE read_at IS NOT NULL`。方針は [processing-model.md](processing-model.md) §8、頻度・保持期間は [todo.md](todo.md)。
 
 ## 共通方針
 

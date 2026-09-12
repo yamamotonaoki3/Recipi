@@ -27,7 +27,7 @@ Phase 10）。
 
     python -m app.jobs.recount_counts
 
-数え直す対象:
+数え直す対象（4 列。Issue #72 でそろったことをテストで確認）:
 - `users.following_count` / `follower_count` ← `follows`（Issue #66）
 - `recipes.favorite_count` ← `favorites`（Issue #68）
 - `recipes.comment_count` ← `recipe_comments`（Issue #69）

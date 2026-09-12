@@ -48,6 +48,10 @@
 | `LOG_LEVEL` | ログレベル | per-env | `INFO` | dev は `DEBUG` 可 |
 | `LOG_FORMAT` | ログ形式 | per-env | `json` | 本番は `json`（構造化ログ・[non-functional.md](non-functional.md) / [todo.md](todo.md) #44） |
 | `AI_PROVIDER` | AI 校正プロバイダの選択（**Phase 11**） | per-env | `local`（dev）/ `stub`（test）/ `anthropic`（prod） | 契約はプロバイダ非依存（[features/ai-proofread.md](features/ai-proofread.md)） |
+| `NOTIFICATION_READ_RETENTION_DAYS` | 既読通知の保持日数（過ぎたら定期ジョブが削除。未読は残す） | fixed（目安） | `90` | 1 以上。Issue #72・[processing-model.md](processing-model.md) §8 |
+| `OUTBOX_PROCESSED_RETENTION_DAYS` | 配布済み `notification_outbox` の保持日数 | fixed（目安） | `7` | 1 以上。Issue #72 |
+| `REFRESH_TOKEN_EXPIRED_RETENTION_DAYS` | リフレッシュトークンのチェーンが全部期限切れになってからの保持日数 | fixed（目安） | `30` | 1 以上。再利用検知との関係は [features/auth.md](features/auth.md)。Issue #72 |
+| `RECIPE_VIEWS_MAX_PER_USER` | 閲覧履歴の 1 ユーザーあたりの保持件数 | fixed（目安） | `200` | 1 以上。超過分は定期ジョブが古い順に削除。Issue #72 |
 | `ANTHROPIC_API_KEY` | Anthropic API キー（**Phase 11・production のみ**） | secret | （`.env.production.example` では空） | 本番のシークレット管理で注入。dev/test では未設定 |
 
 ### frontend-ts（`expoApp/.env` — `EXPO_PUBLIC_` 接頭辞のみクライアントに露出）

@@ -97,6 +97,13 @@ class Notification(SQLModel, table=True):
         sa.Index("ix_notifications_actor_id", "actor_id"),
         sa.Index("ix_notifications_recipe_id", "recipe_id"),
         sa.Index("ix_notifications_comment_id", "comment_id"),
+        # 既読通知の掃除（app/jobs/cleanup_notifications.py）用。未読は掃除しないので
+        # 索引に含めず小さく保つ（Issue #72）。
+        sa.Index(
+            "ix_notifications_read_at",
+            "read_at",
+            postgresql_where=sa.text("read_at IS NOT NULL"),
+        ),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)

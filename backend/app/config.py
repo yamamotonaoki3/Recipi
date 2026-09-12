@@ -119,6 +119,20 @@ class Settings(BaseSettings):
     # 占有してメモリを圧迫するため、バイト数とは別に画素数にも上限を設ける。
     IMAGE_MAX_PIXELS: int = 40_000_000
 
+    # --- 定期ジョブの保持期間・上限（Issue #72。processing-model.md §8） -------
+    # 「消してよい古さ」を決める値。どれも 1 以上（0 や負の値だと、まだ必要な
+    # 行まで消してしまうので、起動時に設定エラーにする）。
+    #
+    # 既読になってからこの日数を過ぎた通知を消す（未読は消さない）。
+    NOTIFICATION_READ_RETENTION_DAYS: int = Field(default=90, ge=1)
+    # 配り終えてからこの日数を過ぎた通知 outbox の行を消す（未処理は消さない）。
+    OUTBOX_PROCESSED_RETENTION_DAYS: int = Field(default=7, ge=1)
+    # リフレッシュトークンのチェーンが、最後のトークンの期限切れからこの日数を
+    # 過ぎたら消す（それまでは古いトークンの再利用を検知できるよう残す）。
+    REFRESH_TOKEN_EXPIRED_RETENTION_DAYS: int = Field(default=30, ge=1)
+    # 閲覧履歴を 1 ユーザーあたりこの件数まで残す（超えた分は古い順に消す）。
+    RECIPE_VIEWS_MAX_PER_USER: int = Field(default=200, ge=1)
+
     # --- CORS（フロントからのブラウザ / デスクトップ経由の呼び出しを許可） -
     # Web（Expo）や Tauri はページのオリジン（例 http://localhost:8081）と
     # API のオリジン（http://localhost:8000）が違うため、CORS の許可が要る。
