@@ -144,13 +144,25 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
         </Text>
 
         <View className="flex-row items-center gap-2">
-          <Avatar
-            url={recipe.author.avatarUrl}
-            displayName={recipe.author.displayName}
-            size={24}
-            testID="recipe-detail-author-avatar"
-          />
-          <Text className="text-sm text-neutral-500">{recipe.author.displayName}</Text>
+          {/* 投稿者をタップすると、他人ならプロフィール、自分ならマイページを開く。 */}
+          <Pressable
+            testID="recipe-detail-author"
+            onPress={() => {
+              // 自分の行はマイページ、他人の行はその人のプロフィールを開く。
+              if (isOwner) router.navigate("/my-page" as never);
+              else router.push(`${basePath}/users/${recipe.author.id}` as never);
+            }}
+            accessibilityRole="button"
+            className="flex-row items-center gap-2"
+          >
+            <Avatar
+              url={recipe.author.avatarUrl}
+              displayName={recipe.author.displayName}
+              size={24}
+              testID="recipe-detail-author-avatar"
+            />
+            <Text className="text-sm text-neutral-500">{recipe.author.displayName}</Text>
+          </Pressable>
           {!recipe.isPublic && (
             <Text className="rounded bg-neutral-200 px-1.5 py-0.5 text-xs text-neutral-600">
               非公開
