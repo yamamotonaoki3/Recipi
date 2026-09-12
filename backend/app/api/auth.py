@@ -24,7 +24,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlmodel import Session, select
 
 from app.config import settings
@@ -231,7 +231,13 @@ def refresh(body: RefreshRequest, session: Session = Depends(get_session)) -> Re
     # 上書きしない。`session.refresh(..., with_for_update=True)` を使うと
     # 行ロックを取りながら属性を DB の値で強制的に上書きできる。
     token_row = unlocked_peek
-    session.refresh(token_row, with_for_update=True)
+    try:
+        session.refresh(token_row, with_for_update=True)
+    except InvalidRequestError:
+        # ロック無しで読んでからロックを取るまでの間に、行が消えていた（掃除ジョブ
+        # app/jobs/cleanup_refresh_tokens.py が期限切れのチェーンを消した等）。
+        # 消されるのは期限切れから日数がたったトークンだけなので、どのみち 401。
+        raise unauthorized("リフレッシュトークンが無効です") from None
 
     if token_row.revoked_at is not None:
         # 既に失効済み（＝一度使われた）トークンが再提示された。
