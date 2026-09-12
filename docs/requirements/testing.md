@@ -96,7 +96,7 @@
 | backend lint / format | **ruff** | 2026 の Python 標準。`pyproject.toml` に設定 |
 | backend 型チェック | **mypy** | strict 寄せの度合いは実装時に調整 |
 | backend テスト | **pytest**（＋ `pytest-asyncio` / `pytest-cov` / `httpx`） | 結合は `ASGITransport` で FastAPI を直接叩く |
-| backend 結合の DB / ストレージ | GitHub Actions `services:`（postgres）＋ MinIO コンテナ | `testcontainers` は使わない（ランナー標準の services で足りる） |
+| backend 結合の DB / ストレージ | GitHub Actions `services:`（postgres）＋ MinIO コンテナ | `testcontainers` は使わない（ランナー標準の services で足りる）。MinIO は `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`（compose と同じタグで固定。[environment.md](environment.md) §4・Issue #89） |
 | frontend lint / format | **ESLint**（Expo 設定）＋ **Prettier** | |
 | frontend 型チェック | **`tsc --noEmit`** | |
 | frontend テスト | **jest-expo ＋ @testing-library/react-native** | Expo 標準。vitest は使わない |
