@@ -83,6 +83,8 @@
 
 ## 4. `docker-compose.yml` での参照
 
+- **MinIO のイメージは `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`**（MinIO 公式の quay.io。Docker Hub の `minio/minio` は 2026-09 に認証なしでは取得できなくなった）。`latest` は使わずリリースタグで固定し、CI（`.github/workflows/backend.yml`）と**同じタグ**にそろえる。更新するときは compose と `backend.yml` の 2 か所を同時に変え、ローカルで結合テストを流してから PR にする（Issue #89）。
+
 - コミットする `infra/docker-compose.yml` は**環境変数展開のみ**（`${POSTGRES_PASSWORD}` など）。実値を埋め込まない。
 - `${...}` 展開のための値は **`--env-file` で明示的に渡す**（compose は `.env.development` を自動では読まず、既定は `.env` のみ）:
   - `docker compose --env-file .env.development -f infra/docker-compose.yml up -d postgres minio`
