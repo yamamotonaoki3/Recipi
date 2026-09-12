@@ -18,11 +18,10 @@ export type RecipeFeedItem = components["schemas"]["RecipeFeedItem"];
  * - `all`       … 全体（すべての公開レシピ）
  * - `following` … 自分がフォローしている人の公開レシピ（Issue #98 で有効化）
  * - `followers` … 自分をフォローしている人の公開レシピ（Issue #98 で有効化）
- *
- * 「お気に入りレシピ」（`favorites`）は F4 で有効化するまで画面側で「準備中」を出し、
- * この関数を呼ばない。
+ * - `favorites` … 自分がお気に入りしたレシピ（自分の非公開も含む。登録日時の新しい順。
+ *                 Issue #100 で有効化。features/favorite.md §3）
  */
-export type FeedKind = "all" | "following" | "followers";
+export type FeedKind = "all" | "following" | "followers" | "favorites";
 
 type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 
