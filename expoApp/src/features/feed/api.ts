@@ -1,5 +1,5 @@
 /**
- * ホームフィード（「全体」タブ ＋ 検索）の API 呼び出し（Issue #42）。
+ * ホームフィードの API 呼び出し（Issue #42・#98）。
  *
  * `features/recipe/api.ts` と同じ方針: openapi-fetch の `error` / `data` 分岐を
  * ここでまとめ、hook 側は「成功データ」か「投げられた `ApiError`」だけを見ればよい
@@ -11,6 +11,18 @@ import type { components } from "@/api/schema";
 
 export type RecipeFeedResponse = components["schemas"]["RecipeFeedResponse"];
 export type RecipeFeedItem = components["schemas"]["RecipeFeedItem"];
+
+/**
+ * ホームのサブタブのうち、フィードを取得できるもの（features/home-feed.md §5）。
+ *
+ * - `all`       … 全体（すべての公開レシピ）
+ * - `following` … 自分がフォローしている人の公開レシピ（Issue #98 で有効化）
+ * - `followers` … 自分をフォローしている人の公開レシピ（Issue #98 で有効化）
+ *
+ * 「お気に入りレシピ」（`favorites`）は F4 で有効化するまで画面側で「準備中」を出し、
+ * この関数を呼ばない。
+ */
+export type FeedKind = "all" | "following" | "followers";
 
 type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 
@@ -24,14 +36,14 @@ function toApiError(error: unknown, status: number): ApiError {
 /**
  * ホームフィードを 1 ページ取得する（features/home-feed.md §5）。
  *
- * `feed` は **"all" 固定**。MVP で機能するのは「全体」タブだけで、
- * サーバーも `feed=all` 以外を 400 で弾く（Issue #41）。「フォロー」等の
- * 準備中タブは、そもそもこの関数を呼ばずに画面側で「準備中」を出す。
+ * `feed` を省略すると `all`（全体）。検索語 `q` は表示中のタブの集合の中を
+ * 絞り込むので、`feed` と一緒に送る（home-feed.md §3）。
  *
  * `q` が空文字のときは `undefined` にして**クエリ自体を送らない**。
  * 空文字を送ると「空の検索語で絞り込む」という別の意味になりかねないため。
  */
 export async function listFeed(query: {
+  feed?: FeedKind;
   q?: string;
   cursor?: string;
   limit?: number;
@@ -39,7 +51,7 @@ export async function listFeed(query: {
   const { data, error, response } = await api.GET("/api/v1/recipes", {
     params: {
       query: {
-        feed: "all",
+        feed: query.feed ?? "all",
         q: query.q || undefined,
         cursor: query.cursor || undefined,
         limit: query.limit,
