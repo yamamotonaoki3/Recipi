@@ -117,25 +117,70 @@ describe("HistoryScreen", () => {
     expect(mockClearHistory).not.toHaveBeenCalled();
   });
 
+  // 「消しました」の通知は本物の時計で 3 秒後に消える。本物の時計のままだと、CI の
+  // ランナーが遅いときに確かめる前に消えて落ちうる（ImagePickerField の完了ポップアップで
+  // 実際に発生した不安定さと同じ種類）。偽のタイマーではテストが進めない限り時間が経たない。
+  // 書き方は RecipeEditor.test.tsx と同じく、テストの中で有効にして finally で戻す。
   it("確認して実行すると消去し、空状態になる", async () => {
-    mockGetHistory
-      .mockResolvedValueOnce({ items: [item("1")], nextCursor: null })
-      .mockResolvedValue({ items: [], nextCursor: null });
-    mockClearHistory.mockResolvedValue(undefined);
+    jest.useFakeTimers();
+    try {
+      mockGetHistory
+        .mockResolvedValueOnce({ items: [item("1")], nextCursor: null })
+        .mockResolvedValue({ items: [], nextCursor: null });
+      mockClearHistory.mockResolvedValue(undefined);
 
-    const { findByText, getByTestId, findByTestId } = await render(
-      <HistoryScreen basePath="/history" />,
-      { wrapper },
-    );
-    await findByText("レシピ1");
+      const { findByText, getByTestId, findByTestId } = await render(
+        <HistoryScreen basePath="/history" />,
+        { wrapper },
+      );
+      await findByText("レシピ1");
 
-    await fireEvent.press(getByTestId("history-clear"));
-    await fireEvent.press(getByTestId("history-clear-dialog-confirm"));
+      await fireEvent.press(getByTestId("history-clear"));
+      await fireEvent.press(getByTestId("history-clear-dialog-confirm"));
 
-    expect(mockClearHistory).toHaveBeenCalledTimes(1);
-    expect(await findByTestId("history-empty")).toBeTruthy();
-    // 破壊的操作なので「消えた」ことを知らせる（history.md §5）。
-    expect(await findByTestId("history-cleared-snackbar")).toBeTruthy();
+      expect(mockClearHistory).toHaveBeenCalledTimes(1);
+      expect(await findByTestId("history-empty")).toBeTruthy();
+      // 破壊的操作なので「消えた」ことを知らせる（history.md §5）。
+      expect(await findByTestId("history-cleared-snackbar")).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("消去の通知は 3 秒で自動的に消える", async () => {
+    jest.useFakeTimers();
+    try {
+      mockGetHistory
+        .mockResolvedValueOnce({ items: [item("1")], nextCursor: null })
+        .mockResolvedValue({ items: [], nextCursor: null });
+      mockClearHistory.mockResolvedValue(undefined);
+
+      const { findByText, getByTestId, findByTestId, queryByTestId } = await render(
+        <HistoryScreen basePath="/history" />,
+        { wrapper },
+      );
+      await findByText("レシピ1");
+
+      await fireEvent.press(getByTestId("history-clear"));
+      await fireEvent.press(getByTestId("history-clear-dialog-confirm"));
+      await findByTestId("history-cleared-snackbar");
+
+      // 3000ms は HistoryScreen.tsx の setTimeout の値。findByTestId は通知を見つけるまでに
+      // 偽の時間を最大 50ms 進めるので、境界の前後に余裕を持たせて確かめる。
+      // 表示から 2900〜2950ms 経った時点ではまだ出ている。
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2900);
+      });
+      expect(getByTestId("history-cleared-snackbar")).toBeTruthy();
+
+      // 表示から 3000〜3050ms 経ったら消えている。
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(100);
+      });
+      expect(queryByTestId("history-cleared-snackbar")).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("送信中の閲覧記録が決着してから消去する（消した履歴が復活しない）", async () => {
