@@ -90,7 +90,7 @@ Recipi/
 | --- | --- |
 | `api` | FastAPI（Uvicorn）。backend。`AI_PROVIDER` 等の環境変数を受け取る |
 | `postgres` | PostgreSQL |
-| `minio` | S3 互換オブジェクトストレージ（画像保存。詳細は [features/image.md](features/image.md)） |
+| `minio` | S3 互換オブジェクトストレージ（画像保存。詳細は [features/image.md](features/image.md)）。イメージは `quay.io/minio/minio` のリリースタグ固定（[environment.md](environment.md) §4・Issue #89） |
 | `ollama`（Phase 11・要検討） | dev の AI 校正のローカル推論。追加するかは spike（→ [todo.md](todo.md)） |
 
 ## テスト / CI
