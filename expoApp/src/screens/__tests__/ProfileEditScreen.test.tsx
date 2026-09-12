@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { AVATAR_TOAST_MS, ProfileEditScreen } from "../ProfileEditScreen";
 import { ApiError } from "@/features/auth/api";
 import { pickImage } from "@/features/image/pickImage";
+import { useUnsavedChangesStore } from "@/features/navigation/unsavedChanges";
 import { deleteAvatar, getMyProfile, putAvatar, updateMe } from "@/features/profile/api";
 import { profileKeys } from "@/features/profile/hooks";
 import { useSession } from "@/store/session";
@@ -20,12 +21,29 @@ const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockStackScreen = jest.fn((_props: unknown) => null);
 let mockCanGoBack = true;
+let mockIsFocused = true;
+const mockFocusListeners = new Set<() => void>();
+
+function setMockFocus(isFocused: boolean) {
+  mockIsFocused = isFocused;
+  mockFocusListeners.forEach((listener) => listener());
+}
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: mockBack, replace: mockReplace, canGoBack: () => mockCanGoBack }),
   useFocusEffect: (effect: () => void | (() => void)) => {
     const React = jest.requireActual<typeof import("react")>("react");
-    React.useEffect(effect, [effect]);
+    const isFocused = React.useSyncExternalStore(
+      (listener) => {
+        mockFocusListeners.add(listener);
+        return () => mockFocusListeners.delete(listener);
+      },
+      () => mockIsFocused,
+    );
+    React.useEffect(() => {
+      if (!isFocused) return;
+      return effect();
+    }, [effect, isFocused]);
   },
   Stack: {
     Screen: (props: unknown) => {
@@ -89,6 +107,11 @@ async function renderLoaded() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockCanGoBack = true;
+  mockIsFocused = true;
+  const requestClose = useUnsavedChangesStore.getState().requestClose;
+  if (requestClose) {
+    useUnsavedChangesStore.getState().clearRequestClose(requestClose);
+  }
   useSession.getState().clear();
   useSession.getState().setAuth({
     accessToken: "a",
@@ -303,6 +326,32 @@ describe("保存", () => {
 });
 
 describe("未保存ガード", () => {
+  it("フォーカス中で dirty なら requestClose を登録する", async () => {
+    const { getByTestId } = await renderLoaded();
+    await fireEvent(getByTestId("profile-edit-x-public"), "valueChange", false);
+
+    await waitFor(() => {
+      expect(useUnsavedChangesStore.getState().requestClose).not.toBeNull();
+    });
+  });
+
+  it("フォーカスが外れたら requestClose の登録を外す", async () => {
+    const utils = await renderLoaded();
+    await fireEvent(utils.getByTestId("profile-edit-x-public"), "valueChange", false);
+
+    await waitFor(() => {
+      expect(useUnsavedChangesStore.getState().requestClose).not.toBeNull();
+    });
+
+    await act(async () => {
+      setMockFocus(false);
+    });
+
+    await waitFor(() => {
+      expect(useUnsavedChangesStore.getState().requestClose).toBeNull();
+    });
+  });
+
   it("未保存の変更がある間は iOS のスワイプバックを無効にする", async () => {
     const { getByTestId } = await renderLoaded();
     expect(mockStackScreen).toHaveBeenLastCalledWith({

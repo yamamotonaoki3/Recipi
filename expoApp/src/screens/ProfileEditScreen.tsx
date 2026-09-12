@@ -10,8 +10,8 @@
  *
  * アカウント削除ボタン（区切り線の下）は F7 で追加する。
  */
-import { Stack, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -169,14 +169,18 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
   const dirty = isDirty(initial, values);
   const guard = useUnsavedChangesGuard(dirty, onLeave, saving);
 
-  useEffect(() => {
-    if (!dirty) return;
+  // タブを切り替えて画面がフォーカスを失ったとき、裏に残った編集画面が
+  // 表示中の画面の操作を横取りしないように、フォーカス中だけ登録する。
+  useFocusEffect(
+    useCallback(() => {
+      if (!dirty) return;
 
-    // タブをもう一度押したときも、画面内の戻るボタンと同じ確認を出す。
-    // 保存中は guard.requestClose 自身が何もしないため、入力内容を守ったまま待つ。
-    useUnsavedChangesStore.getState().registerRequestClose(guard.requestClose);
-    return () => useUnsavedChangesStore.getState().clearRequestClose(guard.requestClose);
-  }, [dirty, guard.requestClose]);
+      // タブをもう一度押したときも、画面内の戻るボタンと同じ確認を出す。
+      // 保存中は guard.requestClose 自身が何もしないため、入力内容を守ったまま待つ。
+      useUnsavedChangesStore.getState().registerRequestClose(guard.requestClose);
+      return () => useUnsavedChangesStore.getState().clearRequestClose(guard.requestClose);
+    }, [dirty, guard.requestClose]),
+  );
 
   function setField<K extends keyof ProfileFormValues>(field: K, value: ProfileFormValues[K]) {
     setValues((prev) => ({ ...prev, [field]: value }));
