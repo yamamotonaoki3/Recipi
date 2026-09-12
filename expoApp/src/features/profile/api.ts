@@ -74,6 +74,28 @@ export async function putAvatar(file: UploadFile): Promise<{ avatarUrl: string }
   return data;
 }
 
+export type RecipeListResponse = components["schemas"]["RecipeListResponse"];
+
+/**
+ * あるユーザーのレシピ一覧（1 ページ分。features/profile.md §5）。
+ *
+ * 他人なら公開レシピだけ、本人なら非公開も含む（サーバーが出し分ける）。
+ * 形は自分のレシピ一覧（`listMyRecipes`）と同じ。
+ */
+export async function listUserRecipes(
+  userId: string,
+  query: { cursor?: string; limit?: number } = {},
+): Promise<RecipeListResponse> {
+  const { data, error, response } = await api.GET("/api/v1/users/{user_id}/recipes", {
+    params: {
+      path: { user_id: userId },
+      query: { cursor: query.cursor || undefined, limit: query.limit },
+    },
+  });
+  if (error || !data) throw toApiError(error, response.status, "読み込みに失敗しました");
+  return data;
+}
+
 /** アバターを外す（設定していなくても成功する）。 */
 export async function deleteAvatar(): Promise<void> {
   const { error, response } = await api.DELETE("/api/v1/users/me/avatar");

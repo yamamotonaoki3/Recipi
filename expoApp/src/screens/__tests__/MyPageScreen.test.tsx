@@ -84,6 +84,34 @@ describe("MyPageScreen", () => {
     expect(mockPush).toHaveBeenCalledWith("/my-page/my-recipes");
   });
 
+  it("取得できたらフォロー数 / フォロワー数を出し、タップで一覧の該当タブへ", async () => {
+    mockProfileQuery.data = {
+      displayName: "テスト太郎",
+      avatarUrl: null,
+      followingCount: 2,
+      followerCount: 7,
+    };
+    const { getByTestId, getByText } = await render(<MyPageScreen basePath="/my-page" />);
+    expect(getByText("2")).toBeTruthy();
+    expect(getByText("7")).toBeTruthy();
+
+    await fireEvent.press(getByTestId("my-page-following"));
+    expect(mockPush).toHaveBeenLastCalledWith("/my-page/connections?tab=following");
+    await fireEvent.press(getByTestId("my-page-followers"));
+    expect(mockPush).toHaveBeenLastCalledWith("/my-page/connections?tab=followers");
+  });
+
+  it("取得前はフォロー数を出さない（0 と誤解させない）", async () => {
+    const { queryByTestId } = await render(<MyPageScreen basePath="/my-page" />);
+    expect(queryByTestId("my-page-following")).toBeNull();
+  });
+
+  it("メニュー「フォロー・フォロワー」は自分の一覧へ", async () => {
+    const { getByTestId } = await render(<MyPageScreen basePath="/my-page" />);
+    await fireEvent.press(getByTestId("my-page-connections"));
+    expect(mockPush).toHaveBeenCalledWith("/my-page/connections");
+  });
+
   it("「プロフィール編集」へ push する", async () => {
     const { getByTestId } = await render(<MyPageScreen basePath="/my-page" />);
     await fireEvent.press(getByTestId("my-page-profile-edit"));

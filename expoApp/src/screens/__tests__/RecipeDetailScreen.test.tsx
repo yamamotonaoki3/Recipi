@@ -13,10 +13,17 @@ import { ApiError } from "@/features/auth/api";
 import { useSession } from "@/store/session";
 
 const mockPush = jest.fn();
+const mockNavigate = jest.fn();
 const mockBack = jest.fn();
 
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush, back: mockBack, replace: jest.fn(), canGoBack: () => true }),
+  useRouter: () => ({
+    push: mockPush,
+    navigate: mockNavigate,
+    back: mockBack,
+    replace: jest.fn(),
+    canGoBack: () => true,
+  }),
   useLocalSearchParams: () => ({ id: "r1" }),
 }));
 
@@ -105,6 +112,22 @@ describe("RecipeDetailScreen", () => {
     expect(await findByText("肉じゃが")).toBeTruthy();
     expect(await findByText("じゃがいも")).toBeTruthy();
     expect(queryByTestId("detail-group-name-0")).toBeNull();
+  });
+
+  it("投稿者をタップするとその人のプロフィールへ（Issue #96）", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe());
+    const { findByTestId } = await render(<RecipeDetailScreen basePath="/home" />, { wrapper });
+    await fireEvent.press(await findByTestId("recipe-detail-author"));
+    expect(mockPush).toHaveBeenCalledWith("/home/users/author-1");
+  });
+
+  it("自分のレシピなら投稿者のタップでマイページへ", async () => {
+    useSession.setState({ user: { id: "author-1", displayName: "投稿者太郎" } });
+    mockGetRecipe.mockResolvedValue(makeRecipe());
+    const { findByTestId } = await render(<RecipeDetailScreen basePath="/home" />, { wrapper });
+    await fireEvent.press(await findByTestId("recipe-detail-author"));
+    expect(mockNavigate).toHaveBeenCalledWith("/my-page");
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("グループ名ありなら見出しを出す", async () => {
