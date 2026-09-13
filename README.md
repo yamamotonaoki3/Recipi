@@ -97,7 +97,8 @@ npm run e2e:android             # Android（Appium + WebdriverIO。Appium サー
 
 ### テストの方針
 
-- **単体 / 結合 / E2E ＋ 静的解析（品質チェック）＋ 契約テスト**を CI（GitHub Actions）で回す。
+- **単体 / 結合 / Web E2E ＋ 静的解析（品質チェック）＋ 契約テスト**を通常の CI（GitHub Actions）で回す。
+- 実行時間の長い Android E2E と Tauri 検証は、Phase 完了時・リリース前・関連する共通基盤の変更時に GitHub Actions から手動実行する。
 - テストは **ブラックボックス（仕様ベース）＋ ホワイトボックス（実装・分岐ベース）** を併用する。
 - 詳細: [`docs/requirements/testing.md`](docs/requirements/testing.md)
 

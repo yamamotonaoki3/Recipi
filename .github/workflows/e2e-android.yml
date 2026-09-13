@@ -7,32 +7,14 @@
 # 【このワークフローを e2e.yml から分離した理由（Issue #50 Phase 1）】
 # - Android E2E は 1 回 十数分（`expo prebuild` + `gradlew assembleRelease` +
 #   エミュレータ起動が重い）かかる。
-# - そのため **backend / openapi だけの変更では Android E2E を回さない**。
-#   backend 契約の検証は contract.yml（openapi 差分）＋ backend の結合テスト、
+# - backend 契約の検証は contract.yml（openapi 差分）＋ backend の結合テスト、
 #   および Web E2E（e2e.yml、こちらは backend/** でも起動）が担う。
-# - Android のネイティブ側に影響しうる `expoApp/**` / `infra/**` の変更、
-#   または手動実行（workflow_dispatch）でのみ起動する。
+# - 通常 PR の待ち時間を短縮するため自動では起動しない。Phase 完了時・
+#   リリース前・Android または共通基盤の変更時に手動実行する。
 
 name: e2e-android
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "expoApp/**"
-      - "infra/**"
-      - ".github/workflows/e2e-android.yml"
-  # main へのマージ後にも同じ paths で実行する。GitHub Actions の cache は
-  # 「default ブランチで作られた cache は全 PR から復元できる」「PR で作られた
-  # cache はその PR 内でしか使えない」スコープ規則なので、main での実行が
-  # ないと Gradle / AVD cache が PR 間で共有されず、毎 PR が cold build に
-  # なってしまう（Issue #50）。
-  push:
-    branches: [main]
-    paths:
-      - "expoApp/**"
-      - "infra/**"
-      - ".github/workflows/e2e-android.yml"
   workflow_dispatch:
 
 jobs:
@@ -115,9 +97,8 @@ jobs:
 
       # Gradle の依存・ラッパー・build cache（タスク出力）を GitHub Actions cache
       # に保存し、次回以降のビルドで復元する（Issue #50 Phase 1）。
-      # cache-read-only を false にして、この PR 内の複数回実行でも cache が
-      # 育つようにする（本命は main マージ後: main のジョブが作った cache を
-      # 全 PR が復元できるようになる）。
+      # cache-read-only を false にして、手動実行を重ねるほど cache が
+      # 育つようにする。
       - name: Gradle をセットアップ（依存・build cache の復元 / 保存）
         uses: gradle/actions/setup-gradle@v6
         with:

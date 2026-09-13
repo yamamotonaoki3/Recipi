@@ -6,13 +6,13 @@
 
 ## 1. テストのレイヤー
 
-| レイヤー | 目的 | backend（Python / FastAPI） | frontend-ts（Expo / React Native） |
-| --- | --- | --- | --- |
-| **品質チェック（静的解析）** | 実行しなくても分かる誤り・スタイル崩れを機械的に弾く | **ruff**（lint ＋ `format --check`）、**mypy**（型チェック） | **ESLint**（Expo 設定）、**Prettier `--check`**、**`tsc --noEmit`**（型チェック） |
-| **単体テスト（unit）** | 関数・クラス・hook・コンポーネントを単体で検証。外部依存はモック | **pytest**。純粋関数（正規化・単位整形・カーソルのエンコード）、Pydantic モデルのバリデーション、サービス層のロジック（DB はモック / インメモリ） | **jest-expo ＋ @testing-library/react-native**。表示整形などの util、hooks、コンポーネント（API は MSW でモック） |
-| **結合テスト（integration）** | 複数の部品を実際につないで検証。DB・ストレージは本物 | **pytest ＋ 実 PostgreSQL**（Alembic マイグレーションを適用したテスト DB）＋ **MinIO**。API を `httpx` ＋ `ASGITransport` で直接叩き、認証フロー・CRUD のトランザクション・カウント列・CASCADE を検証 | **MSW** で生成 API クライアントをモックし、画面 → API 呼び出し → 状態更新（TanStack Query のキャッシュ / 無効化）→ 再描画 の一連を検証 |
-| **E2E テスト** | ユーザーがアプリを操作する流れを端から端まで検証 | — | Web = **Playwright**、Android = **Appium + WebdriverIO**。`infra/docker-compose.yml` のフルスタック（api ＋ postgres ＋ minio）に対し、Phase ごとの主要フローを実行 |
-| **契約テスト（contract）** | backend の API 契約とフロントの生成コードのズレを検知 | CI で FastAPI から `openapi.json` を再生成し、コミット済みと一致するか（`git diff --exit-code`） | CI で `openapi-typescript` を再実行し、生成物（`expoApp/src/api/schema.ts`）に差分が出たら失敗（[todo.md](todo.md) #42） |
+| レイヤー                      | 目的                                                             | backend（Python / FastAPI）                                                                                                                                                                           | frontend-ts（Expo / React Native）                                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **品質チェック（静的解析）**  | 実行しなくても分かる誤り・スタイル崩れを機械的に弾く             | **ruff**（lint ＋ `format --check`）、**mypy**（型チェック）                                                                                                                                          | **ESLint**（Expo 設定）、**Prettier `--check`**、**`tsc --noEmit`**（型チェック）                                                                                   |
+| **単体テスト（unit）**        | 関数・クラス・hook・コンポーネントを単体で検証。外部依存はモック | **pytest**。純粋関数（正規化・単位整形・カーソルのエンコード）、Pydantic モデルのバリデーション、サービス層のロジック（DB はモック / インメモリ）                                                     | **jest-expo ＋ @testing-library/react-native**。表示整形などの util、hooks、コンポーネント（API は MSW でモック）                                                   |
+| **結合テスト（integration）** | 複数の部品を実際につないで検証。DB・ストレージは本物             | **pytest ＋ 実 PostgreSQL**（Alembic マイグレーションを適用したテスト DB）＋ **MinIO**。API を `httpx` ＋ `ASGITransport` で直接叩き、認証フロー・CRUD のトランザクション・カウント列・CASCADE を検証 | **MSW** で生成 API クライアントをモックし、画面 → API 呼び出し → 状態更新（TanStack Query のキャッシュ / 無効化）→ 再描画 の一連を検証                              |
+| **E2E テスト**                | ユーザーがアプリを操作する流れを端から端まで検証                 | —                                                                                                                                                                                                     | Web = **Playwright**、Android = **Appium + WebdriverIO**。`infra/docker-compose.yml` のフルスタック（api ＋ postgres ＋ minio）に対し、Phase ごとの主要フローを実行 |
+| **契約テスト（contract）**    | backend の API 契約とフロントの生成コードのズレを検知            | CI で FastAPI から `openapi.json` を再生成し、コミット済みと一致するか（`git diff --exit-code`）                                                                                                      | CI で `openapi-typescript` を再実行し、生成物（`expoApp/src/api/schema.ts`）に差分が出たら失敗（[todo.md](todo.md) #42）                                            |
 
 > 「単体」「結合」の線引きが曖昧なケースは、**実 DB につなぐなら結合、つながないなら単体**で分類する。
 
@@ -70,15 +70,17 @@
 
 `.github/workflows/` に配置する。
 
-| ワークフロー | トリガー | 内容 |
-| --- | --- | --- |
-| `backend.yml` | `backend/**` を含む push / PR | ruff（lint・format）→ mypy → Alembic マイグレーション → pytest（単体 ＋ 結合を 1 回で実行。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ `check_coverage.py` で行・分岐の下限を判定（PR へのコメントは未実装・#86） |
-| `frontend-ts.yml` | `expoApp/**` を含む push / PR | `checks` ジョブ: ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、`--coverage` で行・分岐の下限を判定）→ Web ビルド（`npm run build:web`）。`tauri` ジョブ: Tauri の Rust を `cargo check` |
-| `contract.yml` | backend / `openapi.json` / 生成設定の変更 | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後） |
-| `e2e.yml` | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行 |
-| `e2e-android.yml` | **`expoApp/**` / `infra/**` の PR ／ 手動のみ**（backend / openapi だけの変更では回さない。Issue #50） | docker-compose でフルスタック起動 → `expo prebuild` → release APK ビルド（Gradle cache）→ エミュレータ（AVD snapshot cache）→ **Android（Appium + WebdriverIO）** の E2E フロー実行。実行時間が長い（十数分）ため PR のパスフィルタを絞っているが、品質ゲート（`continue-on-error` なし。Issue #57 で id ロケータ問題を解消） |
+| ワークフロー      | トリガー                                                              | 内容                                                                                                                                                                                                                                      |
+| ----------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend.yml`     | `backend/**` を含む push / PR                                         | ruff（lint・format）→ mypy → Alembic マイグレーション → pytest（単体 ＋ 結合を 1 回で実行。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ `check_coverage.py` で行・分岐の下限を判定（PR へのコメントは未実装・#86） |
+| `frontend-ts.yml` | `expoApp/**` を含む push / PR                                         | `checks` ジョブ: ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、`--coverage` で行・分岐の下限を判定）→ Web ビルド（`npm run build:web`）                                                                                |
+| `contract.yml`    | backend / `openapi.json` / 生成設定の変更                             | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後）                                                                                                                                  |
+| `e2e.yml`         | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行                                                                                                                                                    |
+| `e2e-android.yml` | **手動（`workflow_dispatch`）**                                       | docker-compose でフルスタック起動 → `expo prebuild` → release APK ビルド（Gradle cache）→ エミュレータ（AVD snapshot cache）→ **Android（Appium + WebdriverIO）** の E2E フロー実行                                                       |
+| `tauri.yml`       | **手動（`workflow_dispatch`）**                                       | Web ビルド → Tauri の Rust を `cargo check`                                                                                                                                                                                               |
 
-- **トリガー**: `pull_request`（→ `main`。マージの必須チェックにする）＋ feature ブランチへの `push`。
+- **通常 PR のトリガー**: `pull_request`（→ `main`。マージの必須チェックにする）＋必要な feature ブランチへの `push`。
+- **時間のかかるプラットフォーム検証**: Android E2E と Tauri は通常 PR の必須チェックから外し、Phase 完了時・リリース前・各プラットフォーム固有または認証・ナビゲーション・API クライアントなど共通基盤の変更時に手動実行する。手動結果が必要な変更は、成功を確認してからマージする。
 - **パスフィルタ**: `backend/**` の変更で frontend ジョブを回さない（逆も同様）。共通ファイル（`openapi.json` 等）は両方を回す。
 - **ブランチ保護**: `main` への直接 push 禁止（既存ルール）＋ 上記チェックを必須にする（**未設定。#87 で対応**。それまではマージ前に `gh pr checks` で、期待するチェック名がそろっていて全部 pass であることを確かめる）。
 - **ローカルでの再現**（CI と同じ内容）: `backend/` は `ruff check .` / `ruff format --check .` / `mypy .` / `pytest --cov-report=json` → `python -m scripts.check_coverage coverage.json --lines 85 --branches 75`、`expoApp/` は `npm run lint` / `npm run format` / `npm run typecheck` / `npm test -- --coverage`。E2E は `npm run e2e:web`（Playwright）/ `npm run e2e:android`（要 Appium サーバー起動・エミュレータ）。手順はルート `README.md`（Issue で作成）。
@@ -93,23 +95,23 @@
 
 ## 7. ツール一覧（確定）
 
-| 用途 | 採用 | 備考 |
-| --- | --- | --- |
-| backend lint / format | **ruff** | 2026 の Python 標準。`pyproject.toml` に設定 |
-| backend 型チェック | **mypy** | strict 寄せの度合いは実装時に調整 |
-| backend テスト | **pytest**（＋ `pytest-asyncio` / `pytest-cov` / `httpx`） | 結合は `ASGITransport` で FastAPI を直接叩く |
-| backend 結合の DB / ストレージ | GitHub Actions `services:`（postgres）＋ MinIO コンテナ | `testcontainers` は使わない（ランナー標準の services で足りる）。MinIO は `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`（compose と同じタグで固定。[environment.md](environment.md) §4・Issue #89） |
-| frontend lint / format | **ESLint**（Expo 設定）＋ **Prettier** | |
-| frontend 型チェック | **`tsc --noEmit`** | |
-| frontend テスト | **jest-expo ＋ @testing-library/react-native** | Expo 標準。vitest は使わない |
-| frontend API モック | **MSW**（Mock Service Worker） | 生成した API クライアントの下でネットワークをモック |
-| E2E（Web） | **Playwright**（`@playwright/test`。Apache 2.0 の無料 OSS） | 実ブラウザを CDP で直接操作。React Native Web の `data-testid` を `getByTestId` でそのまま拾える |
-| E2E（Android） | **Appium**（UiAutomator2 ドライバ）＋ **WebdriverIO** （いずれも Apache 2.0 の無料 OSS） | ビルド済み `.apk` を OS レベルから操作する「ブラックボックス」型のため Expo / React Native のバージョンに依存しない。ホスティング型クラウド（有料）は使わない |
-| 契約 | `openapi-typescript`（フロント）／ FastAPI 標準出力（backend） | [tech-stack.md](tech-stack.md) 「型共有」 |
+| 用途                           | 採用                                                                                     | 備考                                                                                                                                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| backend lint / format          | **ruff**                                                                                 | 2026 の Python 標準。`pyproject.toml` に設定                                                                                                                                                             |
+| backend 型チェック             | **mypy**                                                                                 | strict 寄せの度合いは実装時に調整                                                                                                                                                                        |
+| backend テスト                 | **pytest**（＋ `pytest-asyncio` / `pytest-cov` / `httpx`）                               | 結合は `ASGITransport` で FastAPI を直接叩く                                                                                                                                                             |
+| backend 結合の DB / ストレージ | GitHub Actions `services:`（postgres）＋ MinIO コンテナ                                  | `testcontainers` は使わない（ランナー標準の services で足りる）。MinIO は `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`（compose と同じタグで固定。[environment.md](environment.md) §4・Issue #89） |
+| frontend lint / format         | **ESLint**（Expo 設定）＋ **Prettier**                                                   |                                                                                                                                                                                                          |
+| frontend 型チェック            | **`tsc --noEmit`**                                                                       |                                                                                                                                                                                                          |
+| frontend テスト                | **jest-expo ＋ @testing-library/react-native**                                           | Expo 標準。vitest は使わない                                                                                                                                                                             |
+| frontend API モック            | **MSW**（Mock Service Worker）                                                           | 生成した API クライアントの下でネットワークをモック                                                                                                                                                      |
+| E2E（Web）                     | **Playwright**（`@playwright/test`。Apache 2.0 の無料 OSS）                              | 実ブラウザを CDP で直接操作。React Native Web の `data-testid` を `getByTestId` でそのまま拾える                                                                                                         |
+| E2E（Android）                 | **Appium**（UiAutomator2 ドライバ）＋ **WebdriverIO** （いずれも Apache 2.0 の無料 OSS） | ビルド済み `.apk` を OS レベルから操作する「ブラックボックス」型のため Expo / React Native のバージョンに依存しない。ホスティング型クラウド（有料）は使わない                                            |
+| 契約                           | `openapi-typescript`（フロント）／ FastAPI 標準出力（backend）                           | [tech-stack.md](tech-stack.md) 「型共有」                                                                                                                                                                |
 
 ## 8. 未確定（各 Phase 着手時に `resolve-tech-stack` で確定）
 
 - 各ツールのバージョン（Phase 0 の scaffold 時に固定）
 - JWT ライブラリ（PyJWT 予定・[todo.md](todo.md) #41）、PostgreSQL メジャーバージョン（[todo.md](todo.md) #5）
 - フロントの状態管理ライブラリ（Zustand / Jotai・[todo.md](todo.md) #7）
-- E2E をどのプラットフォームまで CI で回すか（Android エミュレータ ＋ Web は必須。iOS シミュレータは macOS ランナーが要るため要検討）
+- iOS シミュレータの自動検証（macOS ランナーが必要）は未導入。Web は通常 PR の自動 CI、Android は手動 Workflow で検証する。
