@@ -58,6 +58,7 @@ def test_production_accepts_strong_jwt_secret(monkeypatch: pytest.MonkeyPatch, t
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
     monkeypatch.setenv("JWT_SECRET_KEY", "x" * 40)
+    monkeypatch.setenv("AUTH_COOKIE_SECURE", "true")
 
     s = Settings(_env_file=tmp_path / ".env.missing")
     assert s.APP_ENV == "production"
