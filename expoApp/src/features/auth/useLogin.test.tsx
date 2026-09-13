@@ -91,4 +91,23 @@ describe("useLogin", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(useSession.getState().isAuthenticated).toBe(false);
   });
+
+  it("token保存型クライアントでrefresh tokenが無ければ空文字を保存せず失敗する", async () => {
+    mockLogin.mockResolvedValue({
+      user: { id: "u1", displayName: "太郎" },
+      accessToken: "access-1",
+      refreshToken: null,
+    });
+
+    const { result } = await renderHook(() => useLogin(), { wrapper });
+    result.current.mutate({
+      email: "testuser_001@example.com",
+      password: "TestPass123!",
+      rememberMe: true,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(secureStorage.setRefreshToken).not.toHaveBeenCalled();
+    expect(useSession.getState().isAuthenticated).toBe(false);
+  });
 });

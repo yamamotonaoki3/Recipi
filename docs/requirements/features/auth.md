@@ -74,6 +74,11 @@ Bearer tokenと各プラットフォームのセキュアストレージを使�
 Cookie認証を使うWebの状態変更リクエストは、許可Originを限定し、CORSの
 `allow_credentials`を有効にする。CSRF対策としてSameSite属性とOrigin検証を併用する。
 
+Tauriの開発時はExpo dev serverと同じ `http://localhost:8081` Originになるため、
+通常ブラウザと区別するクライアント印を付けて、CookieではなくStronghold保存用の
+refresh tokenをJSON応答で受け取る。この印は開発・テスト環境だけで有効にし、本番の
+ブラウザにrefresh tokenを露出させない。
+
 | チェック | 挙動 |
 | --- | --- |
 | ON | リフレッシュトークンを端末のセキュアストレージ（iOS Keychain / Android Keystore）に**永続保存**。アプリ再起動時、保存済みリフレッシュトークンで自動的にアクセストークンを再取得（自動再ログイン） |

@@ -17,8 +17,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/api/client";
+import { usesCookieAuth } from "@/lib/authPlatform";
 import { secureStorage } from "@/lib/secureStorage";
-import { isTauri } from "@/lib/tauriEnv";
 import { useSession, type SessionUser } from "@/store/session";
 
 const REFRESH_TIMEOUT_MS = 5000;
@@ -45,11 +45,7 @@ export function useAuthRefresh(): AuthRestoreStatus {
 
     async function restore() {
       try {
-        const isBrowserWeb =
-          typeof window !== "undefined" &&
-          typeof process !== "undefined" &&
-          !process.env.JEST_WORKER_ID &&
-          !isTauri();
+        const isBrowserWeb = usesCookieAuth();
         const storedRefreshToken = isBrowserWeb ? null : await secureStorage.getRefreshToken();
         if (!isBrowserWeb && !storedRefreshToken) {
           setStatus("not-restored");
