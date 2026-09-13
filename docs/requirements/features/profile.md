@@ -2,7 +2,7 @@
 
 ## 1. 目的・概要
 
-ユーザーの表示名・アバター画像・連絡先/SNS リンクを管理する。他ユーザーはプロフィール画面で表示名・フォロー状況・公開設定された連絡先・その人の公開レシピを見られる。プロフィール編集画面からアカウント削除もできる。
+ユーザーの表示名・自己紹介文・アバター画像・連絡先/SNS リンクを管理する。他ユーザーはプロフィール画面で表示名・自己紹介文・フォロー状況・公開設定された連絡先・その人の公開レシピを見られる。プロフィール編集画面からアカウント削除もできる。
 
 自分のプロフィールの入口はボトムナビゲーション / ナビゲーションレールの「マイページ」destination（[../screens/my-page.md](../screens/my-page.md)）。そこから「プロフィール編集」「自分のレシピ一覧」「フォロー・フォロワー」「ログアウト」に進む。他ユーザーのプロフィールは [../screens/user-profile.md](../screens/user-profile.md)。
 
@@ -14,13 +14,14 @@
 
 1. アバター画像（変更 / 削除ボタン）
 2. 表示名
-3. メールアドレス（値の表示 + 「プロフィールに表示する」トグル）
-4. X の URL（+ トグル）
-5. Instagram の URL（+ トグル）
-6. その他の URL（+ トグル）
-7. 保存ボタン
-8. （区切り線）
-9. **アカウント削除**ボタン（赤色）
+3. 自己紹介文（空欄・改行可、最大 2,000 文字）
+4. メールアドレス（値の表示 + 「プロフィールに表示する」トグル）
+5. X の URL（+ トグル）
+6. Instagram の URL（+ トグル）
+7. その他の URL（+ トグル）
+8. 保存ボタン
+9. （区切り線）
+10. **アカウント削除**ボタン（赤色）
 
 > ログアウトはこの画面には置かない（マイページ側。[../screens/my-page.md](../screens/my-page.md)）。
 
@@ -32,10 +33,11 @@
 ### ユーザープロフィール（他人）（[../screens/user-profile.md](../screens/user-profile.md)）
 
 1. アバター + 表示名
-2. フォロー数 / フォロワー数（タップでフォロー・フォロワー画面の該当タブへ。対象はこのユーザー、[follow.md](follow.md)）
-3. フォローボタン（フォロー / フォロー中）
-4. 連絡先・SNS: **公開トグル ON の項目のみ**表示（メール / X / Instagram / その他 URL）
-5. その人の公開レシピ一覧（レシピカード）
+2. 自己紹介文（未設定なら表示しない）
+3. フォロー数 / フォロワー数（タップでフォロー・フォロワー画面の該当タブへ。対象はこのユーザー、[follow.md](follow.md)）
+4. フォローボタン（フォロー / フォロー中）
+5. 連絡先・SNS: **公開トグル ON の項目のみ**表示（メール / X / Instagram / その他 URL）
+6. その人の公開レシピ一覧（レシピカード）
 
 ## 3. 振る舞い・ルール
 
@@ -60,6 +62,7 @@
 | カラム | 型 | 制約 |
 | --- | --- | --- |
 | `display_name` | string | NOT NULL（1〜30 文字。空白だけは不可） |
+| `bio` | varchar(2000) | NULL 可（空欄・改行可、最大 2,000 文字） |
 | `avatar_key` | string | NULL 可 |
 | `email_public` | boolean | NOT NULL DEFAULT false |
 | `x_url` | string | NULL 可（URL 形式・2048 文字まで） |
@@ -78,7 +81,7 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 ```json
 // 他人を取得（公開トグルON の項目だけ）
 {
-  "id": "…", "displayName": "テスト太郎",
+  "id": "…", "displayName": "テスト太郎", "bio": "お菓子作りが好きです。",
   "avatarUrl": "https://…",
   "followingCount": 12, "followerCount": 34,
   "isFollowing": true,
@@ -86,7 +89,7 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 }
 // 本人を取得（全項目 + トグル状態）
 {
-  "id": "…", "displayName": "テスト太郎", "email": "testuser_001@example.com",
+  "id": "…", "displayName": "テスト太郎", "bio": "お菓子作りが好きです。", "email": "testuser_001@example.com",
   "avatarUrl": "https://…",
   "followingCount": 12, "followerCount": 34, "isFollowing": null,
   "emailPublic": false,
@@ -105,7 +108,7 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 
 ### PATCH `/users/me`（認証必要）
 
-- body（すべて任意、送られた項目だけ更新）: `displayName`, `emailPublic`, `xUrl`, `xPublic`, `instagramUrl`, `instagramPublic`, `otherUrl`, `otherPublic`
+- body（すべて任意、送られた項目だけ更新）: `displayName`, `bio`, `emailPublic`, `xUrl`, `xPublic`, `instagramUrl`, `instagramPublic`, `otherUrl`, `otherPublic`
 - 送らなかった項目は変更しない。URL に `null` を送ると削除。`displayName` と各トグルに `null` は 400
 - 200（本人向けの設定一式）/ 400（形式エラー。1 項目でも不正なら何も書き換えない）
 
@@ -128,6 +131,7 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 | 項目 | ルール |
 | --- | --- |
 | displayName | 1〜30 文字。空白だけ（半角・全角とも）は不可 |
+| bio | 空欄・改行可。最大 2,000 文字。空文字・空白だけは null 扱い |
 | xUrl / instagramUrl / otherUrl | URL 形式（`http(s)://` で始まり空白を含まない）。2048 文字まで（文字数で数える）。空文字・空白だけは null 扱い。ドメイン許可リストは採らない（[todo.md](../todo.md) #14 で確定） |
 | アバター画像 | [image.md](image.md) の共通ルール（形式・サイズ、1 枚、正方形推奨） |
 
@@ -135,6 +139,8 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 
 - [ ] 表示名を変更すると、自分の投稿・一覧・感想の表示名に反映される
 - [ ] 表示名が空 / 31 文字以上だと 400
+- [ ] 自己紹介文を保存でき、本人・他人のプロフィールに改行を保って表示できる
+- [ ] 自己紹介文が空欄なら未設定になり、2,001 文字以上だと 400
 - [ ] URL 項目に不正な文字列を入れると 400
 - [ ] 公開トグル OFF の項目は、他人が `GET /users/{id}` しても返らない
 - [ ] 公開トグル ON にした項目だけが他人のプロフィール画面に表示される

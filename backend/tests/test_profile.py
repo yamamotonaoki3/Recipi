@@ -36,6 +36,7 @@ URLS = {
 PUBLIC_BASE_KEYS = {
     "id",
     "displayName",
+    "bio",
     "avatarUrl",
     "followingCount",
     "followerCount",
@@ -53,6 +54,8 @@ SELF_ONLY_KEYS = {
     "otherUrl",
     "otherPublic",
 }
+
+BIO_MAX_LENGTH = 2000
 
 
 class _User:
@@ -151,6 +154,55 @@ def test_display_name_boundaries(client: TestClient, name: str, expected: int) -
     else:
         assert res.json()["error"]["code"] == "VALIDATION_ERROR"
         assert _self(client, me)["displayName"] == original
+
+
+# --- 自己紹介文 -----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_status", "expected_stored"),
+    [
+        ("", 200, None),
+        ("  \n　", 200, None),
+        ("こんにちは", 200, "こんにちは"),
+        ("1行目\n2行目", 200, "1行目\n2行目"),
+        ("あ" * BIO_MAX_LENGTH, 200, "max"),
+        ("あ" * (BIO_MAX_LENGTH + 1), 400, None),
+    ],
+)
+def test_bio_validation(
+    client: TestClient, value: str, expected_status: int, expected_stored: str | None
+) -> None:
+    me = _User(client)
+
+    res = _patch(client, me, {"bio": value})
+
+    assert res.status_code == expected_status, res.text
+    stored = _self(client, me)["bio"]
+    if expected_stored == "max":
+        assert stored == value
+        assert len(stored) == BIO_MAX_LENGTH
+    else:
+        assert stored == expected_stored
+
+
+def test_null_bio_clears_the_value(client: TestClient) -> None:
+    me = _User(client)
+    assert _patch(client, me, {"bio": "自己紹介"}).status_code == 200
+
+    res = _patch(client, me, {"bio": None})
+
+    assert res.status_code == 200, res.text
+    assert _self(client, me)["bio"] is None
+
+
+def test_bio_is_visible_to_other_users(client: TestClient) -> None:
+    owner = _User(client)
+    viewer = _User(client)
+    bio = "お菓子作りが好きです。\nよろしくお願いします。"
+    assert _patch(client, owner, {"bio": bio}).status_code == 200
+
+    assert _profile(client, viewer, owner)["bio"] == bio
 
 
 # --- URL ------------------------------------------------------------------
@@ -298,6 +350,7 @@ def test_self_profile_contains_everything(client: TestClient) -> None:
     body = _self(client, me)
 
     assert body["email"] == me.email
+    assert body["bio"] is None
     assert body["emailPublic"] is False
     assert body["xUrl"] == URLS["x"]
     assert body["xPublic"] is True
@@ -320,6 +373,8 @@ def test_public_profile_openapi_marks_hidden_items_optional(client: TestClient) 
     assert "email" not in public["required"]
     assert "links" in public["required"]
     assert "displayName" in public["properties"]  # 項目の定義が消えていない
+    assert "bio" in public["properties"]
+    assert "bio" not in public["required"]
 
     links = schemas["ProfileLinks"]
     assert set(links["properties"]) == {"x", "instagram", "other"}
