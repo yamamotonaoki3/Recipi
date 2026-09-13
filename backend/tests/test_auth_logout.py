@@ -102,7 +102,7 @@ def test_web_logout_expires_refresh_cookie(client: TestClient, unique_email: str
 
     assert res.status_code == 204
     set_cookie = res.headers["set-cookie"].lower()
-    assert "recipi_refresh_token=\"\"" in set_cookie
+    assert 'recipi_refresh_token=""' in set_cookie
     assert "max-age=0" in set_cookie
     expires_value = set_cookie.split("expires=", maxsplit=1)[1].split(";", maxsplit=1)[0]
     assert parsedate_to_datetime(expires_value) < datetime.now(UTC)
