@@ -24,6 +24,14 @@ jest.mock("../lib/secureStorage", () => ({
   },
 }));
 
+// node プロジェクトでは react-native 本体を読み込めないため、実行環境の
+// 判定は固定する。このテストの対象は認証 HTTP ミドルウェアであり、
+// プラットフォーム判定自体は native 側のテストで確認する。
+jest.mock("../lib/authPlatform", () => ({
+  usesCookieAuth: jest.fn(() => false),
+  isTauriTokenClient: jest.fn(() => false),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { secureStorage } = require("../lib/secureStorage") as typeof import("../lib/secureStorage");
 // client.ts はモジュール読み込み時に `api.use(...)` でミドルウェアを

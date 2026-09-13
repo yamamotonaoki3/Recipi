@@ -25,16 +25,12 @@ import createClient from "openapi-fetch";
 
 import { RefreshCoordinator, type RefreshResult } from "./refreshCoordinator";
 import type { paths } from "./schema";
+import { isTauriTokenClient, usesCookieAuth } from "../lib/authPlatform";
 import { secureStorage } from "../lib/secureStorage";
-import { isTauri } from "../lib/tauriEnv";
 import { useSession } from "../store/session";
 
 const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-const isBrowserWeb =
-  typeof window !== "undefined" &&
-  typeof process !== "undefined" &&
-  !process.env.JEST_WORKER_ID &&
-  !isTauri();
+const isBrowserWeb = usesCookieAuth();
 
 export const api = createClient<paths>({
   baseUrl,
@@ -128,6 +124,9 @@ api.use({
     const { accessToken } = useSession.getState();
     if (accessToken && !request.headers.has("Authorization")) {
       request.headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+    if (isTauriTokenClient()) {
+      request.headers.set("X-Recipi-Auth-Transport", "token");
     }
     pendingRequestClones.set(id, request.clone());
     return request;

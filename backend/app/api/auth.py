@@ -98,6 +98,17 @@ _REMEMBER_ME_OFF_TTL_DAYS = 1
 
 def _is_web_request(request: Request) -> bool:
     """ブラウザ由来のリクエストだけCookie方式を有効にする。"""
+    # Tauri の開発時は画面を Expo dev server（http://localhost:8081）から
+    # 読み込むため、Origin だけでは通常ブラウザと区別できない。そのままだと
+    # refresh token を HttpOnly Cookie にしか入れず、Stronghold へ空文字を
+    # 保存して再起動後の復元が 401 になる。Tauri クライアントだけが付ける
+    # 印は開発・テスト環境でのみ受け入れる。本番は Tauri の tauri:// Origin
+    # 自体が Cookie 対象外であり、任意ヘッダーで token を露出させない。
+    if (
+        settings.APP_ENV != "production"
+        and request.headers.get("x-recipi-auth-transport") == "token"
+    ):
+        return False
     origin = request.headers.get("origin")
     return (
         origin is not None

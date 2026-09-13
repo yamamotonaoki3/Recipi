@@ -81,3 +81,21 @@ def test_login_persists_remember_me_on_refresh_token(
     ).first()
     assert token_row is not None
     assert token_row.remember_me is expected_remember_me
+
+
+def test_tauri_dev_login_returns_token_instead_of_cookie(client: TestClient, unique_email: str):
+    """Tauri dev は localhost Origin でも Stronghold 用の token を受け取る。"""
+    _signup(client, unique_email)
+
+    res = client.post(
+        LOGIN_URL,
+        json={"email": unique_email, "password": PASSWORD, "rememberMe": True},
+        headers={
+            "Origin": "http://localhost:8081",
+            "X-Recipi-Auth-Transport": "token",
+        },
+    )
+
+    assert res.status_code == 200
+    assert res.json()["refreshToken"]
+    assert "recipi_refresh_token" not in res.headers.get("set-cookie", "")

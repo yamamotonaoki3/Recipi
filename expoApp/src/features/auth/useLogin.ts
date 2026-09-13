@@ -12,6 +12,7 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { login as loginApi } from "./api";
+import { usesCookieAuth } from "@/lib/authPlatform";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
 
@@ -29,13 +30,20 @@ export function useLogin() {
       // rememberMe=true でストレージ書き込みが失敗したときに「メモリ上は
       // ログイン済みなのに画面はエラー表示」という不整合が起きる。
       if (input.rememberMe) {
+        const refreshToken = result.refreshToken ?? "";
+        // Cookie 認証ではトークンを JavaScript へ返さない。一方、Android / iOS /
+        // Tauri で値が無いのはサーバー・実行環境の誤判定なので、空文字を保存して
+        // 次回起動時に原因不明の 401 にするのではなく、この場で失敗させる。
+        if (!usesCookieAuth() && !refreshToken) {
+          throw new Error("refresh token was not returned for a token-storage client");
+        }
         // `/auth/refresh` はユーザー情報を返さないため、次回起動時の
         // 自動復元（useAuthRefresh）ですぐ使えるようユーザー情報も
         // トークンと一緒に保存しておく。片方だけ書き込めた状態で
         // ミューテーションを失敗として返すと、「ログイン失敗」の画面表示と
         // 裏腹に次回起動時だけ自動ログインしてしまう不整合が起きるため、
         // 2 回目の書き込みが失敗したら 1 回目の分もロールバックする。
-        await secureStorage.setRefreshToken(result.refreshToken ?? "");
+        if (!usesCookieAuth()) await secureStorage.setRefreshToken(refreshToken);
         try {
           await secureStorage.setUser(JSON.stringify(result.user));
         } catch (error) {

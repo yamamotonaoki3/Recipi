@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any, cast
 
 import pytest
@@ -85,3 +87,23 @@ def test_logout_with_unknown_refresh_token_is_idempotent(client: TestClient, uni
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert res.status_code == 204
+
+
+def test_web_logout_expires_refresh_cookie(client: TestClient, unique_email: str):
+    signup_body = _signup(client, unique_email)
+    res = client.post(
+        LOGOUT_URL,
+        json={},
+        headers={
+            "Authorization": f"Bearer {signup_body['accessToken']}",
+            "Origin": "http://localhost:8081",
+        },
+    )
+
+    assert res.status_code == 204
+    set_cookie = res.headers["set-cookie"].lower()
+    assert 'recipi_refresh_token=""' in set_cookie
+    assert "max-age=0" in set_cookie
+    expires_value = set_cookie.split("expires=", maxsplit=1)[1].split(";", maxsplit=1)[0]
+    assert parsedate_to_datetime(expires_value) < datetime.now(UTC)
+    assert "path=/api/v1/auth" in set_cookie
