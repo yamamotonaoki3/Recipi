@@ -7,14 +7,16 @@
 import { resolveRecipeStackDestination } from "./destinations";
 
 describe("resolveRecipeStackDestination", () => {
-  it.each(["/home", "/history", "/my-page"])("既知の destination はそのまま通す: %s", (href) => {
-    expect(resolveRecipeStackDestination(href)).toBe(href);
-  });
+  it.each(["/home", "/history", "/notifications", "/my-page"])(
+    "既知の destination はそのまま通す: %s",
+    (href) => {
+      expect(resolveRecipeStackDestination(href)).toBe(href);
+    },
+  );
 
   it.each([
     undefined,
     "",
-    "/notifications", // レシピ詳細のスタックを持たない
     "https://example.com/phishing", // 外部 URL（開かせない）
     "//example.com",
     "/home/../../etc",

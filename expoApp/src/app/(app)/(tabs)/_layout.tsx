@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NavCreateButton, NavItemLabel, useIsNavRail } from "@/components/AppNavBar";
 import { DESTINATIONS_WITH_RECIPE_STACK } from "@/features/navigation/destinations";
+import { useUnreadNotificationCount } from "@/features/notification/hooks";
 import { useUnsavedChangesStore } from "@/features/navigation/unsavedChanges";
 
 /** タブの定義（並び順は navigation.md: ホーム / 履歴 / ＋ / 通知 / マイページ）。 */
@@ -52,6 +53,7 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const isRail = useIsNavRail();
+  const unread = useUnreadNotificationCount();
 
   /**
    * 既に選択中の destination をもう一度押したときに、そのタブのスタックを
@@ -84,9 +86,7 @@ export default function TabsLayout() {
    * 「＋」で開いた作成モーダルは、保存後に**その destination のスタック**へ
    * 詳細を積みたい（履歴から作ってホームへ飛ばされない。Codex #42 指摘）。
    *
-   * 対象は**レシピ詳細を積めるスタックを持つ destination だけ**。通知は MVP では
-   * 空状態のスタブでネストしたスタックが無く、`/notifications/recipes/{id}` は
-   * 存在しないルートになってしまうため、ホームに倒す（Codex #42 レビュー指摘）。
+   * 対象は**レシピ詳細を積めるスタックを持つ destination だけ**。
    */
   const currentDestination =
     DESTINATIONS_WITH_RECIPE_STACK.find(
@@ -161,7 +161,11 @@ export default function TabsLayout() {
             onPress={(event) => popToDestinationRoot(tab.href, event)}
             asChild
           >
-            <NavTabButton icon={tab.icon} label={tab.label} />
+            <NavTabButton
+              icon={tab.icon}
+              label={tab.label}
+              badge={tab.name === "notifications" ? unread.data?.unreadCount : undefined}
+            />
           </TabTrigger>
         ))}
       </TabList>
@@ -181,16 +185,18 @@ export default function TabsLayout() {
 function NavTabButton({
   icon,
   label,
+  badge,
   isFocused,
   ...pressableProps
 }: {
   icon: string;
   label: string;
+  badge?: number;
   isFocused?: boolean;
 } & React.ComponentProps<typeof Pressable>) {
   return (
     <Pressable {...pressableProps} className="min-w-16 items-center justify-center py-1">
-      <NavItemLabel icon={icon} label={label} focused={Boolean(isFocused)} />
+      <NavItemLabel icon={icon} label={label} focused={Boolean(isFocused)} badge={badge} />
     </Pressable>
   );
 }

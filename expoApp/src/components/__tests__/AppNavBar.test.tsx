@@ -58,6 +58,16 @@ describe("NavItemLabel", () => {
     expect(getByText("🏠")).toBeTruthy();
     expect(getByText("ホーム")).toBeTruthy();
   });
+
+  it("未読件数を99+上限で表示し、0件ならバッジを隠す", async () => {
+    const { getByTestId, getByText, rerender, queryByTestId } = await render(
+      <NavItemLabel icon="🔔" label="通知" focused={false} badge={120} />,
+    );
+    expect(getByTestId("nav-notifications-badge")).toBeTruthy();
+    expect(getByText("99+")).toBeTruthy();
+    await rerender(<NavItemLabel icon="🔔" label="通知" focused={false} badge={0} />);
+    expect(queryByTestId("nav-notifications-badge")).toBeNull();
+  });
 });
 
 describe("NavCreateButton", () => {
