@@ -9,7 +9,9 @@ import { MyPageScreen } from "../MyPageScreen";
 import { useSession } from "@/store/session";
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 const mockLogoutMutate = jest.fn();
+const mockDeleteAccountMutate = jest.fn();
 const mockRefetch = jest.fn();
 let mockProfileQuery: {
   data?: unknown;
@@ -18,7 +20,7 @@ let mockProfileQuery: {
   refetch: jest.Mock;
 };
 
-jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }) }));
 
 jest.mock("@/features/auth/useLogout", () => ({
   useLogout: () => ({ mutate: mockLogoutMutate, isPending: false }),
@@ -26,6 +28,7 @@ jest.mock("@/features/auth/useLogout", () => ({
 
 jest.mock("@/features/profile/hooks", () => ({
   useMyProfile: () => mockProfileQuery,
+  useDeleteAccount: () => ({ mutate: mockDeleteAccountMutate, isPending: false }),
 }));
 
 beforeEach(() => {
@@ -121,5 +124,21 @@ describe("MyPageScreen", () => {
     const { getByTestId } = await render(<MyPageScreen basePath="/my-page" />);
     await fireEvent.press(getByTestId("my-page-logout"));
     expect(mockLogoutMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("アカウント削除は確認後にだけ実行する", async () => {
+    const { getByTestId, queryByTestId } = await render(<MyPageScreen basePath="/my-page" />);
+    await fireEvent.press(getByTestId("my-page-delete-account"));
+
+    expect(mockDeleteAccountMutate).not.toHaveBeenCalled();
+    expect(getByTestId("my-page-delete-account-confirm")).toBeTruthy();
+
+    await fireEvent.press(getByTestId("my-page-delete-account-confirm-cancel"));
+    expect(mockDeleteAccountMutate).not.toHaveBeenCalled();
+    expect(queryByTestId("my-page-delete-account-confirm")).toBeNull();
+
+    await fireEvent.press(getByTestId("my-page-delete-account"));
+    await fireEvent.press(getByTestId("my-page-delete-account-confirm-confirm"));
+    expect(mockDeleteAccountMutate).toHaveBeenCalledTimes(1);
   });
 });

@@ -9,10 +9,11 @@ import { pickImage } from "@/features/image/pickImage";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
 
-import { deleteAvatar, getMyProfile, putAvatar, updateMe } from "../api";
+import { deleteAccount, deleteAvatar, getMyProfile, putAvatar, updateMe } from "../api";
 import {
   profileKeys,
   useAvatarUpload,
+  useDeleteAccount,
   useDeleteAvatar,
   useMyProfile,
   useUpdateProfile,
@@ -23,16 +24,22 @@ jest.mock("../api", () => ({
   updateMe: jest.fn(),
   putAvatar: jest.fn(),
   deleteAvatar: jest.fn(),
+  deleteAccount: jest.fn(),
 }));
 jest.mock("@/features/image/pickImage", () => ({ pickImage: jest.fn() }));
 jest.mock("@/lib/secureStorage", () => ({
-  secureStorage: { setUser: jest.fn().mockResolvedValue(undefined) },
+  secureStorage: {
+    setUser: jest.fn().mockResolvedValue(undefined),
+    deleteRefreshToken: jest.fn().mockResolvedValue(undefined),
+    deleteUser: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 const mockGetMyProfile = getMyProfile as jest.Mock;
 const mockUpdateMe = updateMe as jest.Mock;
 const mockPutAvatar = putAvatar as jest.Mock;
 const mockDeleteAvatar = deleteAvatar as jest.Mock;
+const mockDeleteAccount = deleteAccount as jest.Mock;
 const mockPickImage = pickImage as jest.Mock;
 
 const selfProfile = {
@@ -253,5 +260,49 @@ describe("アバター", () => {
       await expect(result.current.mutateAsync()).resolves.toBeUndefined();
     });
     expect(client.getQueryData(profileKeys.detail("u1"))).toBeUndefined();
+  });
+});
+
+describe("useDeleteAccount", () => {
+  it("成功時だけ認証状態・キャッシュ・端末保存を消す", async () => {
+    login(true);
+    client.setQueryData(["private"], { value: "secret" });
+    mockDeleteAccount.mockResolvedValue(undefined);
+
+    const { result } = await renderHook(() => useDeleteAccount(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync();
+    });
+
+    expect(useSession.getState().isAuthenticated).toBe(false);
+    expect(client.getQueryData(["private"])).toBeUndefined();
+    expect(secureStorage.deleteRefreshToken).toHaveBeenCalledTimes(1);
+    expect(secureStorage.deleteUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("成功時に画面遷移用のコールバックを呼ぶ", async () => {
+    login();
+    mockDeleteAccount.mockResolvedValue(undefined);
+    const onDeleted = jest.fn();
+
+    const { result } = await renderHook(() => useDeleteAccount(onDeleted), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync();
+    });
+
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+  });
+
+  it("削除 API が失敗したら認証状態を残す", async () => {
+    login(true);
+    mockDeleteAccount.mockRejectedValue(new Error("failed"));
+
+    const { result } = await renderHook(() => useDeleteAccount(), { wrapper });
+    await act(async () => {
+      await expect(result.current.mutateAsync()).rejects.toThrow("failed");
+    });
+
+    expect(useSession.getState().isAuthenticated).toBe(true);
+    expect(secureStorage.deleteRefreshToken).not.toHaveBeenCalled();
   });
 });

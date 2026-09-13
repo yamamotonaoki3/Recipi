@@ -6,12 +6,14 @@
  * フォロー数・「フォロー・フォロワー」は Issue #96 で追加した。
  */
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useLogout } from "@/features/auth/useLogout";
-import { useMyProfile } from "@/features/profile/hooks";
+import { useDeleteAccount, useMyProfile } from "@/features/profile/hooks";
 import { useSession } from "@/store/session";
 
 export function MyPageScreen({ basePath }: { basePath: string }) {
@@ -20,12 +22,22 @@ export function MyPageScreen({ basePath }: { basePath: string }) {
   const user = useSession((s) => s.user);
   const profileQuery = useMyProfile();
   const logout = useLogout();
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteAccount = useDeleteAccount(() => router.replace("/login" as never));
 
   // 取得前はセッションの表示名を出しておく（空白の画面にしない）。
   const displayName = profileQuery.data?.displayName ?? user?.displayName ?? "";
 
   function openConnections(tab?: "following" | "followers") {
     router.push(`${basePath}/connections${tab ? `?tab=${tab}` : ""}` as never);
+  }
+
+  function handleDeleteAccount() {
+    setDeleteError(null);
+    deleteAccount.mutate(undefined, {
+      onError: () => setDeleteError("アカウントの削除に失敗しました。もう一度お試しください。"),
+    });
   }
 
   return (
@@ -138,7 +150,34 @@ export function MyPageScreen({ basePath }: { basePath: string }) {
             {logout.isPending ? "ログアウト中…" : "ログアウト"}
           </Text>
         </Pressable>
+
+        <Pressable
+          testID="my-page-delete-account"
+          onPress={() => {
+            setDeleteError(null);
+            setDeleteConfirmVisible(true);
+          }}
+          disabled={logout.isPending || deleteAccount.isPending}
+          accessibilityRole="button"
+          className="border-b border-neutral-200 px-4 py-4"
+        >
+          <Text className="text-base text-red-600">アカウントを削除</Text>
+        </Pressable>
+        {deleteError && (
+          <Text testID="my-page-delete-account-error" className="px-4 pt-2 text-sm text-red-600">
+            {deleteError}
+          </Text>
+        )}
       </View>
+      <ConfirmDialog
+        visible={deleteConfirmVisible}
+        title="アカウントを削除しますか？"
+        message="アカウントを削除すると、投稿したレシピ・フォロー・お気に入り・感想がすべて削除され、元に戻せません。"
+        confirmLabel={deleteAccount.isPending ? "削除中…" : "削除する"}
+        onConfirm={handleDeleteAccount}
+        onCancel={() => !deleteAccount.isPending && setDeleteConfirmVisible(false)}
+        testID="my-page-delete-account-confirm"
+      />
     </View>
   );
 }

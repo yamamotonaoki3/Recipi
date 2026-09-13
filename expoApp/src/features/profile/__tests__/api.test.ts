@@ -3,7 +3,7 @@
  */
 import { api } from "@/api/client";
 
-import { deleteAvatar, getMyProfile, getUser, putAvatar, updateMe } from "../api";
+import { deleteAccount, deleteAvatar, getMyProfile, getUser, putAvatar, updateMe } from "../api";
 
 jest.mock("@/api/client", () => ({
   api: { GET: jest.fn(), PATCH: jest.fn(), PUT: jest.fn(), DELETE: jest.fn() },
@@ -123,5 +123,20 @@ describe("putAvatar / deleteAvatar", () => {
 
     mockDelete.mockResolvedValueOnce({ error: {}, response: { status: 500 } });
     await expect(deleteAvatar()).rejects.toMatchObject({ message: "画像の削除に失敗しました" });
+  });
+});
+
+describe("deleteAccount", () => {
+  it("DELETE /users/me が成功したら何も返さない", async () => {
+    mockDelete.mockResolvedValue({ response: { status: 204 } });
+    await expect(deleteAccount()).resolves.toBeUndefined();
+    expect(mockDelete).toHaveBeenCalledWith("/api/v1/users/me");
+  });
+
+  it("失敗時は既定メッセージの ApiError", async () => {
+    mockDelete.mockResolvedValue({ error: {}, response: { status: 500 } });
+    await expect(deleteAccount()).rejects.toMatchObject({
+      message: "アカウントの削除に失敗しました",
+    });
   });
 });
