@@ -65,6 +65,15 @@
 
 ### 「ログインを保持」
 
+Webブラウザでは、refresh tokenをlocalStorageへ保存せず、HttpOnly Cookie
+（`recipi_refresh_token`）で保持する。Cookieは `SameSite=Lax`、本番では
+`Secure` を付け、`Path=/api/v1/auth` に限定する。WebのrefreshはCookieを自動送信し、
+JavaScriptからrefresh token本体を読み取らない。iOS / Android / Tauriは従来どおり
+Bearer tokenと各プラットフォームのセキュアストレージを使う。
+
+Cookie認証を使うWebの状態変更リクエストは、許可Originを限定し、CORSの
+`allow_credentials`を有効にする。CSRF対策としてSameSite属性とOrigin検証を併用する。
+
 | チェック | 挙動 |
 | --- | --- |
 | ON | リフレッシュトークンを端末のセキュアストレージ（iOS Keychain / Android Keystore）に**永続保存**。アプリ再起動時、保存済みリフレッシュトークンで自動的にアクセストークンを再取得（自動再ログイン） |
@@ -205,6 +214,7 @@
 - [ ] 無効化済みリフレッシュトークンを再提示すると、例外なくチェーン全体が失効して再ログインが要求される（チェーンの全トークンが期限切れから 30 日を過ぎて行が削除された後は、単に 401 で再ログインが要求される）
 - [ ] クライアントが single-flight でリフレッシュするため、正規利用で不要なログアウトが起きない
 - [ ] 「ログインを保持」ON でアプリを再起動すると自動的にログイン状態が復帰する
+- [ ] Webではrefresh tokenをlocalStorageへ保存せず、HttpOnly CookieでF5後のセッションを復元する
 - [ ] 「ログインを保持」OFF でアプリを再起動すると再ログインが必要
 - [ ] パスワードリセットで、正しい答えを入力すると新パスワードを設定でき、以後それでログインできる
 - [ ] パスワードリセット後、リセット前に発行された既存のリフレッシュトークンは使えなくなる

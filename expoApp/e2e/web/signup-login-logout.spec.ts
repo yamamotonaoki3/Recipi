@@ -3,19 +3,20 @@
  * （Issue #36）。
  *
  * テストデータはグローバル CLAUDE.md の規約に従い、実在しないメール
- * アドレス（@example.com）＋ e2euser_ プレフィックスを使う。CI では
- * postgres コンテナを毎回作り直すため固定値で問題ない。
+ * アドレス（@example.com）＋ e2euser_ プレフィックスを使う。実行ごとに
+ * 一意なアドレスを生成するため、開発DBを毎回初期化する必要はない。
  */
 import { test, expect } from "@playwright/test";
 
 test("signup → 自動ログイン確認 → logout → 再ログイン", async ({ page }) => {
+  const email = `e2euser_signup_${Date.now()}@example.com`;
   await page.goto("/login");
 
   // 起動後は splash → 未ログインなのでログイン画面に着地する。
   // そこから「新規登録」リンクでサインアップ画面へ移動する。
   await page.getByText("新規登録").click();
 
-  await page.getByTestId("signup-email").fill("e2euser_002@example.com");
+  await page.getByTestId("signup-email").fill(email);
   await page.getByTestId("signup-password").fill("TestPass123!");
   await page.getByTestId("signup-password-confirm").fill("TestPass123!");
   await page.getByTestId("signup-display-name").fill("E2EUser B");
@@ -35,7 +36,7 @@ test("signup → 自動ログイン確認 → logout → 再ログイン", async
   // ログアウト後は認可ゲート（useProtectedRoute）によりログイン画面へ戻される。
   await expect(page.getByTestId("login-email")).toBeVisible();
 
-  await page.getByTestId("login-email").fill("e2euser_002@example.com");
+  await page.getByTestId("login-email").fill(email);
   await page.getByTestId("login-password").fill("TestPass123!");
   await page.getByTestId("login-submit").click();
 

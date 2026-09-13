@@ -26,9 +26,15 @@ import createClient from "openapi-fetch";
 import { RefreshCoordinator, type RefreshResult } from "./refreshCoordinator";
 import type { paths } from "./schema";
 import { secureStorage } from "../lib/secureStorage";
+import { isTauri } from "../lib/tauriEnv";
 import { useSession } from "../store/session";
 
 const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const isBrowserWeb =
+  typeof window !== "undefined" &&
+  typeof process !== "undefined" &&
+  !process.env.JEST_WORKER_ID &&
+  !isTauri();
 
 export const api = createClient<paths>({
   baseUrl,
@@ -38,7 +44,8 @@ export const api = createClient<paths>({
   // 固定されたままだと差し替えが効かない。呼び出しのたびに
   // `globalThis.fetch` を読みに行く薄いラッパーにしておくことで、
   // いつ差し替えられても正しく反映されるようにする。
-  fetch: (...args) => globalThis.fetch(...args),
+  fetch: (request) =>
+    globalThis.fetch(isBrowserWeb ? new Request(request, { credentials: "include" }) : request),
 });
 
 // リフレッシュ自体のリクエスト（/auth/refresh）が 401 になった場合は
@@ -55,7 +62,7 @@ const LOGOUT_PATH = "/api/v1/auth/logout";
 async function callRefreshEndpoint(refreshToken: string): Promise<RefreshResult> {
   try {
     const { data, error } = await api.POST("/api/v1/auth/refresh", {
-      body: { refreshToken },
+      body: isBrowserWeb ? {} : { refreshToken },
     });
     if (error || !data) {
       return { ok: false };
@@ -70,9 +77,9 @@ async function callRefreshEndpoint(refreshToken: string): Promise<RefreshResult>
     try {
       const { rememberMe } = useSession.getState();
       if (rememberMe) {
-        await secureStorage.setRefreshToken(data.refreshToken);
+        await secureStorage.setRefreshToken(data.refreshToken ?? "");
       }
-      useSession.getState().setAccessTokenOnly(data.accessToken, data.refreshToken);
+      useSession.getState().setAccessTokenOnly(data.accessToken, data.refreshToken ?? "");
     } catch {
       // サーバー側は既にローテーション済みなのに、ローカルへの永続化が
       // 失敗した場合。中途半端に「認証済み」のまま残すと、次回以降すべての
@@ -81,7 +88,7 @@ async function callRefreshEndpoint(refreshToken: string): Promise<RefreshResult>
       return { ok: false };
     }
 
-    return { ok: true, accessToken: data.accessToken, refreshToken: data.refreshToken };
+    return { ok: true, accessToken: data.accessToken, refreshToken: data.refreshToken ?? "" };
   } catch {
     // ネットワークエラー等で fetch 自体が reject した場合も失敗として扱う。
     // ここで投げっぱなしにすると、呼び出し元の onResponse が

@@ -45,6 +45,11 @@
 | `MINIO_ROOT_USER` | compose の MinIO のルートユーザー | secret / local-only | `changeme` | `S3_ACCESS_KEY_ID` と一致させる。`.env.production` には**書かない** |
 | `MINIO_ROOT_PASSWORD` | compose の MinIO のルートパスワード | secret / local-only | `changeme` | `S3_SECRET_ACCESS_KEY` と一致させる |
 | `CORS_ALLOW_ORIGINS` | Web / Tauri からの API 呼び出しを許可するオリジン（カンマ区切り） | per-env | `http://localhost:8081,http://tauri.localhost,tauri://localhost` | 本番はデプロイ先フロントのオリジン。Issue #34 |
+| `CORS_ALLOW_CREDENTIALS` | WebのHttpOnly CookieをCORSリクエストで送信するか | per-env | `true` | `allow_origins`はワイルドカードにしない。Issue #104 |
+| `AUTH_COOKIE_NAME` | Web用refresh token Cookie名 | per-env | `recipi_refresh_token` | HttpOnlyで設定する。Issue #104 |
+| `AUTH_COOKIE_SECURE` | Web用CookieをHTTPS通信だけに限定するか | per-env | `false`（開発）/ `true`（本番） | 本番は必ず`true`。Issue #104 |
+| `AUTH_COOKIE_SAMESITE` | Web用CookieのSameSite属性 | per-env | `lax` | CSRF対策として`lax`以上を使う。Issue #104 |
+| `AUTH_COOKIE_PATH` | Web用Cookieを送信するパス | per-env | `/api/v1/auth` | 認証APIに限定する。Issue #104 |
 | `LOG_LEVEL` | ログレベル | per-env | `INFO` | dev は `DEBUG` 可 |
 | `LOG_FORMAT` | ログ形式 | per-env | `json` | 本番は `json`（構造化ログ・[non-functional.md](non-functional.md) / [todo.md](todo.md) #44） |
 | `AI_PROVIDER` | AI 校正プロバイダの選択（**Phase 11**） | per-env | `local`（dev）/ `stub`（test）/ `anthropic`（prod） | 契約はプロバイダ非依存（[features/ai-proofread.md](features/ai-proofread.md)） |

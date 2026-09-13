@@ -70,10 +70,29 @@ app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allow_origins,
-    allow_credentials=True,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def enforce_web_origin(request: Request, call_next: Any) -> Any:
+    """Cookie認証を使うブラウザの状態変更を許可Originに限定する。"""
+    origin = request.headers.get("origin")
+    if origin and request.method not in {"GET", "HEAD", "OPTIONS"}:
+        if origin not in settings.cors_allow_origins:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": {
+                        "code": "FORBIDDEN",
+                        "message": "許可されていないOriginです",
+                        "details": None,
+                    }
+                },
+            )
+    return await call_next(request)
 
 
 @app.exception_handler(AppError)

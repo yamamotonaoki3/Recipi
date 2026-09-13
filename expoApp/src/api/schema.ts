@@ -673,7 +673,7 @@ export interface components {
             /** Accesstoken */
             accessToken: string;
             /** Refreshtoken */
-            refreshToken: string;
+            refreshToken: string | null;
             user: components["schemas"]["UserPublic"];
         };
         /**
@@ -900,7 +900,7 @@ export interface components {
         /** LogoutRequest */
         LogoutRequest: {
             /** Refreshtoken */
-            refreshToken: string;
+            refreshToken?: string | null;
         };
         /**
          * MarkReadRequest
@@ -1184,14 +1184,14 @@ export interface components {
         /** RefreshRequest */
         RefreshRequest: {
             /** Refreshtoken */
-            refreshToken: string;
+            refreshToken?: string | null;
         };
         /** RefreshResponse */
         RefreshResponse: {
             /** Accesstoken */
             accessToken: string;
             /** Refreshtoken */
-            refreshToken: string;
+            refreshToken: string | null;
         };
         /** SignupRequest */
         SignupRequest: {

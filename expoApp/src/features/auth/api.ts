@@ -58,7 +58,7 @@ export async function login(body: {
   return data;
 }
 
-export async function logout(body: { refreshToken: string }): Promise<void> {
+export async function logout(body: { refreshToken?: string } = {}): Promise<void> {
   const { error, response } = await api.POST("/api/v1/auth/logout", { body });
   if (error) throw toApiError(error, response.status);
 }

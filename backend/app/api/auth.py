@@ -22,7 +22,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlmodel import Session, select
@@ -96,6 +96,40 @@ _IP_LOCKOUT_MAX_ATTEMPTS = 20
 _REMEMBER_ME_OFF_TTL_DAYS = 1
 
 
+def _is_web_request(request: Request) -> bool:
+    """ブラウザ由来のリクエストだけCookie方式を有効にする。"""
+    origin = request.headers.get("origin")
+    return (
+        origin is not None
+        and origin.startswith(("http://", "https://"))
+        and origin in settings.cors_allow_origins
+    )
+
+
+def _set_refresh_cookie(response: Response, token: str, remember_me: bool) -> None:
+    """Web用refresh token Cookieを設定する。"""
+    max_age = settings.REFRESH_TOKEN_TTL_DAYS * 86400 if remember_me else None
+    response.set_cookie(
+        key=settings.AUTH_COOKIE_NAME,
+        value=token,
+        max_age=max_age,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+        path=settings.AUTH_COOKIE_PATH,
+    )
+
+
+def _delete_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.AUTH_COOKIE_NAME,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+        path=settings.AUTH_COOKIE_PATH,
+    )
+
+
 def _client_ip(request: Request) -> str:
     """レート制限のキーに使う呼び出し元 IP アドレス。
 
@@ -135,17 +169,24 @@ def _issue_refresh_token(
     return raw_token
 
 
-def _auth_response(session: Session, user: User, raw_refresh_token: str) -> AuthTokenResponse:
+def _auth_response(
+    session: Session, user: User, raw_refresh_token: str, *, expose_refresh_token: bool = True
+) -> AuthTokenResponse:
     access_token = create_access_token(user.id, user.token_version)
     return AuthTokenResponse(
         user=UserPublic(id=user.id, display_name=user.display_name),
         access_token=access_token,
-        refresh_token=raw_refresh_token,
+        refresh_token=raw_refresh_token if expose_refresh_token else None,
     )
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, responses=_error_responses(409))
-def signup(body: SignupRequest, session: Session = Depends(get_session)) -> AuthTokenResponse:
+def signup(
+    body: SignupRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> AuthTokenResponse:
     existing = session.exec(select(User).where(User.email == body.email)).first()
     if existing is not None:
         raise conflict("このメールアドレスは既に登録されています")
@@ -169,11 +210,20 @@ def signup(body: SignupRequest, session: Session = Depends(get_session)) -> Auth
 
     raw_refresh_token = _issue_refresh_token(session, user.id, chain_id=uuid.uuid4())
     session.commit()
-    return _auth_response(session, user, raw_refresh_token)
+    if _is_web_request(request):
+        _set_refresh_cookie(response, raw_refresh_token, remember_me=False)
+    return _auth_response(
+        session, user, raw_refresh_token, expose_refresh_token=not _is_web_request(request)
+    )
 
 
 @router.post("/login", responses=_error_responses(401))
-def login(body: LoginRequest, session: Session = Depends(get_session)) -> AuthTokenResponse:
+def login(
+    body: LoginRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> AuthTokenResponse:
     user = session.exec(select(User).where(User.email == body.email)).first()
     # 「メールが見つからない」と「パスワードが違う」を区別しない
     # （どちらのケースでも同じ 401 を返すことで、メールアドレスの
@@ -197,12 +247,24 @@ def login(body: LoginRequest, session: Session = Depends(get_session)) -> AuthTo
         session, user.id, chain_id=uuid.uuid4(), remember_me=body.remember_me
     )
     session.commit()
-    return _auth_response(session, user, raw_refresh_token)
+    if _is_web_request(request):
+        _set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
+    return _auth_response(
+        session, user, raw_refresh_token, expose_refresh_token=not _is_web_request(request)
+    )
 
 
 @router.post("/refresh", responses=_error_responses(401))
-def refresh(body: RefreshRequest, session: Session = Depends(get_session)) -> RefreshResponse:
-    token_hash = hash_refresh_token(body.refresh_token)
+def refresh(
+    body: RefreshRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> RefreshResponse:
+    raw_input_token = body.refresh_token or request.cookies.get(settings.AUTH_COOKIE_NAME)
+    if not raw_input_token:
+        raise unauthorized("リフレッシュトークンが無効です")
+    token_hash = hash_refresh_token(raw_input_token)
 
     # まずロック無しでトークンの存在と所有者（user_id）だけ確認する。
     # ロックする順番を「常にユーザー行 → トークン行」に統一するため
@@ -271,16 +333,27 @@ def refresh(body: RefreshRequest, session: Session = Depends(get_session)) -> Re
     )
     access_token = create_access_token(user.id, user.token_version)
     session.commit()
-    return RefreshResponse(access_token=access_token, refresh_token=raw_refresh_token)
+    if _is_web_request(request):
+        _set_refresh_cookie(response, raw_refresh_token, remember_me=token_row.remember_me)
+    return RefreshResponse(
+        access_token=access_token,
+        refresh_token=raw_refresh_token if not _is_web_request(request) else None,
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, responses=_error_responses(401))
 def logout(
     body: LogoutRequest,
+    request: Request,
+    response: Response,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> None:
-    token_hash = hash_refresh_token(body.refresh_token)
+    raw_input_token = body.refresh_token or request.cookies.get(settings.AUTH_COOKIE_NAME)
+    if not raw_input_token:
+        _delete_refresh_cookie(response)
+        return None
+    token_hash = hash_refresh_token(raw_input_token)
     token_row = session.exec(
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     ).first()
@@ -289,6 +362,7 @@ def logout(
     # （current_user と所有者が食い違うトークンで他人のセッションを
     # 終了させられてしまう脆弱性を防ぐ。P2）。
     if token_row is None or token_row.user_id != current_user.id:
+        _delete_refresh_cookie(response)
         return None
 
     # ユーザー行をロックする（refresh() / password_reset_confirm と同じ
@@ -308,6 +382,7 @@ def logout(
         t.revoked_at = now
         session.add(t)
     session.commit()
+    _delete_refresh_cookie(response)
     return None
 
 
