@@ -141,6 +141,8 @@ describe("表示", () => {
     expect(getByTestId("user-profile-bio").props.children).toBe(
       "料理が好きです。\nよろしくお願いします。",
     );
+    expect(getByTestId("user-profile-bio-title").props.children).toBe("自己紹介");
+    expect(getByTestId("user-profile-bio-section")).toBeTruthy();
     expect(getByTestId("user-profile-link-email")).toBeTruthy();
     expect(getByTestId("user-profile-link-instagram")).toBeTruthy();
     // X とその他は公開されていない（レスポンスに無い）ので出さない。
@@ -157,6 +159,7 @@ describe("表示", () => {
     mockGetUser.mockResolvedValue({ ...other, bio: null });
     const { queryByTestId } = await renderLoaded();
     expect(queryByTestId("user-profile-bio")).toBeNull();
+    expect(queryByTestId("user-profile-bio-section")).toBeNull();
   });
 
   it("公開された連絡先が無ければ欄ごと出さない", async () => {
