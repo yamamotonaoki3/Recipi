@@ -52,6 +52,10 @@ type ImagePickerFieldProps = {
   variant?: Variant;
   testID: string;
   label?: string;
+  /** 画像が無いときの案内文。省略するとバリアントの既定（「手順の画像を追加」など）。 */
+  placeholder?: string;
+  /** 送信中など、画像の変更を受け付けないときに true。省略時は押せる。 */
+  disabled?: boolean;
   /** 選択中・アップロード中のどちらでも、親に「保存を待つべき」と知らせる。 */
   onUploadingChange?: (uploading: boolean) => void;
 };
@@ -82,6 +86,8 @@ export function ImagePickerField({
   variant = "thumbnail",
   testID,
   label,
+  placeholder,
+  disabled = false,
   onUploadingChange,
 }: ImagePickerFieldProps) {
   const upload = useImageUpload();
@@ -120,6 +126,7 @@ export function ImagePickerField({
   }
 
   async function handlePick(source: PickSource = "library") {
+    if (disabled) return;
     const uploaded = await upload.pickAndUpload(source);
     // キャンセル・失敗のときは null が返る。既存の画像を消してしまわないよう、
     // 成功したときだけ差し替える（失敗メッセージは upload.error に入る）。
@@ -131,7 +138,7 @@ export function ImagePickerField({
   function handleRemove() {
     // 選択画面の古い結果があとから返ると、削除した画像が復活する可能性がある。
     // 進行中はボタン自体も無効にするが、イベントが別経路から届いても削除しない。
-    if (isBusy) return;
+    if (disabled || isBusy) return;
     upload.clearError();
     setToastVisible(false);
     onChange(null, null);
@@ -163,7 +170,7 @@ export function ImagePickerField({
           />
         ) : (
           <Text testID={`${testID}-placeholder`} className="text-sm text-neutral-400">
-            {style.placeholder}
+            {placeholder ?? style.placeholder}
           </Text>
         )}
 
@@ -186,10 +193,14 @@ export function ImagePickerField({
         <Pressable
           testID={`${testID}-pick`}
           onPress={() => void handlePick("library")}
-          disabled={isUploading}
+          disabled={disabled || isUploading}
           accessibilityRole="button"
         >
-          <Text className={isUploading ? "text-sm text-neutral-400" : "text-sm text-blue-600"}>
+          <Text
+            className={
+              disabled || isUploading ? "text-sm text-neutral-400" : "text-sm text-blue-600"
+            }
+          >
             {isPicking ? "画像を選び直す" : hasImage ? "画像を変更" : "画像を追加"}
           </Text>
         </Pressable>
@@ -200,10 +211,14 @@ export function ImagePickerField({
           <Pressable
             testID={`${testID}-camera`}
             onPress={() => void handlePick("camera")}
-            disabled={isUploading}
+            disabled={disabled || isUploading}
             accessibilityRole="button"
           >
-            <Text className={isUploading ? "text-sm text-neutral-400" : "text-sm text-blue-600"}>
+            <Text
+              className={
+                disabled || isUploading ? "text-sm text-neutral-400" : "text-sm text-blue-600"
+              }
+            >
               写真を撮る
             </Text>
           </Pressable>
@@ -213,10 +228,12 @@ export function ImagePickerField({
           <Pressable
             testID={`${testID}-remove`}
             onPress={handleRemove}
-            disabled={isBusy}
+            disabled={disabled || isBusy}
             accessibilityRole="button"
           >
-            <Text className={isBusy ? "text-sm text-neutral-400" : "text-sm text-red-600"}>
+            <Text
+              className={disabled || isBusy ? "text-sm text-neutral-400" : "text-sm text-red-600"}
+            >
               画像を削除
             </Text>
           </Pressable>
