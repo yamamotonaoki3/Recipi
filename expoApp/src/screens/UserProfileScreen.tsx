@@ -1,7 +1,7 @@
 /**
  * ユーザープロフィール（他人）（screens/user-profile.md。Issue #96）。
  *
- * 上から: アバター＋表示名 → 自己紹介文 → フォロー数 / フォロワー数 → フォローボタン →
+ * 上から: アバター＋表示名 / フォロー情報 → 自己紹介文 →
  * 公開 ON の連絡先・SNS → その人の公開レシピ一覧（無限スクロール）。
  *
  * 自分の ID で開かれたらマイページへ置き換える（自分自身のプロフィールはマイページ）。
@@ -126,48 +126,47 @@ export function UserProfileScreen({ basePath }: { basePath: string }) {
 
   const profileSection = (
     <View className="gap-4 px-4 pb-4 pt-6">
-      <View className="items-center gap-2">
-        <Avatar
-          url={profile.avatarUrl}
-          displayName={profile.displayName}
-          size={80}
-          testID="user-profile-avatar"
-        />
-        <Text testID="user-profile-display-name" className="text-xl font-semibold text-neutral-900">
-          {profile.displayName}
-        </Text>
-      </View>
+      <View className="flex-row items-center gap-3">
+        <View testID="user-profile-identity" className="min-w-0 flex-1 flex-row items-center gap-4">
+          <Avatar
+            url={profile.avatarUrl}
+            displayName={profile.displayName}
+            size={56}
+            testID="user-profile-avatar"
+          />
+          <View className="min-w-0 flex-1 gap-1">
+            <Text
+              testID="user-profile-display-name"
+              numberOfLines={2}
+              className="text-left text-xl font-semibold text-neutral-900"
+            >
+              {profile.displayName}
+            </Text>
+            <View testID="user-profile-follow-summary" className="flex-row gap-4">
+              <Pressable
+                testID="user-profile-following"
+                onPress={() => openConnections("following")}
+                accessibilityRole="button"
+              >
+                <Text className="text-sm text-neutral-600">
+                  <Text className="font-semibold text-neutral-900">{profile.followingCount}</Text>{" "}
+                  フォロー
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="user-profile-followers"
+                onPress={() => openConnections("followers")}
+                accessibilityRole="button"
+              >
+                <Text className="text-sm text-neutral-600">
+                  <Text className="font-semibold text-neutral-900">{profile.followerCount}</Text>{" "}
+                  フォロワー
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
 
-      {profile.bio?.trim() && (
-        <Text testID="user-profile-bio" className="text-base leading-6 text-neutral-700">
-          {profile.bio}
-        </Text>
-      )}
-
-      <View className="flex-row justify-center gap-6">
-        <Pressable
-          testID="user-profile-following"
-          onPress={() => openConnections("following")}
-          accessibilityRole="button"
-        >
-          <Text className="text-sm text-neutral-600">
-            <Text className="font-semibold text-neutral-900">{profile.followingCount}</Text>{" "}
-            フォロー
-          </Text>
-        </Pressable>
-        <Pressable
-          testID="user-profile-followers"
-          onPress={() => openConnections("followers")}
-          accessibilityRole="button"
-        >
-          <Text className="text-sm text-neutral-600">
-            <Text className="font-semibold text-neutral-900">{profile.followerCount}</Text>{" "}
-            フォロワー
-          </Text>
-        </Pressable>
-      </View>
-
-      <View className="items-center">
         <FollowButton
           testID="user-profile-follow"
           isFollowing={profile.isFollowing}
@@ -175,6 +174,23 @@ export function UserProfileScreen({ basePath }: { basePath: string }) {
           onPress={() => toggleFollow.mutate({ userId: profile.id, follow: !profile.isFollowing })}
         />
       </View>
+
+      {profile.bio?.trim() && (
+        <View
+          testID="user-profile-bio-section"
+          className="items-start gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-4"
+        >
+          <Text testID="user-profile-bio-title" className="text-sm font-semibold text-neutral-700">
+            自己紹介
+          </Text>
+          <Text
+            testID="user-profile-bio"
+            className="w-full text-left text-base leading-6 text-neutral-700"
+          >
+            {profile.bio}
+          </Text>
+        </View>
+      )}
 
       {links.length > 0 && (
         <View testID="user-profile-links" className="gap-2 rounded-xl bg-neutral-50 p-3">
