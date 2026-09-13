@@ -22,6 +22,8 @@
 - パスワードリセット成功時は、そのアカウントの全リフレッシュトークン（全チェーン）を失効させる。
 - リフレッシュトークン本体はハッシュで `refresh_tokens` に保存し、失効管理する。
 - 「ログインを保持」OFF のときは、リフレッシュトークンを端末のセキュアストレージに永続化しない。
+- WebブラウザではリフレッシュトークンをlocalStorageに保存せず、HttpOnly Cookieで管理する。
+- Cookie認証の状態変更リクエストは、SameSite属性・許可Origin・CORS credentialsを適切に設定し、CSRFを防止する。
 - セキュアストレージの実体はプラットフォームごとに実装する（iOS: Keychain、Android: Keystore / EncryptedSharedPreferences、Desktop: OS のクレデンシャルストア。相当機能が無い場合の扱いは → [todo.md](todo.md)）。
   - **TypeScript トラック**: `expo-secure-store`（iOS Keychain / Android Keystore）、デスクトップは Tauri の keyring / Stronghold プラグイン。
   - **Kotlin トラック**: `expect` / `actual` で `androidMain` / `iosMain` / `desktopMain` に実装。

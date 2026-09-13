@@ -75,11 +75,11 @@ class LoginRequest(CamelModel):
 
 
 class RefreshRequest(CamelModel):
-    refresh_token: str
+    refresh_token: str | None = None
 
 
 class LogoutRequest(CamelModel):
-    refresh_token: str
+    refresh_token: str | None = None
 
 
 class PasswordResetRequestRequest(CamelModel):
@@ -122,10 +122,10 @@ class UserPublic(CamelModel):
 class AuthTokenResponse(CamelModel):
     user: UserPublic
     access_token: str
-    refresh_token: str
+    refresh_token: str | None
 
 
 class RefreshResponse(CamelModel):
     # features/auth.md の契約どおり、/auth/refresh は user を含まない。
     access_token: str
-    refresh_token: str
+    refresh_token: str | None

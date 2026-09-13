@@ -8,8 +8,15 @@
             "type": "string"
           },
           "refreshToken": {
-            "title": "Refreshtoken",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshtoken"
           },
           "user": {
             "$ref": "#/components/schemas/UserPublic"
@@ -557,13 +564,17 @@
       "LogoutRequest": {
         "properties": {
           "refreshToken": {
-            "title": "Refreshtoken",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshtoken"
           }
         },
-        "required": [
-          "refreshToken"
-        ],
         "title": "LogoutRequest",
         "type": "object"
       },
@@ -1202,13 +1213,17 @@
       "RefreshRequest": {
         "properties": {
           "refreshToken": {
-            "title": "Refreshtoken",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshtoken"
           }
         },
-        "required": [
-          "refreshToken"
-        ],
         "title": "RefreshRequest",
         "type": "object"
       },
@@ -1219,8 +1234,15 @@
             "type": "string"
           },
           "refreshToken": {
-            "title": "Refreshtoken",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshtoken"
           }
         },
         "required": [

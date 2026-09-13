@@ -11,6 +11,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { logout as logoutApi } from "./api";
 import { secureStorage } from "@/lib/secureStorage";
+import { isTauri } from "@/lib/tauriEnv";
 import { useSession } from "@/store/session";
 
 export function useLogout() {
@@ -18,9 +19,14 @@ export function useLogout() {
   return useMutation({
     mutationFn: async () => {
       const { refreshToken } = useSession.getState();
+      const isBrowserWeb =
+        typeof window !== "undefined" &&
+        typeof process !== "undefined" &&
+        !process.env.JEST_WORKER_ID &&
+        !isTauri();
       try {
-        if (refreshToken) {
-          await logoutApi({ refreshToken });
+        if (isBrowserWeb || refreshToken) {
+          await logoutApi(isBrowserWeb ? {} : { refreshToken: refreshToken ?? undefined });
         }
       } finally {
         // メモリ上のセッションは必ず消す。secureStorage の削除は副次的な

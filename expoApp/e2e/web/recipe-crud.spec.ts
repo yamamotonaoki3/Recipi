@@ -40,10 +40,11 @@ async function pickImage(page: Page, pickTestId: string) {
 }
 
 test("レシピ作成 → 一覧 → 詳細 → 編集 → 保存", async ({ page }) => {
+  const email = `e2euser_recipe_${Date.now()}@example.com`;
   // --- サインアップして自動ログイン ---
   await page.goto("/login");
   await page.getByText("新規登録").click();
-  await page.getByTestId("signup-email").fill("e2euser_recipe@example.com");
+  await page.getByTestId("signup-email").fill(email);
   await page.getByTestId("signup-password").fill("TestPass123!");
   await page.getByTestId("signup-password-confirm").fill("TestPass123!");
   await page.getByTestId("signup-display-name").fill("E2E Recipe User");

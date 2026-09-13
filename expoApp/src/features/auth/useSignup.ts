@@ -41,7 +41,7 @@ export function useSignup() {
       }
       useSession.getState().setAuth({
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
+        refreshToken: result.refreshToken ?? "",
         user: result.user,
         rememberMe: false,
       });

@@ -35,7 +35,7 @@ export function useLogin() {
         // ミューテーションを失敗として返すと、「ログイン失敗」の画面表示と
         // 裏腹に次回起動時だけ自動ログインしてしまう不整合が起きるため、
         // 2 回目の書き込みが失敗したら 1 回目の分もロールバックする。
-        await secureStorage.setRefreshToken(result.refreshToken);
+        await secureStorage.setRefreshToken(result.refreshToken ?? "");
         try {
           await secureStorage.setUser(JSON.stringify(result.user));
         } catch (error) {
@@ -61,7 +61,7 @@ export function useLogin() {
       }
       useSession.getState().setAuth({
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
+        refreshToken: result.refreshToken ?? "",
         user: result.user,
         rememberMe: input.rememberMe,
       });

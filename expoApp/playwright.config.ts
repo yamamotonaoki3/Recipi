@@ -14,8 +14,13 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e/web",
-  timeout: 30_000,
+  // Expo Web の開発サーバーは初回アクセス時にバンドル生成が発生するため、
+  // CI・ローカルの初回起動でも十分な時間を確保する。
+  timeout: 60_000,
   fullyParallel: false,
+  // 複数Workerが同時に8081へ初回アクセスすると、開発サーバーのバンドル生成が
+  //競合して page.goto がタイムアウトしやすいため、Web E2Eは直列実行する。
+  workers: 1,
   retries: 0,
   reporter: [["list"]],
   use: {

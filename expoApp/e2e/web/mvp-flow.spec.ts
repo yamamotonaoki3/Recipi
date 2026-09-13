@@ -18,10 +18,11 @@ const UNIQUE_INGREDIENT = "ズッキーニ";
 const RECIPE_TITLE = "MVP通しレシピ";
 
 test("サインアップ → 作成 → ホーム → 検索 → 詳細 → 履歴 → ログアウト", async ({ page }) => {
+  const email = `e2euser_mvp_${Date.now()}@example.com`;
   // --- サインアップして自動ログイン ---
   await page.goto("/login");
   await page.getByText("新規登録").click();
-  await page.getByTestId("signup-email").fill("e2euser_mvp@example.com");
+  await page.getByTestId("signup-email").fill(email);
   await page.getByTestId("signup-password").fill("TestPass123!");
   await page.getByTestId("signup-password-confirm").fill("TestPass123!");
   await page.getByTestId("signup-display-name").fill("E2E MVP User");

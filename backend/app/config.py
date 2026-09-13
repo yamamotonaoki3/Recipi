@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "dev-only-not-a-real-secret"
     ACCESS_TOKEN_TTL_MINUTES: int = 15
     REFRESH_TOKEN_TTL_DAYS: int = 60
+    # WebブラウザのHttpOnly Cookie認証設定。
+    AUTH_COOKIE_NAME: str = "recipi_refresh_token"
+    AUTH_COOKIE_SECURE: bool = False
+    AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+    AUTH_COOKIE_PATH: str = "/api/v1/auth"
 
     # --- オブジェクトストレージ（S3 / MinIO）— 使うのは Phase 3（#39） -
     S3_ENDPOINT_URL: str = "http://localhost:9000"
@@ -141,6 +146,7 @@ class Settings(BaseSettings):
         "http://localhost:8081,http://localhost:19006,"
         "http://localhost:1420,http://tauri.localhost,tauri://localhost"
     )
+    CORS_ALLOW_CREDENTIALS: bool = True
 
     # --- ログ ----------------------------------------------------------
     LOG_LEVEL: str = "INFO"
@@ -169,6 +175,8 @@ class Settings(BaseSettings):
                 "production では JWT_SECRET_KEY に 32 文字以上の本物のランダム鍵を"
                 "設定してください（.env.production / シークレット管理で注入）。"
             )
+        if not self.AUTH_COOKIE_SECURE:
+            raise ValueError("production では AUTH_COOKIE_SECURE=true を設定してください")
         return self
 
 

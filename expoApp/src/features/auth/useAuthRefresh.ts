@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/api/client";
 import { secureStorage } from "@/lib/secureStorage";
+import { isTauri } from "@/lib/tauriEnv";
 import { useSession, type SessionUser } from "@/store/session";
 
 const REFRESH_TIMEOUT_MS = 5000;
@@ -44,14 +45,21 @@ export function useAuthRefresh(): AuthRestoreStatus {
 
     async function restore() {
       try {
-        const storedRefreshToken = await secureStorage.getRefreshToken();
-        if (!storedRefreshToken) {
+        const isBrowserWeb =
+          typeof window !== "undefined" &&
+          typeof process !== "undefined" &&
+          !process.env.JEST_WORKER_ID &&
+          !isTauri();
+        const storedRefreshToken = isBrowserWeb ? null : await secureStorage.getRefreshToken();
+        if (!isBrowserWeb && !storedRefreshToken) {
           setStatus("not-restored");
           return;
         }
 
         const { data, error } = await withTimeout(
-          api.POST("/api/v1/auth/refresh", { body: { refreshToken: storedRefreshToken } }),
+          api.POST("/api/v1/auth/refresh", {
+            body: isBrowserWeb ? {} : { refreshToken: storedRefreshToken as string },
+          }),
           REFRESH_TIMEOUT_MS,
         );
         if (error || !data) throw new Error("refresh failed");
@@ -74,10 +82,10 @@ export function useAuthRefresh(): AuthRestoreStatus {
         // ローテーション後のトークンを永続化する。逆順だと、書き込み失敗時に
         // 「復元失敗（not-restored）」と報告しつつメモリ上は認証済み、という
         // 不整合が起きる。
-        await secureStorage.setRefreshToken(data.refreshToken);
+        if (!isBrowserWeb) await secureStorage.setRefreshToken(data.refreshToken ?? "");
         useSession.getState().setAuth({
           accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
+          refreshToken: data.refreshToken ?? "",
           user,
           rememberMe: true,
         });
