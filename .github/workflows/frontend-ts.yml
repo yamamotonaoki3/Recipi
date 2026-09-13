@@ -1,6 +1,6 @@
 # フロントエンド（expoApp / TypeScript）の CI。
-# 品質チェック（ESLint / Prettier / tsc）→ jest（単体・結合）→ Web ビルド
-# → Tauri（デスクトップ）の Rust をコンパイルできるか確認。
+# 品質チェック（ESLint / Prettier / tsc）→ jest（単体・結合）→ Web ビルド。
+# 時間のかかる Tauri 検証は tauri.yml から手動実行する。
 # 方針は docs/requirements/testing.md。
 
 name: frontend-ts
@@ -51,34 +51,3 @@ jobs:
 
       - name: Web ビルド（Tauri デスクトップの中身 ＋ ビルド検証）
         run: npm run build:web
-
-  tauri:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: expoApp
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: expoApp/package-lock.json
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Tauri（Linux）の system 依存
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev
-
-      - name: Rust の依存をキャッシュ
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: expoApp/src-tauri
-
-      - name: Tauri の Rust をコンパイル確認（cargo check）
-        working-directory: expoApp/src-tauri
-        run: cargo check

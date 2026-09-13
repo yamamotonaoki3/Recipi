@@ -1,0 +1,47 @@
+# Tauri（デスクトップ）の手動ビルド検証。
+# 通常 PR の待ち時間を短縮するため自動では起動しない。
+# Phase 完了時・リリース前・Tauri または共通基盤の変更時に Actions の
+# 「Run workflow」から実行する。
+
+name: tauri
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tauri:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: expoApp
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: expoApp/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Tauri（Linux）の system 依存
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev
+
+      - name: Rust の依存をキャッシュ
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: expoApp/src-tauri
+
+      - name: 依存をインストール
+        run: npm ci
+
+      - name: Web ビルド
+        run: npm run build:web
+
+      - name: Tauri の Rust をコンパイル確認（cargo check）
+        working-directory: expoApp/src-tauri
+        run: cargo check
