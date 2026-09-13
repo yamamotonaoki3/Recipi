@@ -60,7 +60,11 @@ jest.mock("@/features/profile/api", () => ({
 }));
 jest.mock("@/features/image/pickImage", () => ({ pickImage: jest.fn() }));
 jest.mock("@/lib/secureStorage", () => ({
-  secureStorage: { setUser: jest.fn().mockResolvedValue(undefined) },
+  secureStorage: {
+    setUser: jest.fn().mockResolvedValue(undefined),
+    deleteRefreshToken: jest.fn().mockResolvedValue(undefined),
+    deleteUser: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 const mockGetMyProfile = getMyProfile as jest.Mock;

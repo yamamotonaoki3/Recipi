@@ -8,7 +8,6 @@
  * アバターは「保存」と独立して、選んだ時点でサーバーに保存される
  * （profile-edit.md §5「即時反映」）。そのため未保存の変更の判定にも含めない。
  *
- * アカウント削除ボタン（区切り線の下）は F7 で追加する。
  */
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";

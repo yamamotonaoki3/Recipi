@@ -21,6 +21,7 @@ import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
 
 import {
+  deleteAccount,
   deleteAvatar,
   getMyProfile,
   putAvatar,
@@ -143,6 +144,33 @@ export function useDeleteAvatar() {
       if (setCachedAvatar(queryClient, context?.userIdAtStart, null)) {
         invalidateAuthorAppearance(queryClient);
       }
+    },
+  });
+}
+
+/**
+ * アカウントを削除し、成功時にだけこの端末のログイン情報を消去する。
+ *
+ * サーバー削除に失敗した場合は再試行できるよう、セッションもキャッシュも残す。
+ * 成功後の端末側の消去は後始末なので、個々の保存先の失敗で途中停止しない。
+ */
+export function useDeleteAccount(onDeleted?: () => void) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteAccount,
+    onSuccess: () => {
+      // 画面遷移は mutation の共通コールバックで行う。個別の mutate callback は
+      // セッション消去によるアンマウント後には呼ばれないことがあるため。
+      onDeleted?.();
+      useSession.getState().clear();
+      try {
+        queryClient.clear();
+      } catch {
+        // 後始末なので、他の保存先の消去を続ける。
+      }
+      // Promise の失敗も握りつぶす。削除済みアカウントをログイン状態に戻す理由にはならない。
+      void secureStorage.deleteRefreshToken().catch(() => {});
+      void secureStorage.deleteUser().catch(() => {});
     },
   });
 }

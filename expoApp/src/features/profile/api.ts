@@ -101,3 +101,14 @@ export async function deleteAvatar(): Promise<void> {
   const { error, response } = await api.DELETE("/api/v1/users/me/avatar");
   if (error) throw toApiError(error, response.status, "画像の削除に失敗しました");
 }
+
+/**
+ * 自分のアカウントを削除する。成功時は 204 No Content が返る。
+ *
+ * 削除後はトークンもサーバー側で無効になるため、呼び出し元では `/auth/logout` を
+ * 続けて呼ばず、ローカルの認証情報だけを消去する。
+ */
+export async function deleteAccount(): Promise<void> {
+  const { error, response } = await api.DELETE("/api/v1/users/me");
+  if (error) throw toApiError(error, response.status, "アカウントの削除に失敗しました");
+}
