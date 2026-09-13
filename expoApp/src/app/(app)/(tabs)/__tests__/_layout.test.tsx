@@ -56,6 +56,10 @@ jest.mock("expo-router/ui", () => {
   };
 });
 
+jest.mock("@/features/notification/hooks", () => ({
+  useUnreadNotificationCount: () => ({ data: { unreadCount: 3 } }),
+}));
+
 function clearRequestClose() {
   const requestClose = useUnsavedChangesStore.getState().requestClose;
   if (requestClose) {

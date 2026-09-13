@@ -4,7 +4,7 @@
 
 自分あての通知（フォローされた / お気に入りされた / 感想がついた / フォロー中の新着レシピ）を確認する。機能仕様は [`../features/notification.md`](../features/notification.md)。
 
-> **MVP でのスコープ**: 通知は Phase 8 の機能。Phase 4（MVP）では「通知」destination を**空状態（「通知はまだありません」）固定の最小スタブ**として置くだけで、`notifications` テーブル・API・バッジは作らない（[../roadmap.md](../roadmap.md)「MVP ライン」）。
+> Phase 4（MVP）では空状態固定のスタブとして用意し、Phase 8で通知API・一覧・既読処理・未読バッジを実装した。
 
 ## 2. ナビゲーション
 
@@ -38,11 +38,11 @@
 ## 6. 使用 API
 
 - `GET /notifications`
-- `GET /notifications/unread-count`（一覧を開かずバッジだけ更新したいとき。他 destination 滞在中のポーリング要否は実装時に確定 → [`../todo.md`](../todo.md)）
+- `GET /notifications/unread-count`（一覧を開かずバッジだけ更新する。60 秒間隔とアプリ復帰 / Web のウィンドウフォーカス時に再取得）
 - `POST /notifications/read`
 - （[`../features/notification.md`](../features/notification.md)）
 
 ## 7. プラットフォーム差分
 
 - モバイル: 引っぱって更新。
-- デスクトップ: 「更新」ボタン or 一定間隔で `unread-count` をポーリングしてバッジ更新（実装時に確定）。
+- デスクトップ: 「更新」ボタンを表示し、`unread-count` を 60 秒間隔でも更新する。

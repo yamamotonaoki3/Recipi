@@ -1,12 +1,11 @@
 /**
- * マイページ / 通知スタブのテスト（screens/my-page.md・notifications.md）。
+ * マイページのテスト（screens/my-page.md）。
  *
  * 概要（アバター ＋ 表示名）、取得失敗時の再試行、メニューの導線を見る。
  */
 import { fireEvent, render } from "@testing-library/react-native";
 
 import { MyPageScreen } from "../MyPageScreen";
-import { NotificationsScreen } from "../NotificationsScreen";
 import { useSession } from "@/store/session";
 
 const mockPush = jest.fn();
@@ -122,12 +121,5 @@ describe("MyPageScreen", () => {
     const { getByTestId } = await render(<MyPageScreen basePath="/my-page" />);
     await fireEvent.press(getByTestId("my-page-logout"));
     expect(mockLogoutMutate).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("NotificationsScreen", () => {
-  it("MVP では空状態固定のスタブを出す", async () => {
-    const { getByTestId } = await render(<NotificationsScreen />);
-    expect(getByTestId("notifications-empty").props.children).toBe("通知はまだありません");
   });
 });

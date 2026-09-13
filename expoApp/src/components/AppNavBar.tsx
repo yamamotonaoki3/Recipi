@@ -34,14 +34,28 @@ type NavItemLabelProps = {
   icon: string;
   label: string;
   focused: boolean;
+  badge?: number;
 };
 
 /** タブ 1 つ分の中身（アイコン ＋ ラベル）。選択中はオレンジで示す。 */
-export function NavItemLabel({ icon, label, focused }: NavItemLabelProps) {
+export function NavItemLabel({ icon, label, focused, badge = 0 }: NavItemLabelProps) {
   const color = focused ? "text-orange-600" : "text-neutral-500";
   return (
-    <View className="items-center gap-0.5">
-      <Text className={`text-lg ${color}`}>{icon}</Text>
+    <View
+      className="items-center gap-0.5"
+      accessibilityLabel={badge > 0 ? `${label}、未読${badge}件` : label}
+    >
+      <View>
+        <Text className={`text-lg ${color}`}>{icon}</Text>
+        {badge > 0 && (
+          <View
+            testID="nav-notifications-badge"
+            className="absolute -right-4 -top-2 min-w-5 items-center rounded-full bg-red-600 px-1"
+          >
+            <Text className="text-[10px] font-bold text-white">{badge > 99 ? "99+" : badge}</Text>
+          </View>
+        )}
+      </View>
       <Text className={`text-[10px] ${color}`}>{label}</Text>
     </View>
   );

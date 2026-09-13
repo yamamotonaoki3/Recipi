@@ -8,11 +8,14 @@
 /**
  * レシピ詳細を push できるスタックを持つ destination。
  *
- * `(tabs)/<name>/recipes/[id].tsx` があるものだけ。通知は MVP では空状態の
- * スタブでネストしたスタックが無いため含めない（含めると
- * `/notifications/recipes/{id}` という存在しないルートに飛ぶ）。
+ * `(tabs)/<name>/recipes/[id].tsx` があるものだけ。
  */
-export const DESTINATIONS_WITH_RECIPE_STACK = ["/home", "/history", "/my-page"] as const;
+export const DESTINATIONS_WITH_RECIPE_STACK = [
+  "/home",
+  "/history",
+  "/notifications",
+  "/my-page",
+] as const;
 
 export type RecipeStackDestination = (typeof DESTINATIONS_WITH_RECIPE_STACK)[number];
 
