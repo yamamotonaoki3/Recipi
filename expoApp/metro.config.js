@@ -13,6 +13,10 @@ config.resolver.blockList = [
     ? config.resolver.blockList
     : [config.resolver.blockList].filter(Boolean)),
   /.*\.test\.[jt]sx?$/,
+  // Tauri の Rust ビルド中に target 配下の一時ファイルが作成・削除される。
+  // Metro がこれを監視すると、削除直後に ENOENT が発生して開発サーバーが
+  // 終了するため、Tauri の生成物は監視対象から除外する。
+  /.*[\\/]src-tauri[\\/]target[\\/].*/,
 ];
 
 module.exports = withNativeWind(config, { input: "./src/global.css" });
