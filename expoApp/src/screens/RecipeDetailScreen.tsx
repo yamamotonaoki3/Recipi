@@ -3,17 +3,33 @@
  *
  * Issue #38 の範囲: サムネ / タイトル / メタ / 説明 /
  * グループ別材料（名前なしはフラット） / 番号付き手順 / 参照材料リンク /
- * 本人なら編集・削除。♡・フォロー・感想は Phase 5〜7 なのでレイアウトのみ。
+ * 本人なら編集・削除。♡ は Issue #100、感想セクションは Issue #102 で追加した。
  */
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/components/Avatar";
+import { CommentComposer, type CommentDraft } from "@/components/CommentComposer";
+import { CommentItem } from "@/components/CommentItem";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ApiError } from "@/features/auth/api";
+import {
+  useComments,
+  useCreateComment,
+  useDeleteComment,
+  useUpdateComment,
+} from "@/features/comment/hooks";
 import { useToggleFavorite } from "@/features/favorite/hooks";
 import { useRecordView } from "@/features/history/hooks";
 import { formatQuantity, type Placement } from "@/features/recipe/formatQuantity";
@@ -28,6 +44,21 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
   const deleteRecipe = useDeleteRecipe();
   const toggleFavorite = useToggleFavorite();
   const currentUserId = useSession((s) => s.user?.id);
+  // 感想一覧。hooks は早期 return より前に呼ぶ必要があるので、ここで取得を始める。
+  const comments = useComments(id);
+
+  /**
+   * 感想一覧の無限スクロール。詳細は ScrollView の中なので、一覧に FlatList を
+   * 入れ子にせず（同じ向きのスクロールを入れ子にすると警告が出て、末尾の検知も
+   * 効かない）、画面全体のスクロールが末尾近くに来たら次のページを読む。
+   */
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const nearBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 200;
+    if (nearBottom && comments.hasNextPage && !comments.isFetchingNextPage) {
+      void comments.fetchNextPage();
+    }
+  };
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deadRefMessage, setDeadRefMessage] = useState(false);
@@ -119,7 +150,14 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
         )}
       </View>
 
-      <ScrollView contentContainerClassName="gap-4 p-4">
+      <ScrollView
+        testID="recipe-detail-scroll"
+        contentContainerClassName="gap-4 p-4"
+        // キーボード表示中も、入力欄の送信や画像ボタンを 1 回のタップで操作できるようにする。
+        keyboardShouldPersistTaps="handled"
+        onScroll={handleScroll}
+        scrollEventThrottle={200}
+      >
         {/* サムネイル（無ければプレースホルダ。features/image.md §2）。
             枠は 4:3 = スマホ標準カメラの比率。高さ固定にすると幅の広い画面で
             写真の上下が大きく切れてしまう（作成画面の ImagePickerField と同じ考え方）。 */}
@@ -276,8 +314,18 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
           ))}
         </View>
 
-        {/* 感想は F5 で追加する。ここではプレースホルダのみ。 */}
-        <Text className="text-xs text-neutral-300">感想は今後のフェーズで追加</Text>
+        <CommentSection
+          recipeId={recipe.id}
+          commentCount={recipe.commentCount}
+          isRecipeOwner={isOwner}
+          currentUserId={currentUserId}
+          comments={comments}
+          onPressAuthor={(authorId) => {
+            // 詳細の投稿者行と同じ分岐（自分 → マイページ、他人 → プロフィール。lessons #96-1）。
+            if (authorId === currentUserId) router.navigate("/my-page" as never);
+            else router.push(`${basePath}/users/${authorId}` as never);
+          }}
+        />
       </ScrollView>
 
       <ConfirmDialog
@@ -322,6 +370,209 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
         destructive={false}
         onConfirm={() => setDeadRefMessage(false)}
         onCancel={() => setDeadRefMessage(false)}
+      />
+    </View>
+  );
+}
+
+/** 失敗をそのまま画面に出せる文にする（サーバーのメッセージがあればそれを使う）。 */
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message !== "" ? error.message : fallback;
+}
+
+/**
+ * 感想セクション（recipe-detail.md §3-10・features/comment.md §2）。
+ *
+ * - 見出し「感想（数）」
+ * - 入力欄（**レシピ投稿者本人には出さない**。本人は自分のレシピに書けないため）
+ * - 一覧（新しい順）。末尾に「もっと見る」（画面のスクロールでも自動で続きを読む）
+ * - 空状態の文言
+ * - 削除は確認ダイアログを 1 つだけ持ち、どの感想を消すかを覚えておく
+ */
+function CommentSection({
+  recipeId,
+  commentCount,
+  isRecipeOwner,
+  currentUserId,
+  comments,
+  onPressAuthor,
+}: {
+  recipeId: string;
+  commentCount: number;
+  isRecipeOwner: boolean;
+  currentUserId: string | undefined;
+  comments: ReturnType<typeof useComments>;
+  onPressAuthor: (authorId: string) => void;
+}) {
+  const createComment = useCreateComment(recipeId);
+  const updateComment = useUpdateComment(recipeId);
+  const deleteComment = useDeleteComment(recipeId);
+
+  const [createError, setCreateError] = useState<string | null>(null);
+  /** 編集中の失敗は、どの感想のものかも覚える（別の行に出さない）。 */
+  const [saveError, setSaveError] = useState<{ id: string; message: string } | null>(null);
+  // 保存中の感想を ID の集合で覚える。同じ更新 hook を共有しているため、
+  // hook の variables だけでは、どの感想が保存中かを正しく分けられない。
+  const [savingCommentIds, setSavingCommentIds] = useState<Set<string>>(() => new Set());
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteFailed, setDeleteFailed] = useState<string | null>(null);
+
+  const items = comments.data?.pages.flatMap((page) => page.items) ?? [];
+  const hasCommentData = comments.data != null;
+  const isInitialCommentError = comments.isError && !hasCommentData;
+  const isMoreCommentError = comments.isError && hasCommentData;
+
+  async function handleCreate(draft: CommentDraft): Promise<boolean> {
+    setCreateError(null);
+    try {
+      await createComment.mutateAsync({ body: draft.body, imageKey: draft.imageKey });
+      return true;
+    } catch (error) {
+      setCreateError(errorMessage(error, "感想を投稿できませんでした"));
+      return false;
+    }
+  }
+
+  async function handleSave(commentId: string, draft: CommentDraft): Promise<boolean> {
+    setSaveError(null);
+    // 保存を始めた感想だけ、入力欄とキャンセルを操作できないようにする。
+    setSavingCommentIds((ids) => new Set(ids).add(commentId));
+    // 画像を触っていなければ imageKey は送らない（= 変更なし。comment.md §3）。
+    // 外したら null（= 削除）、選び直したら新しいキー（= 差し替え）。
+    const patch = draft.imageChanged
+      ? { body: draft.body, imageKey: draft.imageKey }
+      : { body: draft.body };
+    try {
+      await updateComment.mutateAsync({ commentId, patch });
+      return true;
+    } catch (error) {
+      setSaveError({ id: commentId, message: errorMessage(error, "感想を保存できませんでした") });
+      return false;
+    } finally {
+      // 成功・失敗のどちらでも、保存が終わったら ID を集合から外す。
+      setSavingCommentIds((ids) => {
+        const next = new Set(ids);
+        next.delete(commentId);
+        return next;
+      });
+    }
+  }
+
+  return (
+    <View testID="comment-section" className="gap-3 border-t border-neutral-200 pt-4">
+      <Text testID="comment-heading" className="text-base font-bold text-neutral-900">
+        感想（{commentCount}）
+      </Text>
+
+      {currentUserId == null ? (
+        <Text testID="comment-need-login" className="text-sm text-neutral-500">
+          ログインし直すと感想を書けます
+        </Text>
+      ) : !isRecipeOwner ? (
+        <CommentComposer
+          testID="comment-composer"
+          submitLabel="送信"
+          submitting={createComment.isPending}
+          error={createError}
+          resetOnSuccess
+          onSubmit={handleCreate}
+        />
+      ) : null}
+
+      {comments.isPending ? (
+        <ActivityIndicator testID="comment-loading" />
+      ) : isInitialCommentError ? (
+        <View className="items-center gap-2">
+          <Text className="text-sm text-neutral-600">感想を読み込めませんでした</Text>
+          <Pressable
+            testID="comment-retry"
+            onPress={() => void comments.refetch()}
+            accessibilityRole="button"
+            className="rounded-lg border border-neutral-300 px-4 py-2"
+          >
+            <Text className="text-neutral-700">再試行</Text>
+          </Pressable>
+        </View>
+      ) : items.length === 0 && !isMoreCommentError ? (
+        <Text testID="comment-empty" className="text-sm text-neutral-500">
+          まだ感想がありません。作ってみたら感想を書いてみましょう
+        </Text>
+      ) : (
+        <View className="gap-3">
+          {items.map((comment) => (
+            <CommentItem
+              key={comment.id}
+              testID={`comment-${comment.id}`}
+              comment={comment}
+              // ユーザー ID が分からない間は、誤って編集・削除権限を表示しない。
+              isMine={currentUserId != null && comment.author.id === currentUserId}
+              isRecipeOwner={currentUserId != null && isRecipeOwner}
+              onPressAuthor={() => onPressAuthor(comment.author.id)}
+              onRequestDelete={() => {
+                setDeleteFailed(null);
+                setDeleteTarget(comment.id);
+              }}
+              onSave={(draft) => handleSave(comment.id, draft)}
+              saving={savingCommentIds.has(comment.id)}
+              saveError={saveError?.id === comment.id ? saveError.message : null}
+            />
+          ))}
+          {comments.hasNextPage && !isMoreCommentError && (
+            <Pressable
+              testID="comment-more"
+              onPress={() => void comments.fetchNextPage()}
+              disabled={comments.isFetchingNextPage}
+              accessibilityRole="button"
+              className="items-center rounded-lg border border-neutral-300 py-2"
+            >
+              {comments.isFetchingNextPage ? (
+                <ActivityIndicator />
+              ) : (
+                <Text className="text-sm text-neutral-700">もっと見る</Text>
+              )}
+            </Pressable>
+          )}
+          {isMoreCommentError && (
+            <View className="items-center gap-2">
+              <Text className="text-sm text-neutral-600">続きを読み込めませんでした</Text>
+              <Pressable
+                testID="comment-more-retry"
+                onPress={() => void comments.fetchNextPage()}
+                accessibilityRole="button"
+                className="rounded-lg border border-neutral-300 px-4 py-2"
+              >
+                <Text className="text-neutral-700">再試行</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      )}
+
+      {deleteFailed && (
+        <Text testID="comment-delete-error" className="text-sm text-red-600">
+          {deleteFailed}
+        </Text>
+      )}
+
+      <ConfirmDialog
+        visible={deleteTarget !== null}
+        testID="comment-delete-dialog"
+        title="感想を削除しますか？"
+        message="この感想と添付した画像が削除されます。元に戻せません。"
+        confirmLabel="削除する"
+        onConfirm={() => {
+          const commentId = deleteTarget;
+          setDeleteTarget(null);
+          if (!commentId) return;
+          deleteComment.mutate(
+            { commentId },
+            {
+              onError: (error) =>
+                setDeleteFailed(errorMessage(error, "感想を削除できませんでした")),
+            },
+          );
+        }}
+        onCancel={() => setDeleteTarget(null)}
       />
     </View>
   );

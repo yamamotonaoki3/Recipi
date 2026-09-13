@@ -51,6 +51,28 @@ describe("未選択の状態", () => {
     expect(getByText("画像を追加")).toBeTruthy();
     expect(queryByTestId("f-remove")).toBeNull();
   });
+
+  it("disabled=true のとき画像の選択・削除を受け付けない", async () => {
+    const onChange = jest.fn();
+    const { getByTestId } = await render(
+      <ImagePickerField
+        testID="f"
+        imageKey="uploads/a.jpg"
+        imageUrl="https://x/a.jpg"
+        onChange={onChange}
+        disabled
+      />,
+    );
+
+    expect(getByTestId("f-pick").props.accessibilityState?.disabled).toBe(true);
+    expect(getByTestId("f-remove").props.accessibilityState?.disabled).toBe(true);
+
+    await fireEvent.press(getByTestId("f-pick"));
+    await fireEvent.press(getByTestId("f-remove"));
+
+    expect(mockLaunchLibrary).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 describe("選択して成功したとき", () => {
