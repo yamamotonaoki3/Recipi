@@ -40,8 +40,8 @@
 
 | メソッド | パス | 認証 | 概要 |
 | --- | --- | --- | --- |
-| GET | `/users/{id}` | 必要 | プロフィール。公開トグル ON の項目のみ（本人取得時は全項目 + トグル状態）。`followingCount` / `followerCount`（カウント列）/ `isFollowing` |
-| PATCH | `/users/me` | 必要 | `displayName`, `emailPublic`, `xUrl`, `xPublic`, `instagramUrl`, `instagramPublic`, `otherUrl`, `otherPublic` |
+| GET | `/users/{id}` | 必要 | プロフィール。`bio`（自己紹介文）と公開トグル ON の項目（本人取得時は全項目 + トグル状態）。`followingCount` / `followerCount`（カウント列）/ `isFollowing` |
+| PATCH | `/users/me` | 必要 | `displayName`, `bio`, `emailPublic`, `xUrl`, `xPublic`, `instagramUrl`, `instagramPublic`, `otherUrl`, `otherPublic` |
 | PUT | `/users/me/avatar` | 必要 | アバター画像アップロード（multipart）。200 `{ avatarUrl }`。形式・サイズ不正は 400 |
 | DELETE | `/users/me/avatar` | 必要 | アバター削除。設定していなくても 204（冪等） |
 | DELETE | `/users/me` | 必要 | アカウント削除。削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。関連データを CASCADE 削除 |

@@ -1260,6 +1260,8 @@ export interface components {
          *     - 表示名・トグルに null → 400（DB では NOT NULL の列なので、ここで弾く）
          */
         UpdateMeRequest: {
+            /** Bio */
+            bio?: string | null;
             /** Displayname */
             displayName?: string | null;
             /** Emailpublic */
@@ -1288,6 +1290,8 @@ export interface components {
         UserMeResponse: {
             /** Avatarurl */
             avatarUrl: string | null;
+            /** Bio */
+            bio?: string | null;
             /** Displayname */
             displayName: string;
             /** Email */
@@ -1341,6 +1345,8 @@ export interface components {
         UserPublicProfileResponse: {
             /** Avatarurl */
             avatarUrl: string | null;
+            /** Bio */
+            bio?: string | null;
             /** Displayname */
             displayName: string;
             /** Email */
@@ -1392,6 +1398,8 @@ export interface components {
         UserSelfProfileResponse: {
             /** Avatarurl */
             avatarUrl: string | null;
+            /** Bio */
+            bio?: string | null;
             /** Displayname */
             displayName: string;
             /** Email */

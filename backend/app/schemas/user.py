@@ -10,9 +10,10 @@ from pydantic import Field, field_validator, model_validator
 
 from app.schemas.base import CamelModel
 
-# 表示名・URL の上限（features/profile.md §6）。URL の上限は DB の列長
+# 表示名・自己紹介文・URL の上限（features/profile.md §6）。URL の上限は DB の列長
 # （VARCHAR(2048)。alembic a7b8c9d0e1f2）と同じ値にそろえる。
 DISPLAY_NAME_MAX_LENGTH = 30
+BIO_MAX_LENGTH = 2000
 URL_MAX_LENGTH = 2048
 
 # URL は `http://` か `https://` で始まり、空白を含まないものだけを受け付ける。
@@ -48,6 +49,7 @@ class UpdateMeRequest(CamelModel):
     """
 
     display_name: str | None = Field(default=None, min_length=1, max_length=DISPLAY_NAME_MAX_LENGTH)
+    bio: str | None = Field(default=None, max_length=BIO_MAX_LENGTH)
     x_url: str | None = Field(default=None, max_length=URL_MAX_LENGTH)
     instagram_url: str | None = Field(default=None, max_length=URL_MAX_LENGTH)
     other_url: str | None = Field(default=None, max_length=URL_MAX_LENGTH)
@@ -78,6 +80,14 @@ class UpdateMeRequest(CamelModel):
         if isinstance(value, str):
             stripped = value.strip()
             return stripped or None
+        return value
+
+    @field_validator("bio", mode="before")
+    @classmethod
+    def _blank_bio_to_none(cls, value: object) -> object:
+        """空文字・空白だけは未設定にする。本文の前後や改行は保存時に保持する。"""
+        if isinstance(value, str) and not value.strip():
+            return None
         return value
 
     @field_validator("x_url", "instagram_url", "other_url")
@@ -112,6 +122,8 @@ class UserMeResponse(CamelModel):
     id: uuid.UUID
     email: str
     display_name: str
+    # backendを先に展開しても既存クライアントの生成型を壊さないよう任意項目にする。
+    bio: str | None = None
     avatar_url: str | None
     email_public: bool
     x_url: str | None

@@ -91,6 +91,8 @@ class UserPublicProfileResponse(CamelModel):
 
     id: uuid.UUID
     display_name: str
+    # backendを先に展開しても既存クライアントの生成型を壊さないよう任意項目にする。
+    bio: str | None = None
     avatar_url: str | None
     following_count: int
     follower_count: int

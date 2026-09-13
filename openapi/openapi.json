@@ -1406,6 +1406,18 @@
       "UpdateMeRequest": {
         "description": "`PATCH /users/me` の body（features/profile.md §5）。\n\n## 「送られた項目だけ更新する」の作り方\n\nすべての項目を任意にし、**既定値を `None` にする**。Pydantic v2 では\n`str | None` と書くだけだと「null も入れられる必須項目」になってしまい、\n表示名だけ送る、といった部分更新ができない。\n\nそのうえで、「送られなかった」と「null が送られた」を区別する必要がある\n（どちらも値は `None` になる）。区別には Pydantic が記録している\n`model_fields_set`（＝リクエストに実際に含まれていた項目名）を使う。\n- 送られなかった → 変更しない\n- URL に null → 削除する\n- 表示名・トグルに null → 400（DB では NOT NULL の列なので、ここで弾く）",
         "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
           "displayName": {
             "anyOf": [
               {
@@ -1516,6 +1528,17 @@
               }
             ],
             "title": "Avatarurl"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
           },
           "displayName": {
             "title": "Displayname",
@@ -1628,6 +1651,17 @@
               }
             ],
             "title": "Avatarurl"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
           },
           "displayName": {
             "title": "Displayname",
@@ -1754,6 +1788,17 @@
               }
             ],
             "title": "Avatarurl"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
           },
           "displayName": {
             "title": "Displayname",

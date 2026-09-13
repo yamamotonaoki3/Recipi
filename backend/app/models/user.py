@@ -41,6 +41,10 @@ class User(SQLModel, table=True):
     # 表示名。1〜30 文字の制約は API 層（Pydantic スキーマ）で担保する。
     display_name: str = Field(nullable=False)
 
+    # 自己紹介文。未設定は None。改行を保持し、API層とDBの両方で
+    # 2,000文字を上限とする（profile.md §4）。
+    bio: str | None = Field(default=None, sa_column=sa.Column(sa.String(2000), nullable=True))
+
     # パスワードを忘れた場合に使う「秘密の質問」と、その答えのハッシュ。
     # 答えは正規化（trim + casefold）してから Argon2id でハッシュ化する
     # （security.py の normalize_security_answer を参照）。

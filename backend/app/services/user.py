@@ -37,6 +37,7 @@ from app.services.image import image_url
 _UPDATABLE_FIELDS = frozenset(
     {
         "display_name",
+        "bio",
         "email_public",
         "x_url",
         "x_public",
@@ -67,6 +68,7 @@ def me_response(user: User) -> UserMeResponse:
         id=user.id,
         email=user.email,
         display_name=user.display_name,
+        bio=user.bio,
         avatar_url=image_url(user.avatar_key),
         email_public=user.email_public,
         x_url=user.x_url,
@@ -132,6 +134,7 @@ def get_user_profile(
     return UserPublicProfileResponse(
         id=target.id,
         display_name=target.display_name,
+        bio=target.bio,
         avatar_url=image_url(target.avatar_key),
         following_count=target.following_count,
         follower_count=target.follower_count,
