@@ -14,6 +14,7 @@ import { isBlankUrl, validateProfileUrl } from "./validation";
 
 export type ProfileFormValues = {
   displayName: string;
+  bio: string;
   emailPublic: boolean;
   xUrl: string;
   xPublic: boolean;
@@ -28,11 +29,23 @@ export type ProfileFieldErrors = Partial<Record<ProfileField, string>>;
 
 const URL_FIELDS = ["xUrl", "instagramUrl", "otherUrl"] as const;
 const TOGGLE_FIELDS = ["emailPublic", "xPublic", "instagramPublic", "otherPublic"] as const;
+export const BIO_MAX_LENGTH = 2000;
+
+/** JavaScript の UTF-16 ではなく、backend と同じ Unicode コードポイントで数える。 */
+export function bioLength(value: string): number {
+  return Array.from(value).length;
+}
+
+/** 入力を最大文字数で切る。絵文字も 1 文字として扱う。 */
+export function limitBio(value: string): string {
+  return Array.from(value).slice(0, BIO_MAX_LENGTH).join("");
+}
 
 /** サーバーの値をフォームの値に変換する（入力欄は null を扱えないので空文字にする）。 */
 export function fromProfile(profile: UserSelfProfile): ProfileFormValues {
   return {
     displayName: profile.displayName,
+    bio: profile.bio ?? "",
     emailPublic: profile.emailPublic,
     xUrl: profile.xUrl ?? "",
     xPublic: profile.xPublic,
@@ -41,6 +54,11 @@ export function fromProfile(profile: UserSelfProfile): ProfileFormValues {
     otherUrl: profile.otherUrl ?? "",
     otherPublic: profile.otherPublic,
   };
+}
+
+/** 空・空白だけは null、それ以外は改行と前後空白を含めてそのまま送る。 */
+function normalizeBio(value: string): string | null {
+  return value.trim() === "" ? null : value;
 }
 
 /** URL 欄の値を送信用に正規化する（空・空白だけは null＝削除）。 */
@@ -53,6 +71,9 @@ export function validateProfileForm(values: ProfileFormValues): ProfileFieldErro
   const errors: ProfileFieldErrors = {};
   const displayName = validateDisplayName(values.displayName);
   if (displayName) errors.displayName = displayName;
+  if (bioLength(values.bio) > BIO_MAX_LENGTH) {
+    errors.bio = `自己紹介文は${BIO_MAX_LENGTH.toLocaleString()}文字以内で入力してください`;
+  }
   for (const field of URL_FIELDS) {
     const error = validateProfileUrl(values[field]);
     if (error) errors[field] = error;
@@ -75,6 +96,8 @@ export function buildPatch(
   if (current.displayName !== initial.displayName) {
     patch.displayName = current.displayName;
   }
+  const nextBio = normalizeBio(current.bio);
+  if (nextBio !== normalizeBio(initial.bio)) patch.bio = nextBio;
   for (const field of URL_FIELDS) {
     const next = normalizeUrl(current[field]);
     if (next !== normalizeUrl(initial[field])) patch[field] = next;
@@ -100,7 +123,7 @@ export function mapServerErrors(details: Record<string, unknown> | null): Profil
   const errors: ProfileFieldErrors = {};
   const list = details?.errors;
   if (!Array.isArray(list)) return errors;
-  const known = new Set<string>([...URL_FIELDS, ...TOGGLE_FIELDS, "displayName"]);
+  const known = new Set<string>([...URL_FIELDS, ...TOGGLE_FIELDS, "displayName", "bio"]);
   for (const item of list as { loc?: unknown; msg?: unknown }[]) {
     if (!Array.isArray(item.loc)) continue;
     const field = item.loc.find((part): part is ProfileField => known.has(String(part)));

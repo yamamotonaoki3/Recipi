@@ -1,7 +1,7 @@
 /**
  * プロフィール編集画面（screens/profile-edit.md・features/profile.md。Issue #94）。
  *
- * 上から: アバター（変更 / 削除）→ 表示名 → メール（表示 ＋ 公開トグル）→
+ * 上から: アバター（変更 / 削除）→ 表示名 → 自己紹介文 → メール（表示 ＋ 公開トグル）→
  * X / Instagram / その他の URL（＋ 公開トグル）。アプリバー右の「保存」で
  * **変更した項目だけ** `PATCH /users/me` を送る。
  *
@@ -36,8 +36,11 @@ import {
 } from "@/features/profile/hooks";
 import {
   buildPatch,
+  bioLength,
+  BIO_MAX_LENGTH,
   fromProfile,
   isDirty,
+  limitBio,
   mapServerErrors,
   validateProfileForm,
   type ProfileFieldErrors,
@@ -248,6 +251,28 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
           {fieldErrors.displayName && (
             <Text testID="profile-edit-display-name-error" className="text-sm text-red-600">
               {fieldErrors.displayName}
+            </Text>
+          )}
+        </View>
+
+        <View className="gap-1">
+          <Text className="text-xs text-neutral-500">自己紹介文</Text>
+          <TextInput
+            testID="profile-edit-bio"
+            value={values.bio}
+            onChangeText={(text) => setField("bio", limitBio(text))}
+            editable={!saving}
+            placeholder="自己紹介を入力"
+            multiline
+            textAlignVertical="top"
+            className="min-h-32 rounded-lg border border-neutral-300 px-3 py-3 text-base"
+          />
+          <Text testID="profile-edit-bio-count" className="text-right text-xs text-neutral-500">
+            {bioLength(values.bio).toLocaleString()} / {BIO_MAX_LENGTH.toLocaleString()}文字
+          </Text>
+          {fieldErrors.bio && (
+            <Text testID="profile-edit-bio-error" className="text-sm text-red-600">
+              {fieldErrors.bio}
             </Text>
           )}
         </View>

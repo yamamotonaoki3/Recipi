@@ -3,9 +3,12 @@
  */
 import type { UserSelfProfile } from "../api";
 import {
+  BIO_MAX_LENGTH,
+  bioLength,
   buildPatch,
   fromProfile,
   isDirty,
+  limitBio,
   mapServerErrors,
   validateProfileForm,
   type ProfileFormValues,
@@ -15,6 +18,7 @@ import { PROFILE_URL_MAX_LENGTH, validateProfileUrl } from "../validation";
 const profile: UserSelfProfile = {
   id: "u1",
   displayName: "テスト太郎",
+  bio: "お菓子作りが好きです。\nよろしくお願いします。",
   email: "testuser_001@example.com",
   avatarUrl: null,
   followingCount: 0,
@@ -66,9 +70,23 @@ describe("validateProfileUrl", () => {
 });
 
 describe("fromProfile", () => {
-  it("null の URL は空文字にする", () => {
+  it("null の URL と自己紹介文は空文字にする", () => {
     expect(base.instagramUrl).toBe("");
     expect(base.xUrl).toBe("https://x.com/testuser_001");
+    expect(fromProfile({ ...profile, bio: null }).bio).toBe("");
+  });
+});
+
+describe("自己紹介文", () => {
+  it("改行を含めてコードポイント単位で数える", () => {
+    expect(bioLength("😀\nあ")).toBe(3);
+  });
+
+  it("2,000文字に制限し、絵文字を途中で壊さない", () => {
+    const value = "😀".repeat(BIO_MAX_LENGTH + 1);
+    const limited = limitBio(value);
+    expect(bioLength(limited)).toBe(BIO_MAX_LENGTH);
+    expect(limited.endsWith("😀")).toBe(true);
   });
 });
 
@@ -91,6 +109,13 @@ describe("validateProfileForm", () => {
     const errors = validateProfileForm({ ...base, xUrl: "bad", otherUrl: "ftp://a" });
     expect(Object.keys(errors).sort()).toEqual(["otherUrl", "xUrl"]);
   });
+
+  it("自己紹介文は2,000文字まで許可し、2,001文字はエラー", () => {
+    expect(validateProfileForm({ ...base, bio: "あ".repeat(2000) }).bio).toBeUndefined();
+    expect(validateProfileForm({ ...base, bio: "あ".repeat(2001) }).bio).toBe(
+      "自己紹介文は2,000文字以内で入力してください",
+    );
+  });
 });
 
 describe("buildPatch / isDirty", () => {
@@ -103,11 +128,13 @@ describe("buildPatch / isDirty", () => {
     const patch = buildPatch(base, {
       ...base,
       displayName: "新しい名前",
+      bio: "新しい自己紹介\n2行目",
       emailPublic: true,
       instagramUrl: "https://instagram.com/testuser_001",
     });
     expect(patch).toEqual({
       displayName: "新しい名前",
+      bio: "新しい自己紹介\n2行目",
       emailPublic: true,
       instagramUrl: "https://instagram.com/testuser_001",
     });
@@ -115,6 +142,13 @@ describe("buildPatch / isDirty", () => {
 
   it("URL を空・空白だけにすると null（削除）を送る", () => {
     expect(buildPatch(base, { ...base, xUrl: "  " })).toEqual({ xUrl: null });
+  });
+
+  it("自己紹介文を空白だけにすると null、本文の空白と改行は保持する", () => {
+    expect(buildPatch(base, { ...base, bio: " \n　" })).toEqual({ bio: null });
+    expect(buildPatch(base, { ...base, bio: " 前後を保持 \n" })).toEqual({
+      bio: " 前後を保持 \n",
+    });
   });
 
   it("URL は前後の空白を落として送り、空白を足しただけなら変更なし", () => {
@@ -139,9 +173,14 @@ describe("mapServerErrors", () => {
           { loc: ["body", "xUrl"], msg: "URL が不正です" },
           { loc: ["body", "xUrl"], msg: "2 件目" },
           { loc: ["body", "displayName"], msg: 123 },
+          { loc: ["body", "bio"], msg: "長すぎます" },
         ],
       }),
-    ).toEqual({ xUrl: "URL が不正です", displayName: "入力内容を確認してください" });
+    ).toEqual({
+      xUrl: "URL が不正です",
+      displayName: "入力内容を確認してください",
+      bio: "長すぎます",
+    });
   });
 
   it("知らない欄・形が違うものは無視する", () => {
