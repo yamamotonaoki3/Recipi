@@ -1,7 +1,7 @@
 /**
  * ユーザープロフィール（他人）（screens/user-profile.md。Issue #96）。
  *
- * 上から: アバター＋表示名 → フォロー数 / フォロワー数 → フォローボタン →
+ * 上から: アバター＋表示名 → 自己紹介文 → フォロー数 / フォロワー数 → フォローボタン →
  * 公開 ON の連絡先・SNS → その人の公開レシピ一覧（無限スクロール）。
  *
  * 自分の ID で開かれたらマイページへ置き換える（自分自身のプロフィールはマイページ）。
@@ -137,6 +137,12 @@ export function UserProfileScreen({ basePath }: { basePath: string }) {
           {profile.displayName}
         </Text>
       </View>
+
+      {profile.bio?.trim() && (
+        <Text testID="user-profile-bio" className="text-base leading-6 text-neutral-700">
+          {profile.bio}
+        </Text>
+      )}
 
       <View className="flex-row justify-center gap-6">
         <Pressable

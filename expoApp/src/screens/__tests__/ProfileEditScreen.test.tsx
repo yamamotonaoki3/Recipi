@@ -72,6 +72,7 @@ const mockPickImage = pickImage as jest.Mock;
 const profile = {
   id: "u1",
   displayName: "旧名前",
+  bio: "1行目\n2行目",
   email: "testuser_001@example.com",
   avatarUrl: null as string | null,
   followingCount: 0,
@@ -196,6 +197,8 @@ describe("読み込み", () => {
   it("サーバーの値を初期値として表示する", async () => {
     const { getByTestId } = await renderLoaded();
     expect(getByTestId("profile-edit-display-name").props.value).toBe("旧名前");
+    expect(getByTestId("profile-edit-bio").props.value).toBe("1行目\n2行目");
+    expect(getByTestId("profile-edit-bio-count").props.children.join("")).toBe("7 / 2,000文字");
     expect(getByTestId("profile-edit-email").props.children).toBe("testuser_001@example.com");
     expect(getByTestId("profile-edit-email-public").props.value).toBe(false);
     expect(getByTestId("profile-edit-x-url").props.value).toBe("https://x.com/testuser_001");
@@ -217,6 +220,7 @@ describe("保存", () => {
     const { getByTestId } = await renderLoaded();
 
     await fireEvent.changeText(getByTestId("profile-edit-display-name"), "新名前");
+    await fireEvent.changeText(getByTestId("profile-edit-bio"), "新しい紹介\nです");
     await fireEvent(getByTestId("profile-edit-email-public"), "valueChange", true);
     await fireEvent.changeText(getByTestId("profile-edit-x-url"), "");
     await fireEvent.press(getByTestId("profile-edit-save"));
@@ -224,9 +228,28 @@ describe("保存", () => {
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
     expect(mockUpdateMe).toHaveBeenCalledWith({
       displayName: "新名前",
+      bio: "新しい紹介\nです",
       emailPublic: true,
       xUrl: null,
     });
+  });
+
+  it("自己紹介文は改行を保持し、2,000文字で入力を止める", async () => {
+    const { getByTestId } = await renderLoaded();
+    const value = "😀".repeat(2001);
+    await fireEvent.changeText(getByTestId("profile-edit-bio"), value);
+
+    expect(Array.from(getByTestId("profile-edit-bio").props.value)).toHaveLength(2000);
+    expect(getByTestId("profile-edit-bio-count").props.children.join("")).toBe("2,000 / 2,000文字");
+  });
+
+  it("自己紹介文を空欄にすると null を送る", async () => {
+    const { getByTestId } = await renderLoaded();
+    await fireEvent.changeText(getByTestId("profile-edit-bio"), "");
+    await fireEvent.press(getByTestId("profile-edit-save"));
+
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+    expect(mockUpdateMe).toHaveBeenCalledWith({ bio: null });
   });
 
   it("保存中は入力と戻る操作を無効にする", async () => {

@@ -54,6 +54,7 @@ const mockFollowUser = followUser as jest.Mock;
 const other = {
   id: "u2",
   displayName: "testuser_002",
+  bio: "料理が好きです。\nよろしくお願いします。",
   avatarUrl: null,
   followingCount: 3,
   followerCount: 5,
@@ -132,11 +133,14 @@ describe("状態", () => {
 });
 
 describe("表示", () => {
-  it("表示名・フォロー数・公開 ON の連絡先だけを出す", async () => {
+  it("表示名・自己紹介文・フォロー数・公開 ON の連絡先だけを出す", async () => {
     const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
     const { getByTestId, queryByTestId } = await renderLoaded();
 
     expect(getByTestId("user-profile-display-name").props.children).toBe("testuser_002");
+    expect(getByTestId("user-profile-bio").props.children).toBe(
+      "料理が好きです。\nよろしくお願いします。",
+    );
     expect(getByTestId("user-profile-link-email")).toBeTruthy();
     expect(getByTestId("user-profile-link-instagram")).toBeTruthy();
     // X とその他は公開されていない（レスポンスに無い）ので出さない。
@@ -147,6 +151,12 @@ describe("表示", () => {
     expect(openURL).toHaveBeenCalledWith("https://instagram.example.com/testuser_002");
     await fireEvent.press(getByTestId("user-profile-link-email"));
     expect(openURL).toHaveBeenCalledWith("mailto:testuser_002@example.com");
+  });
+
+  it("自己紹介文が未設定なら欄を表示しない", async () => {
+    mockGetUser.mockResolvedValue({ ...other, bio: null });
+    const { queryByTestId } = await renderLoaded();
+    expect(queryByTestId("user-profile-bio")).toBeNull();
   });
 
   it("公開された連絡先が無ければ欄ごと出さない", async () => {
