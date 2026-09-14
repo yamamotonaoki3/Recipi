@@ -10,12 +10,14 @@
  */
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { UserRow } from "@/components/UserRow";
 import type { ConnectionTab, UserRow as UserRowData } from "@/features/follow/api";
 import { useConnections, useToggleFollow } from "@/features/follow/hooks";
+import { getListStatus } from "@/features/list/useListStatus";
 import { useUserProfile } from "@/features/profile/userHooks";
 import { useSession } from "@/store/session";
 
@@ -96,7 +98,7 @@ export function ConnectionsScreen({
             <View key={i} className="h-12 rounded-lg bg-neutral-100" />
           ))}
         </View>
-      ) : query.isError ? (
+      ) : getListStatus(query).isInitialError ? (
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text className="text-neutral-600">読み込みに失敗しました</Text>
           <Pressable
@@ -116,18 +118,19 @@ export function ConnectionsScreen({
           renderItem={({ item }) => (
             <ConnectionRow row={item} isMe={item.id === myId} onPress={() => openUser(item)} />
           )}
+          // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
           ListEmptyComponent={
-            <Text testID="connections-empty" className="mt-10 text-center text-neutral-500">
-              {current.empty}
-            </Text>
+            getListStatus(query).hasListError ? null : (
+              <Text testID="connections-empty" className="mt-10 text-center text-neutral-500">
+                {current.empty}
+              </Text>
+            )
           }
           onEndReached={() => {
             if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
           }}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            query.isFetchingNextPage ? <ActivityIndicator className="my-4" /> : null
-          }
+          ListFooterComponent={<ListFooterStatus query={query} testID="connections" />}
         />
       )}
     </View>

@@ -32,6 +32,7 @@ import {
 } from "@/features/comment/hooks";
 import { useToggleFavorite } from "@/features/favorite/hooks";
 import { useRecordView } from "@/features/history/hooks";
+import { getListStatus } from "@/features/list/useListStatus";
 import { formatQuantity, type Placement } from "@/features/recipe/formatQuantity";
 import { useDeleteRecipe, useRecipe } from "@/features/recipe/hooks";
 import { useSession } from "@/store/session";
@@ -425,17 +426,17 @@ function CommentSection({
   const [deletingCommentIds, setDeletingCommentIds] = useState<Set<string>>(() => new Set());
 
   const items = comments.data?.pages.flatMap((page) => page.items) ?? [];
-  const hasCommentData = comments.data != null;
-  const isInitialCommentError = comments.isError && !hasCommentData;
   /**
    * 一覧の読み込みに失敗する場面は 2 つあり、直し方が違う（Issue #130）。
    * - 続きのページの読み込みの失敗 → `fetchNextPage()` でやり直す
    * - 表示中の一覧の取り直し（投稿・編集・削除のあとなど）の失敗 → `refetch()` でやり直す
-   * どちらも TanStack Query は読めた分を残したまま `isError` を立てるので、`isError` だけ
-   * では見分けられない。続きの失敗にだけ立つ `isFetchNextPageError` で分ける。
+   * 判定は他の一覧画面と共通の `getListStatus` にまとめてある（Issue #132）。
    */
-  const isMoreCommentError = hasCommentData && comments.isFetchNextPageError;
-  const isRefreshCommentError = hasCommentData && comments.isError && !isMoreCommentError;
+  const {
+    isInitialError: isInitialCommentError,
+    isMoreError: isMoreCommentError,
+    isRefreshError: isRefreshCommentError,
+  } = getListStatus(comments);
 
   /** 削除中の集合から ID を外す（成功・失敗どちらでも呼ぶ）。 */
   function finishDeleting(commentId: string) {

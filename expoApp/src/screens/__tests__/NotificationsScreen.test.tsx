@@ -96,7 +96,8 @@ describe("NotificationsScreen", () => {
   });
 
   it("取得失敗時に再試行できる", async () => {
-    mockQuery = { ...mockQuery, isError: true };
+    // まだ 1 件も読めていない失敗（読めた分が残っている失敗は、一覧を残して末尾で再試行する。Issue #132）。
+    mockQuery = { ...mockQuery, data: undefined, isError: true };
     const { getByTestId } = await render(<NotificationsScreen />);
     await fireEvent.press(getByTestId("notifications-retry"));
     expect(mockRefetch).toHaveBeenCalledTimes(1);
@@ -108,5 +109,33 @@ describe("NotificationsScreen", () => {
     const { getByTestId } = await render(<NotificationsScreen />);
     await fireEvent(getByTestId("notifications-list"), "endReached");
     expect(mockFetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("続きの読み込みに失敗しても一覧を残し、再試行は続きを読み直す（Issue #132）", async () => {
+    ready([followed], 1);
+    mockQuery = { ...mockQuery, hasNextPage: true, isError: true, isFetchNextPageError: true };
+    const { getByTestId, getByText, queryByTestId } = await render(<NotificationsScreen />);
+
+    expect(getByText("続きを読み込めませんでした")).toBeTruthy();
+    expect(getByTestId("notification-n1")).toBeTruthy();
+    expect(queryByTestId("notifications-retry")).toBeNull();
+
+    await fireEvent.press(getByTestId("notifications-more-retry"));
+    expect(mockFetchNextPage).toHaveBeenCalledTimes(1);
+    expect(mockRefetch).not.toHaveBeenCalled();
+  });
+
+  it("取り直しに失敗しても一覧を残し、再試行は取り直す（Issue #132）", async () => {
+    ready([followed], 1);
+    mockQuery = { ...mockQuery, isError: true, isFetchNextPageError: false };
+    const { getByTestId, getByText, queryByTestId } = await render(<NotificationsScreen />);
+
+    expect(getByText("最新の状態を読み込めませんでした")).toBeTruthy();
+    expect(getByTestId("notification-n1")).toBeTruthy();
+    expect(queryByTestId("notifications-empty")).toBeNull();
+
+    await fireEvent.press(getByTestId("notifications-refresh-retry"));
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+    expect(mockFetchNextPage).not.toHaveBeenCalled();
   });
 });

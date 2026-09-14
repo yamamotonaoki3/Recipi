@@ -7,23 +7,21 @@
 import { useRouter } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
+import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { RecipeCard } from "@/components/RecipeCard";
+import { getListStatus } from "@/features/list/useListStatus";
 import { useMyRecipes } from "@/features/recipe/hooks";
 
 export function MyRecipesScreen({ basePath }: { basePath: string }) {
   const router = useRouter();
-  const {
-    data,
-    isPending,
-    isError,
-    refetch,
-    isRefetching,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useMyRecipes();
+  const query = useMyRecipes();
+  const { data, isPending, refetch, isRefetching, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    query;
 
   const items = data?.pages.flatMap((p) => p.items) ?? [];
+  // 失敗の種類（まだ何も読めていない / 続きの失敗 / 取り直しの失敗）。Issue #132。
+  // 続きや取り直しの失敗で画面ごとエラーにすると、読めていた一覧と見出しまで消えてしまう。
+  const status = getListStatus(query);
 
   if (isPending) {
     return (
@@ -33,7 +31,7 @@ export function MyRecipesScreen({ basePath }: { basePath: string }) {
     );
   }
 
-  if (isError) {
+  if (status.isInitialError) {
     return (
       <View className="flex-1 items-center justify-center gap-3 bg-white p-6">
         <Text className="text-neutral-600">読み込みに失敗しました</Text>
@@ -66,8 +64,11 @@ export function MyRecipesScreen({ basePath }: { basePath: string }) {
             onPress={() => router.push(`${basePath}/recipes/${item.id}` as never)}
           />
         )}
+        // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
         ListEmptyComponent={
-          <Text className="mt-10 text-center text-neutral-500">まだレシピを投稿していません</Text>
+          status.hasListError ? null : (
+            <Text className="mt-10 text-center text-neutral-500">まだレシピを投稿していません</Text>
+          )
         }
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} />
@@ -76,7 +77,7 @@ export function MyRecipesScreen({ basePath }: { basePath: string }) {
           if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
         }}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={isFetchingNextPage ? <ActivityIndicator className="my-4" /> : null}
+        ListFooterComponent={<ListFooterStatus query={query} testID="my-recipes" />}
       />
     </View>
   );

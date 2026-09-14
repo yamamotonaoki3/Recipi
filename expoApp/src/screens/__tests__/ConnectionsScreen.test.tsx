@@ -164,6 +164,32 @@ describe("状態", () => {
     expect(await findByTestId("connections-row-u3")).toBeTruthy();
   });
 
+  it("続きの読み込みに失敗しても一覧を残し、再試行で次のページを読む（Issue #132）", async () => {
+    mockListConnections
+      .mockResolvedValueOnce({ items: rows, nextCursor: "cursor-1" })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({
+        items: [{ id: "u4", displayName: "testuser_004", avatarUrl: null, isFollowing: false }],
+        nextCursor: null,
+      });
+
+    const { findByTestId, findByText, getByTestId, queryByTestId } = await render(
+      <ConnectionsScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByTestId("connections-row-u3");
+
+    await fireEvent(getByTestId("connections-list"), "onEndReached");
+
+    expect(await findByText("続きを読み込めませんでした")).toBeTruthy();
+    expect(getByTestId("connections-row-u3")).toBeTruthy();
+    expect(queryByTestId("connections-retry")).toBeNull();
+
+    await fireEvent.press(getByTestId("connections-more-retry"));
+
+    expect(await findByTestId("connections-row-u4")).toBeTruthy();
+  });
+
   it("戻り先が無ければ destination の根へ置き換える", async () => {
     mockCanGoBack = false;
     const { getByTestId } = await render(<ConnectionsScreen basePath="/home" />, { wrapper });

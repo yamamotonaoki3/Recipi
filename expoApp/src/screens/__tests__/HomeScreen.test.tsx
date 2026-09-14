@@ -371,6 +371,30 @@ describe("HomeScreen", () => {
     expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: "cursor-1" }));
   });
 
+  it("続きの読み込みに失敗しても一覧を残し、再試行で次のページを読む（Issue #132）", async () => {
+    mockListFeed
+      .mockResolvedValueOnce({ items: [card("1")], nextCursor: "cursor-1" })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ items: [card("2")], nextCursor: null });
+
+    const { findByText, getByTestId, getByText, queryByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+
+    await fireEvent(getByTestId("home-feed-list"), "onEndReached");
+
+    expect(await findByText("続きを読み込めませんでした")).toBeTruthy();
+    expect(getByText("レシピ1")).toBeTruthy();
+    expect(queryByTestId("home-retry")).toBeNull();
+
+    await fireEvent.press(getByTestId("home-more-retry"));
+
+    expect(await findByText("レシピ2")).toBeTruthy();
+    expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: "cursor-1" }));
+  });
+
   it("入力をバックスペースで空にしても通常フィードに戻る（× を押さなくても）", async () => {
     mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
     const { findByText, findByTestId, getByTestId, queryByTestId } = await render(

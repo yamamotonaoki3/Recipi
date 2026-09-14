@@ -1,17 +1,11 @@
 /** 通知一覧（screens/notifications.md、Issue #117）。 */
 import { useRouter } from "expo-router";
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  Pressable,
-  RefreshControl,
-  Text,
-  View,
-} from "react-native";
+import { FlatList, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { NotificationItem } from "@/components/NotificationItem";
+import { getListStatus } from "@/features/list/useListStatus";
 import type { NotificationItem as NotificationItemData } from "@/features/notification/api";
 import {
   useMarkNotificationsRead,
@@ -85,7 +79,7 @@ export function NotificationsScreen({ basePath = "/notifications" }: { basePath?
             </View>
           ))}
         </View>
-      ) : notifications.isError ? (
+      ) : getListStatus(notifications).isInitialError ? (
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text className="text-neutral-600">読み込みに失敗しました</Text>
           <Pressable
@@ -109,10 +103,13 @@ export function NotificationsScreen({ basePath = "/notifications" }: { basePath?
               disabled={!item.readAt && markRead.isPending}
             />
           )}
+          // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
           ListEmptyComponent={
-            <Text testID="notifications-empty" className="mt-10 text-center text-neutral-500">
-              通知はまだありません
-            </Text>
+            getListStatus(notifications).hasListError ? null : (
+              <Text testID="notifications-empty" className="mt-10 text-center text-neutral-500">
+                通知はまだありません
+              </Text>
+            )
           }
           refreshControl={
             <RefreshControl
@@ -126,9 +123,7 @@ export function NotificationsScreen({ basePath = "/notifications" }: { basePath?
             }
           }}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            notifications.isFetchingNextPage ? <ActivityIndicator className="my-4" /> : null
-          }
+          ListFooterComponent={<ListFooterStatus query={notifications} testID="notifications" />}
         />
       )}
     </View>
