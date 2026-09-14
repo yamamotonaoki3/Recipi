@@ -58,6 +58,7 @@
 | `OUTBOX_PROCESSED_RETENTION_DAYS` | 配布済み `notification_outbox` の保持日数 | fixed（目安） | `7` | 1 以上。Issue #72 |
 | `REFRESH_TOKEN_EXPIRED_RETENTION_DAYS` | リフレッシュトークンのチェーンが全部期限切れになってからの保持日数 | fixed（目安） | `30` | 1 以上。再利用検知との関係は [features/auth.md](features/auth.md)。Issue #72 |
 | `RECIPE_VIEWS_MAX_PER_USER` | 閲覧履歴の 1 ユーザーあたりの保持件数 | fixed（目安） | `200` | 1 以上。超過分は定期ジョブが古い順に削除。Issue #72 |
+| `PASSWORD_RESET_ATTEMPT_RETENTION_DAYS` | パスワード再設定の試行記録（成功した request を含む。メール・IP を持つ）の保持日数 | fixed（目安） | `1` | 1 以上。レート制限が数えるのは直近 15 分だけなので 1 日で足りる。Issue #85 |
 | `ANTHROPIC_API_KEY` | Anthropic API キー（**Phase 11・production のみ**） | secret | （`.env.production.example` では空） | 本番のシークレット管理で注入。dev/test では未設定 |
 
 ### frontend-ts（`expoApp/.env` — `EXPO_PUBLIC_` 接頭辞のみクライアントに露出）
