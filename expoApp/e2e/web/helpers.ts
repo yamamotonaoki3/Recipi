@@ -61,31 +61,60 @@ export async function logOut(page: Page): Promise<void> {
   await expect(page.getByTestId("login-email")).toBeVisible({ timeout: 15_000 });
 }
 
-/** ＋ から公開レシピを作り、詳細画面に着くまで待つ。 */
-export async function createPublicRecipe(
+/**
+ * ＋ からレシピを作り、詳細画面に着くまで待つ。作ったレシピの ID（詳細の URL から）を返す。
+ *
+ * 公開スイッチ（`editor-is-public`）の既定は非公開。フィード・検索は公開レシピしか
+ * 返さないので、他人に見せたいときは `isPublic: true` にする。
+ */
+export async function createRecipe(
   page: Page,
   title: string,
   ingredient: string,
-): Promise<void> {
+  { isPublic }: { isPublic: boolean },
+): Promise<string> {
   await page.getByTestId("nav-create").last().click();
   await expect(page.getByTestId("editor-title")).toBeVisible();
   await page.getByTestId("editor-title").fill(title);
   await page.getByTestId("g0-i0-name").fill(ingredient);
   await page.getByTestId("g0-i0-quantity").fill("1");
   await page.getByTestId("step-0-body").fill("[E2E_TEST] 材料を切って炒める");
-  // フィード・検索は公開レシピしか返さないので、公開に切り替える。
-  await page.getByTestId("editor-is-public").click();
+  if (isPublic) await page.getByTestId("editor-is-public").click();
   await page.getByTestId("editor-save").click();
   await expect(page.getByTestId("recipe-detail-title").last()).toHaveText(title, {
     timeout: 15_000,
   });
+  const id = /\/recipes\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+  expect(id, "保存後の詳細の URL からレシピ ID を取れること").toBeTruthy();
+  return id as string;
+}
+
+/** ＋ から公開レシピを作り、詳細画面に着くまで待つ。 */
+export async function createPublicRecipe(
+  page: Page,
+  title: string,
+  ingredient: string,
+): Promise<string> {
+  return createRecipe(page, title, ingredient, { isPublic: true });
 }
 
 /** ホームの検索に語を入れ、検索ボタンで確定する。 */
 export async function searchHome(page: Page, query: string): Promise<void> {
-  await page.getByTestId("nav-home").last().click();
-  await expect(page.getByTestId("home-search-input").last()).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId("home-search-input").last().fill(query);
-  await page.getByTestId("home-search-submit").last().click();
-  await expect(page.getByTestId("home-search-chip").last()).toBeVisible();
+  // 見えている要素だけを取る（前の画面が DOM に隠れて残るため）。
+  const shown = (testId: string) => page.getByTestId(testId).filter({ visible: true }).first();
+  const navHome = page.getByTestId("nav-home").filter({ visible: true }).first();
+  await navHome.click();
+  // ホームのタブの中でレシピを作ったり開いたりしていると、別のタブから「ホーム」に戻っても
+  // その詳細が出る（タブごとにスタックを持つ）。検索窓が見えなければ、選択中のホームを
+  // もう一度押してスタックの根（ホームの一覧）まで戻る（Issue #151 で発生）。
+  const searchInput = shown("home-search-input");
+  const onHomeRoot = await searchInput
+    .waitFor({ state: "visible", timeout: 3_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!onHomeRoot) await navHome.click();
+  await expect(searchInput).toBeVisible({ timeout: 15_000 });
+  await shown("home-search-input").fill(query);
+  await shown("home-search-submit").click();
+  await expect(shown("home-search-chip")).toBeVisible();
 }
