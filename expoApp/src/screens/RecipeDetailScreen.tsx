@@ -23,6 +23,7 @@ import { Avatar } from "@/components/Avatar";
 import { CommentComposer, type CommentDraft } from "@/components/CommentComposer";
 import { CommentItem } from "@/components/CommentItem";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { RecipeDetailSkeleton } from "@/components/Skeleton";
 import { ApiError } from "@/features/auth/api";
 import {
   useComments,
@@ -88,9 +89,10 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
   }, [loadedRecipeId, recordView]);
 
   if (recipeQuery.isPending) {
+    // 初回の読み込み中はスケルトン（recipe-detail.md §4）。
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator />
+      <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
+        <RecipeDetailSkeleton testID="recipe-detail-skeleton" />
       </View>
     );
   }

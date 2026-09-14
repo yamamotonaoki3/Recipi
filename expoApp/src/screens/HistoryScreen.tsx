@@ -7,20 +7,13 @@
  */
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  Pressable,
-  RefreshControl,
-  Text,
-  View,
-} from "react-native";
+import { FlatList, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FeedRecipeCard } from "@/components/FeedRecipeCard";
 import { ListFooterStatus } from "@/components/ListFooterStatus";
+import { RecipeCardSkeletonList } from "@/components/Skeleton";
 import { useClearHistory, useHistory } from "@/features/history/hooks";
 import { getListStatus } from "@/features/list/useListStatus";
 
@@ -76,9 +69,8 @@ export function HistoryScreen({ basePath }: { basePath: string }) {
       </View>
 
       {history.isPending ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator />
-        </View>
+        // 初回の読み込み中はスケルトン（history.md §4）。
+        <RecipeCardSkeletonList testID="history-skeleton" />
       ) : status.isInitialError ? (
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text className="text-neutral-600">読み込みに失敗しました</Text>

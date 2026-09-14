@@ -6,7 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 
+import { setupNativeConnectivity } from "@/features/network/connectivity";
 import { useSession } from "@/store/session";
+
+// スマホの通信状態を TanStack Query に伝える（Issue #133）。アプリの起動時に 1 回だけ
+// つなげばよいので、描画のたびではなくこのファイルを読み込んだときに呼ぶ。
+setupNativeConnectivity();
 
 export function QueryProvider({ children }: { children: ReactNode }) {
   // QueryClient は「キャッシュの本体」。再レンダーで作り直さないよう useState で 1 度だけ生成。

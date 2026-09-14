@@ -5,10 +5,11 @@
  * 本格的なマイページからの導線は #42。当面は (app)/index.tsx の一時リンクから来る。
  */
 import { useRouter } from "expo-router";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { RecipeCard } from "@/components/RecipeCard";
+import { RecipeCardSkeletonList } from "@/components/Skeleton";
 import { getListStatus } from "@/features/list/useListStatus";
 import { useMyRecipes } from "@/features/recipe/hooks";
 
@@ -24,9 +25,10 @@ export function MyRecipesScreen({ basePath }: { basePath: string }) {
   const status = getListStatus(query);
 
   if (isPending) {
+    // 初回の読み込み中はスケルトン（my-recipes.md §4）。
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator />
+      <View className="flex-1 bg-white">
+        <RecipeCardSkeletonList testID="my-recipes-skeleton" />
       </View>
     );
   }
@@ -67,7 +69,9 @@ export function MyRecipesScreen({ basePath }: { basePath: string }) {
         // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
         ListEmptyComponent={
           status.hasListError ? null : (
-            <Text className="mt-10 text-center text-neutral-500">まだレシピを投稿していません</Text>
+            <Text testID="my-recipes-empty" className="mt-10 text-center text-neutral-500">
+              まだレシピを投稿していません
+            </Text>
           )
         }
         refreshControl={

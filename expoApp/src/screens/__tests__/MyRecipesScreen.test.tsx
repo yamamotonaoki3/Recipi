@@ -124,8 +124,20 @@ describe("MyRecipesScreen", () => {
 
   it("空なら空状態メッセージを出す", async () => {
     mockList.mockResolvedValue({ items: [], nextCursor: null });
-    const { findByText } = await render(<MyRecipesScreen basePath="/my-page" />, { wrapper });
-    expect(await findByText("まだレシピを投稿していません")).toBeTruthy();
+    const { findByTestId } = await render(<MyRecipesScreen basePath="/my-page" />, { wrapper });
+    expect((await findByTestId("my-recipes-empty")).props.children).toBe(
+      "まだレシピを投稿していません",
+    );
+  });
+
+  it("初回の読み込み中はスケルトンを出す（my-recipes.md §4。Issue #133）", async () => {
+    mockList.mockReturnValue(new Promise(() => undefined));
+    const { getByTestId, queryByTestId } = await render(<MyRecipesScreen basePath="/my-page" />, {
+      wrapper,
+    });
+
+    expect(getByTestId("my-recipes-skeleton")).toBeTruthy();
+    expect(queryByTestId("my-recipes-list")).toBeNull();
   });
 
   it("エラーなら再試行ボタンを出し、押すと再取得する", async () => {

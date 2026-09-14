@@ -425,6 +425,16 @@ describe("HomeScreen", () => {
     expect(mockListFeed).not.toHaveBeenCalled();
   });
 
+  it("初回の読み込み中はスケルトンのカードリストを出す（home.md §4。Issue #133）", async () => {
+    mockListFeed.mockReturnValue(new Promise(() => undefined));
+    const { getByTestId, queryByTestId } = await render(<HomeScreen basePath="/home" />, {
+      wrapper,
+    });
+
+    expect(getByTestId("home-skeleton")).toBeTruthy();
+    expect(queryByTestId("home-feed-list")).toBeNull();
+  });
+
   it("エラーなら再試行ボタンを出し、押すと再取得する", async () => {
     mockListFeed
       .mockRejectedValueOnce(new Error("boom"))

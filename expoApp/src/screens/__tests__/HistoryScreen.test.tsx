@@ -402,4 +402,14 @@ describe("HistoryScreen", () => {
       Platform.OS = originalOS;
     }
   });
+
+  it("初回の読み込み中はスケルトンを出す（history.md §4。Issue #133）", async () => {
+    mockGetHistory.mockReturnValue(new Promise(() => undefined));
+    const { getByTestId, queryByTestId } = await render(<HistoryScreen basePath="/history" />, {
+      wrapper,
+    });
+
+    expect(getByTestId("history-skeleton")).toBeTruthy();
+    expect(queryByTestId("history-list")).toBeNull();
+  });
 });

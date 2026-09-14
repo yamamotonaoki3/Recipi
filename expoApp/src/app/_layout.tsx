@@ -10,6 +10,7 @@
 import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { useAuthRefresh } from "@/features/auth/useAuthRefresh";
 import { QueryProvider } from "@/providers/QueryProvider";
 import "../global.css"; // NativeWind（className）を有効にする
@@ -35,6 +36,10 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryProvider>
         <AuthBootstrap />
+        {/* オフラインのときだけ上部に出る案内（Issue #133）。オンラインかどうかは
+            TanStack Query が知っているので QueryProvider の内側に置く。ログイン前の
+            画面にも出るよう、ルートに 1 つだけ置く。 */}
+        <OfflineBanner />
         <Stack screenOptions={{ headerShown: false }} />
       </QueryProvider>
     </SafeAreaProvider>
