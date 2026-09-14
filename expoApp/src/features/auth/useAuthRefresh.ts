@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/api/client";
+import { getCurrentUser } from "@/features/auth/api";
 import { usesCookieAuth } from "@/lib/authPlatform";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession, type SessionUser } from "@/store/session";
@@ -60,17 +61,30 @@ export function useAuthRefresh(): AuthRestoreStatus {
         );
         if (error || !data) throw new Error("refresh failed");
 
-        // `/auth/refresh` はユーザー情報を返さないため、ログイン時に
-        // secureStorage へ一緒に保存しておいたものを読み戻す
-        // （useLogin.ts 参照）。壊れている・存在しない場合は null のままで
-        // よい（表示名なしのホームになるだけで、認証自体は復元できる）。
-        const storedUserJson = await secureStorage.getUser();
         let user: SessionUser | null = null;
-        if (storedUserJson) {
-          try {
-            user = JSON.parse(storedUserJson) as SessionUser;
-          } catch {
-            user = null;
+        if (isBrowserWeb) {
+          // WebではHttpOnly Cookieを使うため、ユーザー情報はストレージに
+          // 保存されない。refreshで得たアクセストークンをクライアントが付与して
+          // `/auth/me` を呼び、画面に必要なユーザー情報を復元する。
+          const currentUser = await withTimeout(
+            getCurrentUser(data.accessToken),
+            REFRESH_TIMEOUT_MS,
+          );
+          user = {
+            id: currentUser.id,
+            displayName: currentUser.displayName,
+            avatarUrl: currentUser.avatarUrl,
+          };
+        } else {
+          // ネイティブ／Tauriは従来どおり、ログイン時に安全なストレージへ
+          // 保存したユーザー情報を使う。
+          const storedUserJson = await secureStorage.getUser();
+          if (storedUserJson) {
+            try {
+              user = JSON.parse(storedUserJson) as SessionUser;
+            } catch {
+              user = null;
+            }
           }
         }
 

@@ -25,6 +25,7 @@ import { create } from "zustand";
 export type SessionUser = {
   id: string;
   displayName: string;
+  avatarUrl?: string | null;
 };
 
 type SetAuthArgs = {

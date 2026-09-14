@@ -9,6 +9,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 export type AuthTokenResponse = components["schemas"]["AuthTokenResponse"];
+export type CurrentUserResponse = components["schemas"]["CurrentUserResponse"];
 export type RefreshResponse = components["schemas"]["RefreshResponse"];
 export type UserMeResponse = components["schemas"]["UserMeResponse"];
 export type PasswordResetRequestResponse = components["schemas"]["PasswordResetRequestResponse"];
@@ -65,6 +66,15 @@ export async function reactivate(body: {
   rememberMe: boolean;
 }): Promise<AuthTokenResponse> {
   const { data, error, response } = await api.POST("/api/v1/auth/reactivate", { body });
+  if (error || !data) throw toApiError(error, response.status);
+  return data;
+}
+
+/** CookieでrefreshしたWebクライアントが、現在ユーザーを復元するために使う。 */
+export async function getCurrentUser(accessToken: string): Promise<CurrentUserResponse> {
+  const { data, error, response } = await api.GET("/api/v1/auth/me", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
   if (error || !data) throw toApiError(error, response.status);
   return data;
 }
