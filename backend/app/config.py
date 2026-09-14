@@ -137,6 +137,9 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRED_RETENTION_DAYS: int = Field(default=30, ge=1)
     # 閲覧履歴を 1 ユーザーあたりこの件数まで残す（超えた分は古い順に消す）。
     RECIPE_VIEWS_MAX_PER_USER: int = Field(default=200, ge=1)
+    # パスワード再設定の試行記録（メール・IP を含む）を、作られてからこの日数で消す（Issue #85）。
+    # レート制限が数えるのは直近 15 分だけなので、1 日あれば判定に必要な記録は残る。
+    PASSWORD_RESET_ATTEMPT_RETENTION_DAYS: int = Field(default=1, ge=1)
 
     # --- CORS（フロントからのブラウザ / デスクトップ経由の呼び出しを許可） -
     # Web（Expo）や Tauri はページのオリジン（例 http://localhost:8081）と

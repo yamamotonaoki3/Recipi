@@ -26,46 +26,16 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import text
 from sqlmodel import Session
 
 from app.config import settings
 from app.db import engine
+from app.jobs._batch import delete_in_batches
 from app.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 500
-
-
-def _delete_in_batches(
-    session: Session, table: str, condition: str, cutoff: datetime, batch_size: int
-) -> int:
-    """`condition` を満たす行を `batch_size` 行ずつ消す。消した行数を返す。"""
-    total = 0
-    while True:
-        ids = [
-            row[0]
-            for row in session.execute(
-                text(
-                    f"SELECT id FROM {table} WHERE {condition}"
-                    " ORDER BY id LIMIT :n FOR UPDATE SKIP LOCKED"
-                ),
-                {"cutoff": cutoff, "n": batch_size},
-            ).all()
-        ]
-        if not ids:
-            session.commit()
-            break
-        deleted = session.execute(
-            text(f"DELETE FROM {table} WHERE id = ANY(:ids) AND {condition} RETURNING id"),
-            {"ids": ids, "cutoff": cutoff},
-        ).all()
-        session.commit()
-        total += len(deleted)
-        if len(ids) < batch_size:
-            break
-    return total
 
 
 def cleanup_notifications(
@@ -80,7 +50,7 @@ def cleanup_notifications(
     notification_cutoff = current - timedelta(days=settings.NOTIFICATION_READ_RETENTION_DAYS)
     outbox_cutoff = current - timedelta(days=settings.OUTBOX_PROCESSED_RETENTION_DAYS)
 
-    notifications = _delete_in_batches(
+    notifications = delete_in_batches(
         session,
         "notifications",
         # 既読（read_at あり）で、既読になってから保持期間を過ぎたものだけ。
@@ -88,7 +58,7 @@ def cleanup_notifications(
         notification_cutoff,
         batch_size,
     )
-    outbox = _delete_in_batches(
+    outbox = delete_in_batches(
         session,
         "notification_outbox",
         # 配り終えた（processed_at あり）もので、保持期間を過ぎたものだけ。

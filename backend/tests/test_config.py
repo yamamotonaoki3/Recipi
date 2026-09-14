@@ -83,6 +83,7 @@ def test_non_production_allows_default_jwt_secret(monkeypatch: pytest.MonkeyPatc
         "OUTBOX_PROCESSED_RETENTION_DAYS",
         "REFRESH_TOKEN_EXPIRED_RETENTION_DAYS",
         "RECIPE_VIEWS_MAX_PER_USER",
+        "PASSWORD_RESET_ATTEMPT_RETENTION_DAYS",
     ],
 )
 @pytest.mark.parametrize("value", ["0", "-1"])
@@ -98,13 +99,14 @@ def test_cleanup_settings_reject_non_positive(
 
 
 def test_cleanup_settings_defaults_and_override(monkeypatch: pytest.MonkeyPatch, tmp_path):
-    """既定値（90 / 7 / 30 / 200）で読め、環境変数で上書きできる（Issue #72）。"""
+    """既定値（90 / 7 / 30 / 200 / 1）で読め、環境変数で上書きできる（Issue #72・#85）。"""
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
     for name in (
         "NOTIFICATION_READ_RETENTION_DAYS",
         "OUTBOX_PROCESSED_RETENTION_DAYS",
         "REFRESH_TOKEN_EXPIRED_RETENTION_DAYS",
         "RECIPE_VIEWS_MAX_PER_USER",
+        "PASSWORD_RESET_ATTEMPT_RETENTION_DAYS",
     ):
         monkeypatch.delenv(name, raising=False)
     s = Settings(_env_file=tmp_path / ".env.missing")
@@ -113,7 +115,8 @@ def test_cleanup_settings_defaults_and_override(monkeypatch: pytest.MonkeyPatch,
         s.OUTBOX_PROCESSED_RETENTION_DAYS,
         s.REFRESH_TOKEN_EXPIRED_RETENTION_DAYS,
         s.RECIPE_VIEWS_MAX_PER_USER,
-    ) == (90, 7, 30, 200)
+        s.PASSWORD_RESET_ATTEMPT_RETENTION_DAYS,
+    ) == (90, 7, 30, 200, 1)
 
     monkeypatch.setenv("RECIPE_VIEWS_MAX_PER_USER", "50")
     assert Settings(_env_file=tmp_path / ".env.missing").RECIPE_VIEWS_MAX_PER_USER == 50
