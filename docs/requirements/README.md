@@ -66,4 +66,4 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 7. 受け入れ基準
 8. 未確定・メモ
 
-最終更新: 2026-09-03（MVP = Phase 4 まで に確定。テスト / CI 方針 [testing.md](testing.md)〈BB/WB 併用・pytest/ruff/mypy・jest-expo/MSW・Maestro・行/分岐カバレッジ〉と環境変数カタログ [environment.md](environment.md) を追加。以前: 処理方式 [processing-model.md](processing-model.md) を追加、ボトムナビ 5 destination 化、検索をホーム上部の固定検索窓に、閲覧履歴を追加）
+最終更新: 2026-09-03（MVP = Phase 4 まで に確定。テスト / CI 方針 [testing.md](testing.md)〈BB/WB 併用・pytest/ruff/mypy・jest-expo/MSW・Playwright（Web）/ Appium + WebdriverIO（Android）の E2E・行/分岐カバレッジ〉と環境変数カタログ [environment.md](environment.md) を追加。以前: 処理方式 [processing-model.md](processing-model.md) を追加、ボトムナビ 5 destination 化、検索をホーム上部の固定検索窓に、閲覧履歴を追加）

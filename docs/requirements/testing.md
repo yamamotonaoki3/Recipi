@@ -110,9 +110,14 @@
 | E2E（Android）                 | **Appium**（UiAutomator2 ドライバ）＋ **WebdriverIO** （いずれも Apache 2.0 の無料 OSS） | ビルド済み `.apk` を OS レベルから操作する「ブラックボックス」型のため Expo / React Native のバージョンに依存しない。ホスティング型クラウド（有料）は使わない                                            |
 | 契約                           | `openapi-typescript`（フロント）／ FastAPI 標準出力（backend）                           | [tech-stack.md](tech-stack.md) 「型共有」                                                                                                                                                                |
 
-## 8. 未確定（各 Phase 着手時に `resolve-tech-stack` で確定）
+## 8. 確定済み・未確定（`resolve-tech-stack` で確定）
 
-- 各ツールのバージョン（Phase 0 の scaffold 時に固定）
-- JWT ライブラリ（PyJWT 予定・[todo.md](todo.md) #41）、PostgreSQL メジャーバージョン（[todo.md](todo.md) #5）
-- フロントの状態管理ライブラリ（Zustand / Jotai・[todo.md](todo.md) #7）
+**確定済み**（TS トラック・backend の MVP 実装で確定した項目。Kotlin トラックの選定は [todo.md](todo.md) #5・#7 の「未定」を参照）:
+
+- バージョンの決め方: backend の Python パッケージは `backend/requirements*.txt` で `==` 固定、frontend は `expoApp/package.json` の指定（`^` / `~`）＋ `package-lock.json` で固定（[todo.md](todo.md) #5）
+- JWT ライブラリ = **PyJWT**（[todo.md](todo.md) #41）、PostgreSQL = **18**（[todo.md](todo.md) #5）
+- フロントの状態管理 = **Zustand**（クライアント状態）＋ **TanStack Query**（サーバーデータ）（[todo.md](todo.md) #7）
+
+**未確定**:
+
 - iOS シミュレータの自動検証（macOS ランナーが必要）は未導入。Web は通常 PR の自動 CI、Android は手動 Workflow で検証する。

@@ -59,6 +59,7 @@
 | **MVP 対象外** | Phase 11    | AI 誤字脱字チェック                                                                                                                                                                                      |
 
 - MVP は「レシピを登録・共有し、他ユーザーの公開レシピを探して見る」までを通す。ソーシャル機能（フォロー / お気に入り / 感想 / 通知）は MVP 後。
+- **MVP では iOS の自動検証と、Windows 上での iOS のローカルビルドは行わない**（iOS のビルドには macOS が要る）。iOS に着手するときに EAS Build（クラウド）を検討する（[todo.md](todo.md) #47・[testing.md](testing.md) §8）。
 - **Phase 4 時点のスコープ（MVP）**:
   - ホームは「全体」タブ ＋ 検索窓のみ機能。「フォロー」「フォロワー」「お気に入りレシピ」タブは Phase 5・6 で有効化（[features/home-feed.md](features/home-feed.md) / [screens/home.md](screens/home.md)）。`GET /recipes` は `feed=all` のみでよい。
   - 「通知」destination は空状態固定の最小スタブ（`notifications` テーブル・API は Phase 8。[screens/notifications.md](screens/notifications.md)）。
