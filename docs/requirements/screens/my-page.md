@@ -24,9 +24,10 @@
   2. フォロー・フォロワー → [connections.md](connections.md)
   3. プロフィール編集 → [profile-edit.md](profile-edit.md)
   4. ログアウト
+  5. アカウント削除（ログアウトの下、赤色。確認ダイアログ後にログイン画面へ）
 
 > - **お気に入りレシピ**はここではなく[ホーム](home.md)の「お気に入りレシピ」タブ。
-> - **アカウント削除**は[プロフィール編集](profile-edit.md)画面内のボタン。
+> - アカウント削除は復帰可能な論理削除。公開レシピは残り、再開時にプロフィールとともに復帰する。
 
 ## 4. 状態
 
@@ -39,11 +40,13 @@
 
 - 概要取得 → `GET /users/{自分のID}`（本人取得なので全項目 + フォロー数 / フォロワー数）。
 - 「ログアウト」→ [確認ダイアログ](components.md)（任意）→ `POST /auth/logout`（リフレッシュトークン失効）→ 端末のトークンを破棄 → [ログイン](login.md)へ。
+- 「アカウント削除」→ 確認ダイアログ → `DELETE /users/me` → 端末の認証情報・キャッシュを破棄 → [ログイン](login.md)へ。
 
 ## 6. 使用 API
 
 - `GET /users/{id}`（自分）
 - `POST /auth/logout`
+- `DELETE /users/me`
 - （[`../features/profile.md`](../features/profile.md) / [`../features/auth.md`](../features/auth.md)）
 
 ## 7. プラットフォーム差分

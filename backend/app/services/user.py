@@ -111,7 +111,7 @@ def get_user_profile(
     どちらの形になるかは「閲覧者と対象が同じ人か」だけで決まる。
     """
     target = session.get(User, target_id)
-    if target is None:
+    if target is None or target.deleted_at is not None:
         raise not_found("ユーザーが見つかりません")
 
     if target.id == viewer.id:

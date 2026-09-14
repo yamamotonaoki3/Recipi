@@ -3,7 +3,15 @@
  * `@/api/client` を jest.mock で差し替え、成功/エラー分岐を確認する。
  */
 import { api } from "@/api/client";
-import { ApiError, confirmPasswordReset, login, logout, requestPasswordReset, signup } from "./api";
+import {
+  ApiError,
+  confirmPasswordReset,
+  login,
+  logout,
+  reactivate,
+  requestPasswordReset,
+  signup,
+} from "./api";
 
 jest.mock("@/api/client", () => ({ api: { POST: jest.fn(), PATCH: jest.fn() } }));
 
@@ -74,6 +82,22 @@ describe("login", () => {
     await expect(
       login({ email: "testuser_030@example.com", password: "wrong", rememberMe: false }),
     ).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("reactivate", () => {
+  it("成功すると再開後の認証情報を返す", async () => {
+    mockPost.mockResolvedValue({
+      data: { user: { id: "u1", displayName: "太郎" }, accessToken: "a", refreshToken: "r" },
+      error: undefined,
+      response: { status: 200 },
+    });
+    await expect(
+      reactivate({ email: "testuser_030@example.com", password: "TestPass123!", rememberMe: true }),
+    ).resolves.toMatchObject({ accessToken: "a" });
+    expect(mockPost).toHaveBeenCalledWith("/api/v1/auth/reactivate", {
+      body: { email: "testuser_030@example.com", password: "TestPass123!", rememberMe: true },
+    });
   });
 });
 

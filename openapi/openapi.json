@@ -825,6 +825,32 @@
         "title": "ProfileLinks",
         "type": "object"
       },
+      "ReactivateRequest": {
+        "description": "退会済みアカウントの明示的な再開。ログインと同じ本人確認を要求する。",
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 72,
+            "title": "Password",
+            "type": "string"
+          },
+          "rememberMe": {
+            "default": false,
+            "title": "Rememberme",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "ReactivateRequest",
+        "type": "object"
+      },
       "RecipeAuthor": {
         "properties": {
           "avatarUrl": {
@@ -846,6 +872,17 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "isDeleted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isdeleted"
           }
         },
         "required": [
@@ -1991,6 +2028,16 @@
               }
             },
             "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
           }
         },
         "summary": "Login",
@@ -2148,6 +2195,58 @@
           }
         },
         "summary": "Password Reset Request",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/reactivate": {
+      "post": {
+        "description": "退会済みアカウントを、メールアドレスとパスワードで本人確認して再開する。",
+        "operationId": "reactivate_api_v1_auth_reactivate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Reactivate",
         "tags": [
           "auth"
         ]

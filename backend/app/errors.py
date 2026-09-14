@@ -80,5 +80,12 @@ def conflict(message: str) -> AppError:
     return AppError(409, "CONFLICT", message)
 
 
+def account_deactivated() -> AppError:
+    """正しい認証情報で退会済みアカウントを検出したときの再開確認用エラー。"""
+    return AppError(
+        409, "ACCOUNT_DEACTIVATED", "アカウントは退会中です。再開するには確認してください。"
+    )
+
+
 def too_many_requests(message: str = "試行回数が多すぎます") -> AppError:
     return AppError(429, "TOO_MANY_REQUESTS", message)

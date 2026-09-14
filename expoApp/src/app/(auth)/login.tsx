@@ -10,16 +10,19 @@ import { useState } from "react";
 import { Pressable, Switch, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "@/features/auth/api";
-import { useLogin } from "@/features/auth/useLogin";
+import { useLogin, useReactivate } from "@/features/auth/useLogin";
 import { PasswordField } from "@/components/PasswordField";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [confirmReactivate, setConfirmReactivate] = useState(false);
 
   const login = useLogin();
+  const reactivate = useReactivate();
   const router = useRouter();
 
   function handleSubmit() {
@@ -31,7 +34,9 @@ export default function LoginScreen() {
           router.replace("/home");
         },
         onError: (error) => {
-          if (error instanceof ApiError && error.status === 401) {
+          if (error instanceof ApiError && error.code === "ACCOUNT_DEACTIVATED") {
+            setConfirmReactivate(true);
+          } else if (error instanceof ApiError && error.status === 401) {
             // メール/パスワードのどちらが誤りかは区別しない（enumeration 対策。auth.md）。
             setErrorMessage("メールアドレスまたはパスワードが違います");
           } else {
@@ -94,6 +99,28 @@ export default function LoginScreen() {
       <Link href="/(auth)/signup" className="text-center text-sm text-neutral-600">
         新規登録
       </Link>
+
+      <ConfirmDialog
+        visible={confirmReactivate}
+        testID="account-reactivate-dialog"
+        title="アカウントを再開しますか？"
+        message="プロフィールとレシピを再開します。退会時に削除されたフォロー・お気に入り・感想・通知・閲覧履歴は戻りません。"
+        confirmLabel={reactivate.isPending ? "再開中…" : "再開する"}
+        destructive={false}
+        onCancel={() => setConfirmReactivate(false)}
+        onConfirm={() => {
+          reactivate.mutate(
+            { email, password, rememberMe },
+            {
+              onSuccess: () => {
+                setConfirmReactivate(false);
+                router.replace("/home");
+              },
+              onError: () => setErrorMessage("通信エラー。もう一度お試しください"),
+            },
+          );
+        }}
+      />
     </View>
   );
 }

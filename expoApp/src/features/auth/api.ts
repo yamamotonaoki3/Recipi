@@ -58,6 +58,17 @@ export async function login(body: {
   return data;
 }
 
+/** 退会済みアカウントを、入力済みの認証情報で明示的に再開する。 */
+export async function reactivate(body: {
+  email: string;
+  password: string;
+  rememberMe: boolean;
+}): Promise<AuthTokenResponse> {
+  const { data, error, response } = await api.POST("/api/v1/auth/reactivate", { body });
+  if (error || !data) throw toApiError(error, response.status);
+  return data;
+}
+
 export async function logout(body: { refreshToken?: string } = {}): Promise<void> {
   const { error, response } = await api.POST("/api/v1/auth/logout", { body });
   if (error) throw toApiError(error, response.status);

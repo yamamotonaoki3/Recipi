@@ -188,11 +188,14 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
           <Pressable
             testID="recipe-detail-author"
             onPress={() => {
+              // 退会済み投稿者にはプロフィール画面がないため遷移させない。
+              if (recipe.author.isDeleted) return;
               // 自分の行はマイページ、他人の行はその人のプロフィールを開く。
               if (isOwner) router.navigate("/my-page" as never);
               else router.push(`${basePath}/users/${recipe.author.id}` as never);
             }}
-            accessibilityRole="button"
+            accessibilityRole={recipe.author.isDeleted ? undefined : "button"}
+            accessibilityState={{ disabled: Boolean(recipe.author.isDeleted) }}
             className="flex-row items-center gap-2"
           >
             <Avatar

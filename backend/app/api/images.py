@@ -35,7 +35,7 @@ from sqlmodel import Session, select
 
 from app.db import get_session
 from app.dependencies import get_current_user
-from app.errors import AppError, ErrorEnvelope
+from app.errors import AppError, ErrorEnvelope, unauthorized
 from app.models.pending_storage_deletion import PendingStorageDeletion
 from app.models.upload import Upload
 from app.models.user import User
@@ -61,6 +61,13 @@ def upload_image(
     # ここで弾ければ `pending` 行もオブジェクトも作らずに済む。
     raw = image_service.read_upload_within_limit(file.file)
     processed = image_service.process_image(raw)
+
+    # 画像の検証中に退会が始まることがある。users 行をロック付きで読み直し、
+    # 退会コミット後なら pending upload を作らず 401 にする。これにより
+    # 「退会後に未使用アップロードだけが残る」競合を防ぐ。
+    session.refresh(current_user, with_for_update={"key_share": True})
+    if current_user.deleted_at is not None:
+        raise unauthorized("ユーザーが見つかりません")
 
     # --- ① Tx1 ＋ ② Tx 外の保存 -----------------------------------------
     # アバター（PUT /users/me/avatar）と共通なので `stage_upload` にまとめてある。

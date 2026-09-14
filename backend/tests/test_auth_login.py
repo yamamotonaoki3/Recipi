@@ -6,13 +6,16 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import select
 
+from app.db import engine
 from app.models.refresh_token import RefreshToken
+from app.models.user import User
 from app.security import hash_refresh_token
 
 pytestmark = pytest.mark.integration
 
 SIGNUP_URL = "/api/v1/auth/signup"
 LOGIN_URL = "/api/v1/auth/login"
+REACTIVATE_URL = "/api/v1/auth/reactivate"
 
 PASSWORD = "TestPass123!"
 
@@ -50,6 +53,30 @@ def test_login_wrong_password_returns_401(client: TestClient, unique_email: str)
     _signup(client, unique_email)
     res = client.post(LOGIN_URL, json={"email": unique_email, "password": "WrongPass123!"})
     assert res.status_code == 401
+
+
+def test_deactivated_account_requires_explicit_reactivation(client: TestClient, unique_email: str):
+    _signup(client, unique_email)
+    login_res = client.post(LOGIN_URL, json={"email": unique_email, "password": PASSWORD})
+    assert login_res.status_code == 200
+    headers = {"Authorization": f"Bearer {login_res.json()['accessToken']}"}
+    assert client.delete("/api/v1/users/me", headers=headers).status_code == 204
+
+    login_res = client.post(LOGIN_URL, json={"email": unique_email, "password": PASSWORD})
+    assert login_res.status_code == 409
+    assert login_res.json()["error"]["code"] == "ACCOUNT_DEACTIVATED"
+
+    reactivate_res = client.post(
+        REACTIVATE_URL,
+        json={"email": unique_email, "password": PASSWORD, "rememberMe": True},
+    )
+    assert reactivate_res.status_code == 200, reactivate_res.text
+    assert reactivate_res.json()["accessToken"]
+    with engine.connect() as conn:
+        assert (
+            conn.execute(select(User.deleted_at).where(User.email == unique_email)).scalar_one()
+            is None
+        )
 
 
 def test_login_overlong_password_returns_400(client: TestClient, unique_email: str):

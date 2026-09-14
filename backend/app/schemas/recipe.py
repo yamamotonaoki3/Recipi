@@ -141,6 +141,9 @@ class RecipeAuthor(CamelModel):
     # `users.avatar_key` から組み立てた表示用 URL。アバターが無ければ null
     # （組み立ては app/services/recipe.py の `author_of`）。
     avatar_url: str | None = None
+    # 退会済み投稿者だけ true。通常投稿者では省略してよく、クライアントは
+    # 未指定を false と扱う（既存のレスポンス互換性を保つ）。
+    is_deleted: bool | None = None
 
 
 class RefRecipe(CamelModel):

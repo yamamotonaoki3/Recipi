@@ -141,7 +141,7 @@ erDiagram
 
 | テーブル | 主なカラム / 制約 / インデックス | 詳細 |
 | --- | --- | --- |
-| `users` | `email` UNIQUE NOT NULL / `password_hash` NOT NULL / `display_name` NOT NULL（1〜30）/ `bio` VARCHAR(2000) NULL 可 / `security_question` NOT NULL / `security_answer_hash` NOT NULL / `token_version` INT NOT NULL DEFAULT 0 / `avatar_key` NULL 可 / `email_public`・`x_public`・`instagram_public`・`other_public` BOOLEAN NOT NULL DEFAULT false / `x_url`・`instagram_url`・`other_url` NULL 可（URL 形式・2048 文字まで）/ `follower_count`・`following_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md), [features/follow.md](features/follow.md) |
+| `users` | `email` UNIQUE NOT NULL / `password_hash` NOT NULL / `display_name` NOT NULL（1〜30）/ `bio` VARCHAR(2000) NULL 可 / `security_question` NOT NULL / `security_answer_hash` NOT NULL / `token_version` INT NOT NULL DEFAULT 0 / `deleted_at` timestamptz NULL 可・index（非 NULL = 退会中）/ `avatar_key` NULL 可 / `email_public`・`x_public`・`instagram_public`・`other_public` BOOLEAN NOT NULL DEFAULT false / `x_url`・`instagram_url`・`other_url` NULL 可（URL 形式・2048 文字まで）/ `follower_count`・`following_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) | [features/auth.md](features/auth.md), [features/profile.md](features/profile.md), [features/follow.md](features/follow.md) |
 | `recipes` | `user_id` FK → `users.id`（ON DELETE CASCADE）/ `servings` NOT NULL CHECK(1〜99) / `is_public` NOT NULL / `title` NOT NULL（1〜120）/ `title_normalized` NOT NULL（index、必要なら `pg_trgm`）/ `description`（0〜2000）/ `thumbnail_key` NULL 可 / `favorite_count`・`comment_count` INT NOT NULL DEFAULT 0 CHECK(>= 0) / index(`user_id`) / index(`is_public`, `created_at` DESC) | [features/recipe.md](features/recipe.md) |
 | `ingredient_groups` | `id` PK / `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `name` VARCHAR NULL（0〜40。NULL / 空 = 名前なしグループ）/ `position` INT / UNIQUE(`recipe_id`, `position`) / **UNIQUE(`id`, `recipe_id`)**（`ingredients` からの複合 FK の参照先） | [features/recipe.md](features/recipe.md) |
 | `ingredients` | `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ **複合 FK (`group_id`, `recipe_id`) → `ingredient_groups`(`id`, `recipe_id`)（ON DELETE CASCADE）** — 材料の `recipe_id` が親グループの `recipe_id` と一致することを DB レベルで保証 / UNIQUE(`group_id`, `position`) / `name` NOT NULL（1〜60）/ `name_normalized` NOT NULL・index（必要なら `pg_trgm`）/ `quantity` NUMERIC NULL・CHECK(quantity > 0) / `unit` VARCHAR NULL（0〜20）/ `ref_recipe_id` FK → `recipes.id`（**ON DELETE SET NULL**）NULL 可 / `ref_recipe_title` VARCHAR NULL（0〜120。参照行の目印兼スナップショット）/ CHECK(`ref_recipe_id` <> `recipe_id`。自己参照不可) / index(`ref_recipe_id`) | [features/recipe.md](features/recipe.md), [features/search.md](features/search.md), [features/unit.md](features/unit.md) |
@@ -184,18 +184,11 @@ erDiagram
 - これらは集計クエリの代わりに保持する非正規化カラム。増減の**運用ルール（トランザクション方針）は [non-functional.md](non-functional.md) を正とする**（このファイルは列の定義のみ）。処理方式全体は [processing-model.md](processing-model.md)。
 - 実数との整合性を担保する補正ジョブを定期実行する（cron 起動の管理 CLI コマンド。[processing-model.md](processing-model.md) §8）。
 
-## アカウント削除時の CASCADE（`DELETE FROM users WHERE id = :me`）
+## アカウント退会（論理削除）
 
-- `recipes`（→ さらに `ingredient_groups` → `ingredients` / `steps` / その `recipe` への `favorites` / `recipe_comments` / `notifications`）
-  - 参照は自分のレシピ間のみなので、アカウント削除ではその人の全レシピが消え、参照していた材料も CASCADE で一緒に消える（`ref_recipe_id` SET NULL の出番はない）。
-  - `ref_recipe_id` の SET NULL は、**個別のレシピ削除**（`DELETE /recipes/{id}`）で、その人の他レシピの材料が消えたレシピを参照していたときの挙動（[features/recipe.md](features/recipe.md)）。
-- `follows`（`follower_id` = me と `followee_id` = me の両方向）
-- `favorites`（`user_id` = me）
-- `recipe_comments`（`user_id` = me）
-- `refresh_tokens`（`user_id` = me）
-- `notifications`（`user_id` = me と `actor_id` = me）
-- `recipe_views`（`user_id` = me。加えて、自分のレシピが消えることで `recipe_id` 側の CASCADE でも他ユーザーの `recipe_views` 行が消える）
-- ストレージ上の画像（サムネ・手順画像・感想画像・アバター）は、**CASCADE 削除の前に**そのキーを集めて削除キューに INSERT する（行が消えた後ではキーを取り出せない。[processing-model.md](processing-model.md) §6・§9）。実削除は定期バッチ。
-- アカウント削除は**単一のアプリケーショントランザクション**で行う。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（実装方法の詳細は [todo.md](todo.md) #10）。
-- 削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。
+- `DELETE /users/me` は `users` 行を消さず、`deleted_at` を設定する。公開・非公開を問わず投稿レシピ、材料、手順、アバターは残す。
+- 退会中は認証依存性が拒否するため、本人の非公開レシピも見られない。公開レシピは残り、API の `RecipeAuthor` は `displayName: "アカウント削除済み"`、`avatarUrl: null`、`isDeleted: true` を返す。
+- 同一トランザクションで、本人が起点の `follows`（両方向）・`favorites`・`recipe_comments`・`refresh_tokens`・`notifications`・`recipe_views`・未使用 `uploads`・通知 outbox を明示削除する。残る他ユーザー・レシピのカウント列もこの時点で補正する。
+- 画像削除キューへ入れるのは消える本人の感想画像と未使用アップロードのみ。レシピ画像・アバター・他ユーザーの感想画像は保持する。
+- 再開は `deleted_at = NULL` に戻すだけで、残ったプロフィール・レシピを復帰する。削除済みの関係行は復元しない。
 - 詳細は [features/profile.md](features/profile.md)。

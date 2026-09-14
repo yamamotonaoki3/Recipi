@@ -2,7 +2,7 @@
 
 ## 1. 目的・概要
 
-ユーザーの表示名・自己紹介文・アバター画像・連絡先/SNS リンクを管理する。他ユーザーはプロフィール画面で表示名・自己紹介文・フォロー状況・公開設定された連絡先・その人の公開レシピを見られる。プロフィール編集画面からアカウント削除もできる。
+ユーザーの表示名・自己紹介文・アバター画像・連絡先/SNS リンクを管理する。他ユーザーはプロフィール画面で表示名・自己紹介文・フォロー状況・公開設定された連絡先・その人の公開レシピを見られる。退会はマイページから行い、アカウントと投稿レシピを復帰可能な状態で保持する。
 
 自分のプロフィールの入口はボトムナビゲーション / ナビゲーションレールの「マイページ」destination（[../screens/my-page.md](../screens/my-page.md)）。そこから「プロフィール編集」「自分のレシピ一覧」「フォロー・フォロワー」「ログアウト」に進む。他ユーザーのプロフィールは [../screens/user-profile.md](../screens/user-profile.md)。
 
@@ -20,14 +20,12 @@
 6. Instagram の URL（+ トグル）
 7. その他の URL（+ トグル）
 8. 保存ボタン
-9. （区切り線）
-10. **アカウント削除**ボタン（赤色）
 
-> ログアウトはこの画面には置かない（マイページ側。[../screens/my-page.md](../screens/my-page.md)）。
+> ログアウト・アカウント削除はこの画面には置かない（マイページ側。[../screens/my-page.md](../screens/my-page.md)）。
 
 #### アカウント削除の確認ダイアログ
 
-- 「アカウントを削除すると、投稿したレシピ・フォロー・お気に入り・感想がすべて削除され、元に戻せません。」
+- 「アカウントを削除すると、プロフィールは非表示になります。投稿したレシピは残り、投稿者は『アカウント削除済み』と表示されます。フォロー・お気に入り・感想・通知・閲覧履歴は削除されます。」
 - 「削除する」/「キャンセル」。削除実行でログイン画面へ。
 
 ### ユーザープロフィール（他人）（[../screens/user-profile.md](../screens/user-profile.md)）
@@ -48,12 +46,11 @@
 - 「秘密の質問・答え」はサインアップ時に登録する（[auth.md](auth.md)）。プロフィール編集からの変更手段は未確定（→ [../todo.md](../todo.md)）。
 - **アカウント削除**（`DELETE /users/me`）:
   - 本人のみ。確認 UI 必須。
-  - 削除は**単一のアプリケーショントランザクション**で行う。削除前に `users.token_version` を原子的に `+1` する。CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする。補正ジョブは多層防御であり、削除時の整合を後追いジョブ任せにしない（共通方針は [non-functional.md](../non-functional.md)「カウント列キャッシュのトランザクション方針」、処理方式全体は [processing-model.md](../processing-model.md) §6）。
-  - 削除で本人の `recipes`（→ `ingredients` / `steps` / その `recipe` への `favorites` / `recipe_comments`）、`follows`（`follower_id` = me と `followee_id` = me の両方向）、`favorites`（`user_id` = me）、`recipe_comments`（`user_id` = me）、`refresh_tokens`（`user_id` = me）、`notifications`（`user_id` = me と `actor_id` = me）を CASCADE 削除。
-  - **CASCADE 削除の前に**、消えるサムネ・手順画像・**感想画像**・アバター、および本人所有で未消費の一時アップロード（`uploads` の `pending` / `stored`）のキーを集めて削除キューに INSERT する（同一トランザクション内。行が消えた後ではキーを取り出せない。[../processing-model.md](../processing-model.md) §6・§9）。ストレージからの実削除は定期バッチ。
-  - 実装（Issue #71）: 本人行を `FOR UPDATE` → `token_version` +1 → 関係者の users・関係レシピ・本人の未使用 uploads を id 順にロック → 画像キーを削除キューへ（reason `account_deleted`。`pending` は `delete_after` で遅延）→ 他人のカウント列を減算 → `DELETE FROM users`（CASCADE）。デッドロックは `run_with_retry()` がやり直す。同時に 2 回退会した 2 件目は 401。`password_reset_attempts`（users への FK なし・レート制限の記録）は削除しない
-  - 退会する本人が削除と同時に送った別の書き込み（お気に入り・感想・閲覧記録）は外部キー違反で 500 になりうる（データは壊れない）。レシピ作成は本人行を先に確認して 401、画像アップロードは 401 / 500（孤児は残さない）
-  - 削除は成功時 204。既発行のアクセストークンは、認証依存性のユーザー存在チェック（および削除前の `token_version` 加算）により以降 401 になる。リフレッシュトークンは CASCADE 削除される。専用の冪等機構は設けない（トークン検証の共通方針は [auth.md](auth.md)）。
+  - 削除は**単一のアプリケーショントランザクション**で `users.deleted_at` を設定する論理削除。削除前に `users.token_version` を原子的に `+1` し、本人の `follows`（両方向）・`favorites`・`recipe_comments`・`refresh_tokens`・`notifications`・`recipe_views`・未使用 `uploads` を明示削除する。
+  - 本人のプロフィールは `GET /users/{id}` と `GET /users/{id}/recipes` で 404 にする。一方、公開レシピは残し、フィード・詳細・他ユーザーのお気に入りでは投稿者を「アカウント削除済み」と表示する。投稿者プロフィールへは遷移させない。非公開レシピも保持するが、再開まで閲覧不能。
+  - 消える本人の感想画像と未使用アップロードだけを削除キューへ入れる。投稿レシピのサムネ・手順画像、アバター、他ユーザーの感想・お気に入りは残す。
+  - 生き残るレシピ・他ユーザーのカウント列は同一トランザクションで減算する。デッドロックは `run_with_retry()` がやり直す。
+  - 削除は成功時 204。既発行トークンは以降 401。ログイン時は正しい認証情報に限り 409 `ACCOUNT_DEACTIVATED` を返し、`POST /auth/reactivate` で明示的に再開する。プロフィール・アバター・レシピは復帰するが、削除済みのフォロー・お気に入り・感想・通知・閲覧履歴は復帰しない。
 
 ## 4. データモデル
 
@@ -64,6 +61,7 @@
 | `display_name` | string | NOT NULL（1〜30 文字。空白だけは不可） |
 | `bio` | varchar(2000) | NULL 可（空欄・改行可、最大 2,000 文字） |
 | `avatar_key` | string | NULL 可 |
+| `deleted_at` | timestamptz | NULL 可。非 NULL なら退会中 |
 | `email_public` | boolean | NOT NULL DEFAULT false |
 | `x_url` | string | NULL 可（URL 形式・2048 文字まで） |
 | `x_public` | boolean | NOT NULL DEFAULT false |
@@ -119,7 +117,12 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 ### DELETE `/users/me`（認証必要）
 
 - 削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。
-- 関連データを CASCADE 削除
+- 論理削除。投稿レシピは残し、本人の行動データだけを削除する
+
+### POST `/auth/reactivate`（認証不要）
+
+- body: `email`, `password`, `rememberMe`
+- 退会中のアカウントだけを再開し、通常ログインと同じ認証レスポンスを返す。対象外または認証失敗は 401。
 
 ### GET `/users/{id}/recipes`（認証必要）
 
@@ -146,7 +149,9 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 - [ ] 公開トグル ON にした項目だけが他人のプロフィール画面に表示される
 - [ ] アバターを設定 / 変更 / 削除でき、一覧カード・詳細・プロフィールに反映される
 - [ ] アカウント削除の確認ダイアログを経ないと削除できない
-- [ ] アカウント削除後、そのユーザーのレシピ・フォロー・お気に入り・感想が残らない
+- [ ] アカウント削除後、公開レシピは残り投稿者が「アカウント削除済み」と表示され、プロフィールは開けない
+- [ ] アカウント削除後、本人のフォロー・お気に入り・感想・通知・閲覧履歴が削除される
+- [ ] 退会済みアカウントを確認後に再開でき、プロフィール・レシピが復帰する
 - [ ] アカウント削除後、削除前に発行された既存のアクセストークンでリクエストすると 401 になる
 
 ## 8. 未確定・メモ

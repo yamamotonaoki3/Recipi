@@ -84,5 +84,9 @@ class User(SQLModel, table=True):
     other_url: str | None = Field(default=None, max_length=2048, nullable=True)
     other_public: bool = Field(default=False, nullable=False)
 
+    # 退会は投稿レシピを残す論理削除とする。退会中は認証・プロフィール公開を
+    # 禁止し、レシピの投稿者情報だけを匿名化して返す。再開時は NULL に戻す。
+    deleted_at: datetime | None = Field(default=None, nullable=True, index=True)
+
     created_at: datetime = Field(default_factory=_utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=_utcnow, nullable=False)
