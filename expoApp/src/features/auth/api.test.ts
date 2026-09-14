@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import {
   ApiError,
   confirmPasswordReset,
+  getCurrentUser,
   login,
   logout,
   reactivate,
@@ -13,14 +14,16 @@ import {
   signup,
 } from "./api";
 
-jest.mock("@/api/client", () => ({ api: { POST: jest.fn(), PATCH: jest.fn() } }));
+jest.mock("@/api/client", () => ({ api: { POST: jest.fn(), PATCH: jest.fn(), GET: jest.fn() } }));
 
 const mockPost = api.POST as jest.Mock;
 const mockPatch = api.PATCH as jest.Mock;
+const mockGet = api.GET as jest.Mock;
 
 beforeEach(() => {
   mockPost.mockReset();
   mockPatch.mockReset();
+  mockGet.mockReset();
 });
 
 describe("signup", () => {
@@ -97,6 +100,34 @@ describe("reactivate", () => {
     ).resolves.toMatchObject({ accessToken: "a" });
     expect(mockPost).toHaveBeenCalledWith("/api/v1/auth/reactivate", {
       body: { email: "testuser_030@example.com", password: "TestPass123!", rememberMe: true },
+    });
+  });
+});
+
+describe("getCurrentUser", () => {
+  it("アクセストークン付きで現在ユーザーを取得する", async () => {
+    mockGet.mockResolvedValue({
+      data: { id: "u1", displayName: "太郎", avatarUrl: null },
+      error: undefined,
+      response: { status: 200 },
+    });
+
+    await expect(getCurrentUser("access-token")).resolves.toMatchObject({ id: "u1" });
+    expect(mockGet).toHaveBeenCalledWith("/api/v1/auth/me", {
+      headers: { Authorization: "Bearer access-token" },
+    });
+  });
+
+  it("401ではApiErrorを投げる", async () => {
+    mockGet.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: "UNAUTHORIZED", message: "認証に失敗しました" } },
+      response: { status: 401 },
+    });
+
+    await expect(getCurrentUser("invalid-token")).rejects.toMatchObject({
+      status: 401,
+      code: "UNAUTHORIZED",
     });
   });
 });

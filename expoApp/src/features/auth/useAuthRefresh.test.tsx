@@ -2,10 +2,12 @@ import { renderHook, waitFor } from "@testing-library/react-native";
 
 import { useAuthRefresh } from "./useAuthRefresh";
 import { api } from "@/api/client";
+import { usesCookieAuth } from "@/lib/authPlatform";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
 
-jest.mock("@/api/client", () => ({ api: { POST: jest.fn() } }));
+jest.mock("@/api/client", () => ({ api: { POST: jest.fn(), GET: jest.fn() } }));
+jest.mock("@/lib/authPlatform", () => ({ usesCookieAuth: jest.fn() }));
 jest.mock("@/lib/secureStorage", () => ({
   secureStorage: {
     getRefreshToken: jest.fn(),
@@ -18,11 +20,15 @@ jest.mock("@/lib/secureStorage", () => ({
 }));
 
 const mockPost = api.POST as jest.Mock;
+const mockGet = api.GET as jest.Mock;
+const mockUsesCookieAuth = usesCookieAuth as jest.Mock;
 const mockGetRefreshToken = secureStorage.getRefreshToken as jest.Mock;
 const mockGetUser = secureStorage.getUser as jest.Mock;
 
 beforeEach(() => {
   mockPost.mockReset();
+  mockGet.mockReset();
+  mockUsesCookieAuth.mockReturnValue(false);
   mockGetRefreshToken.mockReset();
   mockGetUser.mockReset();
   mockGetUser.mockResolvedValue(null);
@@ -72,6 +78,52 @@ describe("useAuthRefresh", () => {
 
     await waitFor(() => expect(result.current).toBe("restored"));
     expect(useSession.getState().user).toEqual({ id: "u1", displayName: "太郎" });
+  });
+
+  it("Webではrefresh成功後に現在ユーザーを取得して復元する", async () => {
+    mockUsesCookieAuth.mockReturnValue(true);
+    mockPost.mockResolvedValue({
+      data: { accessToken: "new-access", refreshToken: null },
+      error: undefined,
+    });
+    mockGet.mockResolvedValue({
+      data: { id: "web-user", displayName: "Web太郎", avatarUrl: "https://example.com/avatar.png" },
+      error: undefined,
+      response: { status: 200 },
+    });
+
+    const { result } = await renderHook(() => useAuthRefresh());
+
+    await waitFor(() => expect(result.current).toBe("restored"));
+    expect(mockPost).toHaveBeenCalledWith("/api/v1/auth/refresh", { body: {} });
+    expect(mockGet).toHaveBeenCalledWith("/api/v1/auth/me", {
+      headers: { Authorization: "Bearer new-access" },
+    });
+    expect(useSession.getState().user).toEqual({
+      id: "web-user",
+      displayName: "Web太郎",
+      avatarUrl: "https://example.com/avatar.png",
+    });
+    expect(secureStorage.setRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it("Webで現在ユーザー取得が401なら認証状態を復元しない", async () => {
+    mockUsesCookieAuth.mockReturnValue(true);
+    mockPost.mockResolvedValue({
+      data: { accessToken: "new-access", refreshToken: null },
+      error: undefined,
+    });
+    mockGet.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: "UNAUTHORIZED" } },
+      response: { status: 401 },
+    });
+
+    const { result } = await renderHook(() => useAuthRefresh());
+
+    await waitFor(() => expect(result.current).toBe("not-restored"));
+    expect(useSession.getState().isAuthenticated).toBe(false);
+    expect(secureStorage.deleteRefreshToken).toHaveBeenCalled();
   });
 
   it("refresh が失敗すれば not-restored になり、保存済みトークンを消す", async () => {
