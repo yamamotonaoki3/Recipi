@@ -419,11 +419,32 @@ function CommentSection({
   const [savingCommentIds, setSavingCommentIds] = useState<Set<string>>(() => new Set());
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteFailed, setDeleteFailed] = useState<string | null>(null);
+  // 削除中の感想も ID の集合で覚える。通信中に同じ感想をもう一度削除すると、2 回目の
+  // DELETE が 404 になり、削除できているのに「削除できませんでした」と出てしまうため
+  // （Issue #130）。
+  const [deletingCommentIds, setDeletingCommentIds] = useState<Set<string>>(() => new Set());
 
   const items = comments.data?.pages.flatMap((page) => page.items) ?? [];
   const hasCommentData = comments.data != null;
   const isInitialCommentError = comments.isError && !hasCommentData;
-  const isMoreCommentError = comments.isError && hasCommentData;
+  /**
+   * 一覧の読み込みに失敗する場面は 2 つあり、直し方が違う（Issue #130）。
+   * - 続きのページの読み込みの失敗 → `fetchNextPage()` でやり直す
+   * - 表示中の一覧の取り直し（投稿・編集・削除のあとなど）の失敗 → `refetch()` でやり直す
+   * どちらも TanStack Query は読めた分を残したまま `isError` を立てるので、`isError` だけ
+   * では見分けられない。続きの失敗にだけ立つ `isFetchNextPageError` で分ける。
+   */
+  const isMoreCommentError = hasCommentData && comments.isFetchNextPageError;
+  const isRefreshCommentError = hasCommentData && comments.isError && !isMoreCommentError;
+
+  /** 削除中の集合から ID を外す（成功・失敗どちらでも呼ぶ）。 */
+  function finishDeleting(commentId: string) {
+    setDeletingCommentIds((ids) => {
+      const next = new Set(ids);
+      next.delete(commentId);
+      return next;
+    });
+  }
 
   async function handleCreate(draft: CommentDraft): Promise<boolean> {
     setCreateError(null);
@@ -496,7 +517,7 @@ function CommentSection({
             <Text className="text-neutral-700">再試行</Text>
           </Pressable>
         </View>
-      ) : items.length === 0 && !isMoreCommentError ? (
+      ) : items.length === 0 && !isMoreCommentError && !isRefreshCommentError ? (
         <Text testID="comment-empty" className="text-sm text-neutral-500">
           まだ感想がありません。作ってみたら感想を書いてみましょう
         </Text>
@@ -517,6 +538,7 @@ function CommentSection({
               }}
               onSave={(draft) => handleSave(comment.id, draft)}
               saving={savingCommentIds.has(comment.id)}
+              deleting={deletingCommentIds.has(comment.id)}
               saveError={saveError?.id === comment.id ? saveError.message : null}
             />
           ))}
@@ -548,6 +570,20 @@ function CommentSection({
               </Pressable>
             </View>
           )}
+          {/* 取り直しの失敗。表示中の一覧はそのまま残し、最新の状態だけ読み直す。 */}
+          {isRefreshCommentError && (
+            <View className="items-center gap-2">
+              <Text className="text-sm text-neutral-600">最新の感想を読み込めませんでした</Text>
+              <Pressable
+                testID="comment-refresh-retry"
+                onPress={() => void comments.refetch()}
+                accessibilityRole="button"
+                className="rounded-lg border border-neutral-300 px-4 py-2"
+              >
+                <Text className="text-neutral-700">再試行</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       )}
 
@@ -566,12 +602,16 @@ function CommentSection({
         onConfirm={() => {
           const commentId = deleteTarget;
           setDeleteTarget(null);
-          if (!commentId) return;
+          // 既に削除中の感想は送り直さない（二重の DELETE を防ぐ）。
+          if (!commentId || deletingCommentIds.has(commentId)) return;
+          setDeletingCommentIds((ids) => new Set(ids).add(commentId));
           deleteComment.mutate(
             { commentId },
             {
               onError: (error) =>
                 setDeleteFailed(errorMessage(error, "感想を削除できませんでした")),
+              // 成功・失敗のどちらでも、終わったら削除中の印を外す。
+              onSettled: () => finishDeleting(commentId),
             },
           );
         }}
