@@ -11,7 +11,7 @@
 
 ```text
 Recipi/
-├── .env.development.example / .env.test.example / .env.production.example   環境変数のテンプレート
+├── .env.development.example / .env.demo.example / .env.test.example / .env.production.example   環境変数のテンプレート
 ├── .github/workflows/   CI（backend / frontend-ts / contract / e2e）
 ├── backend/             Python バックエンド（FastAPI）        ← Phase 0 で追加
 ├── expoApp/             TypeScript フロント（Expo / RN）      ← Phase 0 で追加
@@ -35,6 +35,42 @@ cp .env.test.example .env.test
 ```
 
 > フロントエンド（`expoApp/`）の環境変数は `expoApp/.env.development` に置く（Expo は `expoApp/` から読むため）。テンプレートは Issue #34 で `expoApp/.env.*.example` として追加される。
+
+## README 用デモ環境
+
+既存の開発データを削除せずに、専用DB `recipi_demo` へサンプルを投入する手順です。デモ seed は `APP_ENV=demo` **かつ** DB名に `demo` を含む接続先でしか実行できません。
+
+用意される内容は、3ユーザー・3件の公開レシピ・生成したレシピ画像・材料・手順・フォロー・お気に入り・感想・通知・閲覧履歴です。画像はリポジトリ同梱の生成画像であり、外部サイトからの取得物は含みません。
+
+```powershell
+# 1. 開発用の実際の資格情報を保ったまま、デモ用ファイルを作る。
+Copy-Item .env.development .env.demo
+# .env.demo を開き、APP_ENV=demo と DATABASE_URL の末尾を /recipi_demo に変更する。
+
+# 2. DB / MinIO を起動する。
+docker compose --env-file .env.demo -f infra/docker-compose.yml up -d postgres minio
+
+# 3. デモ用DBへマイグレーションとデータ投入を行う。
+cd backend
+$env:APP_ENV = "demo"
+alembic upgrade head
+python -m scripts.seed_demo
+
+# 4. バックエンドをデモ設定で起動する。
+uvicorn app.main:app --reload
+```
+
+> 既に PostgreSQL の Docker ボリュームを作成済みの場合、`infra/postgres-init/02-create-demo-db.sql` は自動実行されません。その場合は `docker compose --env-file .env.demo -f infra/docker-compose.yml exec postgres createdb -U <POSTGRES_USER> recipi_demo` を1回だけ実行してから手順3へ進んでください。
+
+フロントエンドは通常どおり `expoApp/.env.development` の API URL を使って起動します。Webの場合は `http://localhost:8000` を指していることを確認してください。
+
+| 表示名 | メールアドレス | パスワード |
+| --- | --- | --- |
+| デモ料理人 あかり | `demo.chef@example.com` | `DemoPass123!` |
+| デモ食べ歩き みなと | `demo.foodie@example.com` | `DemoPass123!` |
+| デモ初心者 ひなた | `demo.beginner@example.com` | `DemoPass123!` |
+
+同じ seed を再実行しても、デモ料理人 あかりのアカウントが存在する場合は変更せず終了します。デモデータを作り直す必要がある場合も、開発DBではなく `recipi_demo` のみを対象にしてください。
 
 ## ローカルで動かす・テストする（Phase 0 以降）
 

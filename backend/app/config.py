@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     )
 
     # --- 実行環境 ---------------------------------------------------------
-    APP_ENV: Literal["development", "test", "production"] = "development"
+    APP_ENV: Literal["development", "demo", "test", "production"] = "development"
 
     # --- データベース ---------------------------------------------------
     # SQLAlchemy 形式の接続文字列（postgresql+psycopg://...）。
