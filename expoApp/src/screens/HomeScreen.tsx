@@ -22,6 +22,7 @@ import { RecipeCardSkeletonList } from "@/components/Skeleton";
 import type { FeedKind } from "@/features/feed/api";
 import { getListStatus } from "@/features/list/useListStatus";
 import { useFeed } from "@/features/feed/hooks";
+import { validateSearchQuery } from "@/features/search/validateQuery";
 
 /**
  * サブタブ（home-feed.md §2）。どのタブも `feed` の一覧を取得する。
@@ -68,6 +69,8 @@ export function HomeScreen({ basePath }: { basePath: string }) {
   const [input, setInput] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [activeTab, setActiveTab] = useState<SubTabKey>("all");
+  // 検索語が上限（5 語 / 1 語 30 文字）を超えたときの理由。null = 問題なし（Issue #134）。
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   /**
    * 一度でも開いたサブタブ。開いたタブの一覧は、別のタブに切り替えても
@@ -87,6 +90,7 @@ export function HomeScreen({ basePath }: { basePath: string }) {
   const clearSearch = () => {
     setInput("");
     setSubmittedQuery("");
+    setSearchError(null);
   };
 
   /**
@@ -99,6 +103,11 @@ export function HomeScreen({ basePath }: { basePath: string }) {
    * 経路がひとつ増え、利用者にも「どうすれば検索できるか」が見える。
    */
   const submitSearch = () => {
+    // backend と同じ上限（5 語 / 1 語 30 文字）で先に確かめる。超えていたら送らずに
+    // 理由を出す（送るとサーバーが 400 を返し、一覧が「読み込みに失敗しました」になるだけ）。
+    const error = validateSearchQuery(input);
+    setSearchError(error ?? null);
+    if (error) return;
     setSubmittedQuery(input.trim());
   };
 
@@ -112,6 +121,8 @@ export function HomeScreen({ basePath }: { basePath: string }) {
    */
   const handleChangeText = (next: string) => {
     setInput(next);
+    // 入力を直したら、前の検索のエラーは消す（次に検索したときにあらためて確かめる）。
+    setSearchError(null);
     if (next.trim() === "") setSubmittedQuery("");
   };
 
@@ -125,17 +136,20 @@ export function HomeScreen({ basePath }: { basePath: string }) {
    * ネイティブには Esc キーが無いので、この購読自体を行わない。
    */
   const searchInputRef = useRef<TextInput>(null);
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    // setState 関数は再描画をまたいで同一なので、依存配列は空でよい。
+    setInput("");
+    setSubmittedQuery("");
+    // × ボタンや入力変更と同じように、Esc でも検索語エラーを消す。
+    // 消さないと検索窓は空になっても、前のエラーだけが画面に残ってしまうため。
+    setSearchError(null);
+  };
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const node = searchInputRef.current as unknown as HTMLInputElement | null;
     if (!node?.addEventListener) return;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      // setState 関数は再描画をまたいで同一なので、依存配列は空でよい。
-      setInput("");
-      setSubmittedQuery("");
-    };
     node.addEventListener("keydown", handleKeyDown);
     return () => node.removeEventListener("keydown", handleKeyDown);
   }, []);
@@ -155,6 +169,7 @@ export function HomeScreen({ basePath }: { basePath: string }) {
           testID="home-search-input"
           value={input}
           onChangeText={handleChangeText}
+          {...({ onKeyDown: handleKeyDown } as Record<string, unknown>)}
           ref={searchInputRef}
           onSubmitEditing={submitSearch}
           placeholder="レシピ・材料で検索"
@@ -183,6 +198,13 @@ export function HomeScreen({ basePath }: { basePath: string }) {
           <Text className="text-sm font-semibold text-white">検索</Text>
         </Pressable>
       </View>
+
+      {/* 検索語が上限を超えたときの理由（送らずに止めた。Issue #134）。 */}
+      {searchError && (
+        <Text testID="home-search-error" className="px-4 pb-2 text-sm text-red-600">
+          {searchError}
+        </Text>
+      )}
 
       {/* サブタブ */}
       <View className="flex-row gap-1 border-b border-neutral-200 px-2">

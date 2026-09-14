@@ -13,6 +13,8 @@ import {
   SECURITY_ANSWER_MAX_LENGTH,
   SECURITY_QUESTION_MAX_LENGTH,
 } from "./constants";
+// 文字数は backend と同じコードポイントで数える（絵文字を 2 と数えない。Issue #134）。
+import { countChars } from "@/lib/textLength";
 
 export type FieldErrors<Fields extends string> = Partial<Record<Fields, string>>;
 
@@ -29,10 +31,10 @@ export function validateEmail(email: string): string | undefined {
 
 export function validatePassword(password: string): string | undefined {
   if (isBlank(password)) return "パスワードを入力してください";
-  if (password.length < PASSWORD_MIN_LENGTH) {
+  if (countChars(password) < PASSWORD_MIN_LENGTH) {
     return `パスワードは${PASSWORD_MIN_LENGTH}文字以上で入力してください`;
   }
-  if (password.length > PASSWORD_MAX_LENGTH) {
+  if (countChars(password) > PASSWORD_MAX_LENGTH) {
     return `パスワードは${PASSWORD_MAX_LENGTH}文字以内で入力してください`;
   }
   return undefined;
@@ -46,7 +48,7 @@ export function validatePasswordMatch(password: string, confirm: string): string
 
 export function validateDisplayName(displayName: string): string | undefined {
   if (isBlank(displayName)) return "表示名を入力してください";
-  if (Array.from(displayName).length > DISPLAY_NAME_MAX_LENGTH) {
+  if (countChars(displayName) > DISPLAY_NAME_MAX_LENGTH) {
     return `表示名は${DISPLAY_NAME_MAX_LENGTH}文字以内で入力してください`;
   }
   return undefined;
@@ -54,7 +56,7 @@ export function validateDisplayName(displayName: string): string | undefined {
 
 export function validateSecurityQuestion(question: string): string | undefined {
   if (isBlank(question)) return "秘密の質問を入力してください";
-  if (question.length > SECURITY_QUESTION_MAX_LENGTH) {
+  if (countChars(question) > SECURITY_QUESTION_MAX_LENGTH) {
     return `秘密の質問は${SECURITY_QUESTION_MAX_LENGTH}文字以内で入力してください`;
   }
   return undefined;
@@ -62,7 +64,7 @@ export function validateSecurityQuestion(question: string): string | undefined {
 
 export function validateSecurityAnswer(answer: string): string | undefined {
   if (isBlank(answer)) return "秘密の質問の答えを入力してください";
-  if (answer.length > SECURITY_ANSWER_MAX_LENGTH) {
+  if (countChars(answer) > SECURITY_ANSWER_MAX_LENGTH) {
     return `答えは${SECURITY_ANSWER_MAX_LENGTH}文字以内で入力してください`;
   }
   return undefined;

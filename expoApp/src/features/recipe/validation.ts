@@ -5,6 +5,8 @@
  * 上限値は features/recipe.md §2 の表 ＋ Issue #37 で確定した値
  * （グループ 1〜20 / グループ内材料 1〜50 / 手順 1〜100 / 検索 q は別）。
  */
+import { countChars } from "@/lib/textLength";
+
 import type { RecipeFormState, RecipeSubmission } from "./recipeForm";
 import type { ServerValidationError } from "./api";
 
@@ -56,15 +58,17 @@ export function hasAnyError(errors: RecipeFormErrors): boolean {
 export function validateRecipeForm(state: RecipeFormState): RecipeFormErrors {
   const errors: RecipeFormErrors = { groups: {}, ingredients: {}, steps: {} };
 
+  // 文字数はどれも backend と同じコードポイントで数える（絵文字を 2 と数えない。Issue #134）。
+
   // --- タイトル ---
   if (isBlank(state.title)) {
     errors.title = "タイトルを入力してください";
-  } else if (state.title.trim().length > LIMITS.TITLE_MAX) {
+  } else if (countChars(state.title.trim()) > LIMITS.TITLE_MAX) {
     errors.title = `タイトルは${LIMITS.TITLE_MAX}文字以内で入力してください`;
   }
 
   // --- 説明 ---
-  if (state.description.length > LIMITS.DESCRIPTION_MAX) {
+  if (countChars(state.description) > LIMITS.DESCRIPTION_MAX) {
     errors.description = `説明は${LIMITS.DESCRIPTION_MAX}文字以内で入力してください`;
   }
 
@@ -99,7 +103,7 @@ export function validateRecipeForm(state: RecipeFormState): RecipeFormErrors {
 
   let totalIngredients = 0;
   for (const { group, meaningfulRows } of groupsWithMeaningfulRows) {
-    if (group.name.trim().length > LIMITS.GROUP_NAME_MAX) {
+    if (countChars(group.name.trim()) > LIMITS.GROUP_NAME_MAX) {
       errors.groups[group.localId] = `グループ名は${LIMITS.GROUP_NAME_MAX}文字以内です`;
     }
 
@@ -112,11 +116,11 @@ export function validateRecipeForm(state: RecipeFormState): RecipeFormErrors {
     for (const ing of meaningfulRows) {
       if (isBlank(ing.name)) {
         errors.ingredients[ing.localId] = "材料名を入力してください";
-      } else if (ing.name.trim().length > LIMITS.INGREDIENT_NAME_MAX) {
+      } else if (countChars(ing.name.trim()) > LIMITS.INGREDIENT_NAME_MAX) {
         errors.ingredients[ing.localId] = `材料名は${LIMITS.INGREDIENT_NAME_MAX}文字以内です`;
       } else if (!isBlank(ing.quantity) && !(Number(ing.quantity) > 0)) {
         errors.ingredients[ing.localId] = "数量は0より大きい数値で入力してください";
-      } else if (ing.unit.trim().length > LIMITS.UNIT_MAX) {
+      } else if (countChars(ing.unit.trim()) > LIMITS.UNIT_MAX) {
         errors.ingredients[ing.localId] = `単位は${LIMITS.UNIT_MAX}文字以内です`;
       }
     }
@@ -135,7 +139,7 @@ export function validateRecipeForm(state: RecipeFormState): RecipeFormErrors {
     errors.form = `手順は${LIMITS.MAX_STEPS}件までです`;
   }
   for (const step of filledSteps) {
-    if (step.body.trim().length > LIMITS.STEP_BODY_MAX) {
+    if (countChars(step.body.trim()) > LIMITS.STEP_BODY_MAX) {
       errors.steps[step.localId] = `手順は${LIMITS.STEP_BODY_MAX}文字以内で入力してください`;
     }
   }

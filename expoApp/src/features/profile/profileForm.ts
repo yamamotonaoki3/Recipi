@@ -8,6 +8,7 @@
  * （screens/profile-edit.md §5「即時反映」）ので、「保存」ボタンの対象外。
  */
 import { validateDisplayName } from "@/features/auth/validation";
+import { countChars } from "@/lib/textLength";
 
 import type { UpdateMeRequest, UserSelfProfile } from "./api";
 import { isBlankUrl, validateProfileUrl } from "./validation";
@@ -31,9 +32,9 @@ const URL_FIELDS = ["xUrl", "instagramUrl", "otherUrl"] as const;
 const TOGGLE_FIELDS = ["emailPublic", "xPublic", "instagramPublic", "otherPublic"] as const;
 export const BIO_MAX_LENGTH = 2000;
 
-/** JavaScript の UTF-16 ではなく、backend と同じ Unicode コードポイントで数える。 */
+/** JavaScript の UTF-16 ではなく、backend と同じ Unicode コードポイントで数える（共通の countChars）。 */
 export function bioLength(value: string): number {
-  return Array.from(value).length;
+  return countChars(value);
 }
 
 /** 入力を最大文字数で切る。絵文字も 1 文字として扱う。 */
