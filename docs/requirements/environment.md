@@ -6,7 +6,7 @@
 
 ## 1. 環境の切り替え（`APP_ENV`）
 
-- `APP_ENV` = `development` / `test` / `production` の 3 つ。
+- `APP_ENV` = `development` / `demo` / `test` / `production` の 4 つ。
 - backend は `APP_ENV` を見て `.env.<APP_ENV>` を読み込む（`backend/app/config.py`、`pydantic-settings`）。
 - frontend（Expo）は `EXPO_PUBLIC_*` を `.env` から読む（`development` / `test` を切り替え）。
 - テスト実行時は `APP_ENV=test`。**テスト用 DB / ストレージはローカルまたは CI の使い捨てに限定し、本番・ステージングへ接続しない**。
@@ -17,6 +17,7 @@
 | 環境 | 用途 | DB / ストレージ | AI プロバイダ |
 | --- | --- | --- | --- |
 | `development` | ローカル開発（Docker Compose） | compose の `postgres` / `minio` | `local`（ローカル推論・Phase 11） |
+| `demo` | README 用の動作デモ | 開発DBとは別の `recipi_demo` / ローカル MinIO | `local` |
 | `test` | 自動テスト（ローカル・CI） | 使い捨ての Postgres / MinIO | `stub`（決定的ダミー） |
 | `production` | 本番（デプロイ先未定・[todo.md](todo.md) #2） | マネージド DB / S3 互換 | `anthropic`（クラウド LLM・Phase 11） |
 
@@ -28,7 +29,7 @@
 
 | 変数 | 用途 | 値の性質 | 例プレースホルダ | 備考 |
 | --- | --- | --- | --- | --- |
-| `APP_ENV` | 実行環境の選択 | per-env | `development` | `development` / `test` / `production` |
+| `APP_ENV` | 実行環境の選択 | per-env | `development` | `development` / `demo` / `test` / `production` |
 | `DATABASE_URL` | DB 接続文字列 | per-env / secret | `postgresql+psycopg://<user>:<password>@<host>:<port>/<db>` | SQLAlchemy 形式。**組み立てた実際の URL（本物のパスワード・ホストを含む）は `.env.<APP_ENV>`（`.gitignore` 対象）にのみ置く。** `.env.*.example` にはこのテンプレートのまま書く。[tech-stack.md](tech-stack.md) |
 | `POSTGRES_DB` | compose の postgres の DB 名 | per-env | `recipi` | compose とアプリで一致させる |
 | `POSTGRES_USER` | compose の postgres のユーザー | per-env | `recipi` | `root` / `postgres` のような推測可能値は避ける |
@@ -71,9 +72,10 @@
 
 ## 3. `.env.*.example` に書く内容
 
-### リポジトリルート（backend / infra 用・3 ファイル）
+### リポジトリルート（backend / infra 用・4 ファイル）
 
 - **`.env.development.example`**: 上表 backend の development 相当のプレースホルダ。`APP_ENV=development` / `AI_PROVIDER=local` / MinIO のルート資格情報あり。
+- **`.env.demo.example`**: README用デモ環境のテンプレート。`.env.development` の秘密値をコピーして使い、`APP_ENV=demo` と DB 名 `recipi_demo` だけを分離する。`backend/scripts/seed_demo.py` はこの環境以外で実行できない。
 - **`.env.test.example`**: `APP_ENV=test` / `AI_PROVIDER=stub` / テスト用 DB・ストレージのプレースホルダ。
 - **`.env.production.example`**: `APP_ENV=production` / `AI_PROVIDER=anthropic` / `ANTHROPIC_API_KEY=`（空）。`MINIO_ROOT_*` は書かない（本番は S3 互換のマネージドを想定）。
 

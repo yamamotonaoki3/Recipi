@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -16,12 +18,12 @@ def test_settings_reflect_test_env(client):
     assert settings.is_test is True
 
 
-@pytest.mark.parametrize("app_env", ["development", "test", "production"])
+@pytest.mark.parametrize("app_env", ["development", "demo", "test", "production"])
 def test_env_file_path_follows_app_env(app_env: str):
     """APP_ENV ごとに `.env.<APP_ENV>` を指す（分岐の確認）。"""
     path = env_file_for(app_env)
     assert path.name == f".env.{app_env}"
-    assert path.parent.name == "Recipi"  # リポジトリルート直下
+    assert path.parent == Path(__file__).resolve().parents[2]  # リポジトリルート直下
 
 
 def test_missing_required_setting_raises(monkeypatch: pytest.MonkeyPatch, tmp_path):
