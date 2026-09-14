@@ -197,6 +197,15 @@ jobs:
             expoApp/wdio-debug
           retention-days: 7
 
+      # E2E が作ったデータを消し、残数 0 を確かめる（e2e.yml と同じ。Issue #135）。
+      - name: E2E データの後始末（cleanup_e2e.py、残数 0 を確認）
+        if: always()
+        run: python -m scripts.cleanup_e2e --all --yes
+        working-directory: backend
+        env:
+          APP_ENV: development
+          E2E_CLEANUP_ALLOW_ALL: "1"
+
       - name: 後片付け
         if: always()
         run: docker compose --env-file ../.env.development -f docker-compose.yml down -v
