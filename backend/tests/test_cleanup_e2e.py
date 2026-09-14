@@ -30,6 +30,7 @@ from tests.helpers import recipe_payload, upload_image
 SIGNUP_URL = "/api/v1/auth/signup"
 RECIPES_URL = "/api/v1/recipes"
 USERS_URL = "/api/v1/users"
+RESET_REQUEST_URL = "/api/v1/auth/password-reset/request"
 GRACE = timedelta(hours=1)
 
 
@@ -205,6 +206,29 @@ def test_deletes_only_the_target_run_and_queues_images(client: TestClient, keys:
         r=cleanup_e2e.DELETION_REASON,
     )
     assert queued == 3
+
+
+@pytest.mark.integration
+def test_deletes_password_reset_attempts_of_the_target_only(client: TestClient) -> None:
+    """再設定の試行記録は users に紐付かないので、メールのパターンで消す（Issue #149）。"""
+    run_id = _run_id()
+    e2e = _e2e(client, run_id)
+    plain = _plain(client)
+    # 登録済み・未登録（同じ run-id のメール）・対象外の 3 通りで試行記録を作る。
+    unregistered = f"e2euser_resetnone_{uuid.uuid4().hex[:8]}_{run_id}@example.com"
+    for email in (e2e.email, unregistered, plain.email):
+        client.post(RESET_REQUEST_URL, json={"email": email})
+
+    report = _run(email_pattern(run_id, all_users=False), dry_run=True)
+    assert report.reset_attempts == 2
+
+    _run(email_pattern(run_id, all_users=False))
+
+    count_sql = "SELECT count(*) FROM password_reset_attempts WHERE email = :e"
+    assert _count(count_sql, e=e2e.email) == 0
+    assert _count(count_sql, e=unregistered) == 0
+    # 対象外（testuser_）の記録は残る。
+    assert _count(count_sql, e=plain.email) == 1
 
 
 @pytest.mark.integration

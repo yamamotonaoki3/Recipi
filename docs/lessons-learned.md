@@ -50,8 +50,19 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-14 読み込み中・オフラインの表示（Issue #133）を仕上げるとき](#2026-09-14-読み込み中オフラインの表示issue-133を仕上げるとき)
 - [2026-09-14 入力の上限を backend とそろえる（Issue #134）とき](#2026-09-14-入力の上限を-backend-とそろえるissue-134とき)
 - [2026-09-15 ソーシャルの通し E2E と後始末スクリプト（Issue #135）を作るとき](#2026-09-15-ソーシャルの通し-e2e-と後始末スクリプトissue-135を作るとき)
+- [2026-09-15 パスワード再設定の E2E（Issue #149）で複数端末・再読み込みを扱うとき](#2026-09-15-パスワード再設定の-e2eissue-149で複数端末再読み込みを扱うとき)
 
 ---
+
+## 2026-09-15 パスワード再設定の E2E（Issue #149）で複数端末・再読み込みを扱うとき
+
+**きっかけ**: Issue #149（Phase 10）。パスワード再設定の Web / Android E2E と、Web の再読み込み時のログイン復元の E2E を追加し、成功スナックバーを仕様どおりに出すよう実装を直した。計画の Codex レビュー 1 回（重大な指摘 0）、コードの Codex レビュー 3 回（有効な指摘 0。誤指摘 1 は不採用）。
+
+1. **`router.replace` で戻った画面は、元の画面の上にもう 1 枚重なる**（web スタックは前の画面を DOM に残す）。再設定の成功後にログイン画面へ `replace` すると、最初のログイン画面と 2 枚になり、`getByTestId("login-email")` が 2 要素に一致して strict mode 違反になった。**画面を行き来した後の操作は testID でも `filter({ visible: true }).first()` で見えている方を取る**（#135 の `visibleText` と同じ考え方）。
+2. **`page.reload()` は既定で `load` を待つので、MinIO の画像を表示している画面では終わらないことがある**。確かめたいのが「ログイン画面に戻ること」なら `page.reload({ waitUntil: "domcontentloaded" })` にして、画面の状態は続く `expect` で待つ。
+3. **`browser.newContext()` は `playwright.config.ts` の `baseURL` を引き継がない**。2 台目の端末を作るときは `browser.newContext({ baseURL: test.info().project.use.baseURL })`。Cookie は共有されないので「別端末」の再現になる。
+4. **画面間で一度だけ知らせる（成功のスナックバー等）は、URL パラメータで渡し、表示したら `router.setParams({ x: undefined })` で消す**。表示するかは `useState(() => params.x === "done")` で開いた時点に決める（effect の中で `setState` しない。React Compiler の lint 対策）。
+5. **Codex の「その API は存在しない」系の指摘は、`node_modules` の型定義で確かめてから採否を決める**。「`Locator.filter()` は `visible` を受け付けない」という P1 は、Playwright 1.63 の `types.d.ts` に `visible?: boolean` があり、型チェックと実行も通っていたので不採用にした。
 
 ## 2026-09-15 ソーシャルの通し E2E と後始末スクリプト（Issue #135）を作るとき
 

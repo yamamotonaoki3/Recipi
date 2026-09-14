@@ -27,7 +27,6 @@ export default function PasswordResetScreen() {
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
   const [fieldErrors, setFieldErrors] = useState<PasswordResetConfirmFieldErrors>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const requestReset = useRequestPasswordReset();
   const confirmReset = useConfirmPasswordReset();
@@ -67,8 +66,9 @@ export default function PasswordResetScreen() {
       { email, securityAnswer, newPassword },
       {
         onSuccess: () => {
-          setSuccessMessage("パスワードを再設定しました");
-          router.replace("/(auth)/login");
+          // 成功はログイン画面のスナックバーで知らせる（screens/password-reset.md §4）。
+          // この画面で文言を出してもすぐ遷移して見えないため、パラメータで伝える。
+          router.replace("/(auth)/login?reset=done");
         },
         onError: (error) => {
           if (error instanceof ApiError && error.status === 429) {
@@ -160,7 +160,6 @@ export default function PasswordResetScreen() {
       )}
 
       {errorMessage && <Text className="text-sm text-red-600">{errorMessage}</Text>}
-      {successMessage && <Text className="text-sm text-green-700">{successMessage}</Text>}
 
       <Link href="/(auth)/login" className="text-center text-sm text-neutral-600">
         ログインへ

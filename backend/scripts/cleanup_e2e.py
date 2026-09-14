@@ -163,6 +163,8 @@ class CleanupReport:
     collateral: dict[str, int]
     image_keys: list[tuple[str, datetime | None]]
     shared_keys: list[str] = field(default_factory=list)
+    # パスワード再設定の試行記録（users に紐付かずメールで記録されるので CASCADE で消えない）。
+    reset_attempts: int = 0
     deleted: bool = False
 
     @property
@@ -201,6 +203,16 @@ def _count_all(session: Session, checks: dict[str, str], params: dict[str, Any])
     return {
         name: int(session.execute(text(sql), params).scalar_one()) for name, sql in checks.items()
     }
+
+
+def _count_reset_attempts(session: Session, pattern: str) -> int:
+    """対象メールのパターンに合うパスワード再設定の試行記録の件数。"""
+    return int(
+        session.execute(
+            text("SELECT count(*) FROM password_reset_attempts WHERE email LIKE :p"),
+            {"p": pattern},
+        ).scalar_one()
+    )
 
 
 def _collect_keys(
@@ -254,6 +266,7 @@ def cleanup(
     collateral = _count_all(session, COLLATERAL_CHECKS, params)
     image_keys, shared_keys = _collect_keys(session, params, pending_grace)
     report = CleanupReport(users, recipes, collateral, image_keys, shared_keys)
+    report.reset_attempts = _count_reset_attempts(session, pattern)
 
     if dry_run:
         session.rollback()
@@ -268,6 +281,10 @@ def cleanup(
     # 先に書き出しておかないと、次の DELETE の CASCADE が同じ行を先に消してしまい、
     # コミット時の ORM の削除が 0 行になって SQLAlchemy が警告を出す。
     session.flush()
+    # パスワード再設定の試行記録は users に紐付かない（メールで記録）ので、CASCADE では
+    # 消えない。同じトランザクションで、ユーザーを消す前に対象メールの分を消す。
+    # 未登録メールで試した記録も同じメールのパターンに入るので、ここで一緒に消える。
+    session.execute(text("DELETE FROM password_reset_attempts WHERE email LIKE :p"), {"p": pattern})
     session.execute(text(f"DELETE FROM users WHERE id = {_U}"), params)
     session.commit()
     report.deleted = True
@@ -278,6 +295,7 @@ def cleanup(
             text("SELECT count(*) FROM users WHERE email LIKE :p"), {"p": pattern}
         ).scalar_one()
     )
+    remaining["password_reset_attempts"] = _count_reset_attempts(session, pattern)
     session.rollback()
     left = {name: n for name, n in remaining.items() if n}
     if left:
@@ -337,7 +355,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"ユーザー {len(report.users)} 件 / レシピ {len(report.recipes)} 件 / "
         f"削除キューに積む画像 {len(report.image_keys)} 件 / 共有のため残す画像 "
-        f"{len(report.shared_keys)} 件 / 巻き添え {report.collateral}"
+        f"{len(report.shared_keys)} 件 / パスワード再設定の試行記録 {report.reset_attempts} 件 / "
+        f"巻き添え {report.collateral}"
     )
     if args.dry_run:
         print("dry-run のため何も消していません。")

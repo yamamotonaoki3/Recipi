@@ -76,7 +76,7 @@ describe("PasswordResetScreen", () => {
     expect(mockConfirm).not.toHaveBeenCalled();
   });
 
-  it("ステップ2の送信が成功すると、ログイン画面へ遷移する", async () => {
+  it("ステップ2の送信が成功すると、成功を伝えるパラメータ付きでログイン画面へ遷移する", async () => {
     mockRequest.mockResolvedValue({ securityQuestion: "好きな食べ物は？" });
     mockConfirm.mockResolvedValue(undefined);
 
@@ -93,7 +93,7 @@ describe("PasswordResetScreen", () => {
     );
     await fireEvent.press(getByTestId("password-reset-confirm-submit"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(auth)/login"));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(auth)/login?reset=done"));
     expect(mockConfirm).toHaveBeenCalledWith({
       email: "testuser_040@example.com",
       securityAnswer: "ラーメン",
