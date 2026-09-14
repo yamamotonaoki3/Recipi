@@ -13,10 +13,12 @@ import { ActivityIndicator, FlatList, Linking, Pressable, Text, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
+import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { RecipeCard } from "@/components/RecipeCard";
 import { FollowButton } from "@/components/UserRow";
 import { ApiError } from "@/features/auth/api";
 import { useToggleFollow } from "@/features/follow/hooks";
+import { getListStatus } from "@/features/list/useListStatus";
 import type { UserPublicProfile, UserSelfProfile } from "@/features/profile/api";
 import { useUserProfile, useUserRecipes } from "@/features/profile/userHooks";
 import { useSession } from "@/store/session";
@@ -213,7 +215,9 @@ export function UserProfileScreen({ basePath }: { basePath: string }) {
       )}
 
       <Text className="mt-2 text-base font-bold text-neutral-900">公開レシピ</Text>
-      {recipesQuery.isError && (
+      {/* まだ 1 件も読めていない失敗だけここに出す。続きや取り直しの失敗は、一覧を残したまま
+          末尾の ListFooterStatus で失敗の種類に合った再試行を出す（Issue #132）。 */}
+      {getListStatus(recipesQuery).isInitialError && (
         <View className="flex-row items-center gap-3">
           <Text className="text-sm text-neutral-500">レシピの読み込みに失敗しました</Text>
           <Pressable
@@ -262,7 +266,7 @@ export function UserProfileScreen({ basePath }: { basePath: string }) {
         }}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
-          recipesQuery.isFetchingNextPage ? <ActivityIndicator className="my-4" /> : null
+          <ListFooterStatus query={recipesQuery} testID="user-profile-recipes" />
         }
       />
     </View>

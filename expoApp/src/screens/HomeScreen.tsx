@@ -26,7 +26,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FeedRecipeCard } from "@/components/FeedRecipeCard";
+import { ListFooterStatus } from "@/components/ListFooterStatus";
 import type { FeedKind } from "@/features/feed/api";
+import { getListStatus } from "@/features/list/useListStatus";
 import { useFeed } from "@/features/feed/hooks";
 
 /**
@@ -279,6 +281,8 @@ function FeedList({
   const items = result.data?.pages.flatMap((p) => p.items) ?? [];
   const suffix = feed === "all" ? "" : `-${feed}`;
   const cardPrefix = feed === "all" ? "feed-recipe" : `feed-${feed}-recipe`;
+  // 失敗の種類（まだ何も読めていない / 続きの失敗 / 取り直しの失敗）。Issue #132。
+  const status = getListStatus(result);
 
   return (
     <View className="flex-1" style={{ display: visible ? "flex" : "none" }}>
@@ -286,7 +290,7 @@ function FeedList({
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
-      ) : result.isError ? (
+      ) : status.isInitialError ? (
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text className="text-neutral-600">読み込みに失敗しました</Text>
           <Pressable
@@ -311,13 +315,16 @@ function FeedList({
               onPress={() => router.push(`${basePath}/recipes/${item.id}` as never)}
             />
           )}
+          // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
           ListEmptyComponent={
-            <Text
-              testID={`home-feed-empty${suffix}`}
-              className="mt-10 text-center text-neutral-500"
-            >
-              {query !== "" ? `「${query}」に一致するレシピは見つかりませんでした` : emptyText}
-            </Text>
+            status.hasListError ? null : (
+              <Text
+                testID={`home-feed-empty${suffix}`}
+                className="mt-10 text-center text-neutral-500"
+              >
+                {query !== "" ? `「${query}」に一致するレシピは見つかりませんでした` : emptyText}
+              </Text>
+            )
           }
           refreshControl={
             <RefreshControl
@@ -329,9 +336,7 @@ function FeedList({
             if (result.hasNextPage && !result.isFetchingNextPage) void result.fetchNextPage();
           }}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            result.isFetchingNextPage ? <ActivityIndicator className="my-4" /> : null
-          }
+          ListFooterComponent={<ListFooterStatus query={result} testID={`home${suffix}`} />}
         />
       )}
     </View>

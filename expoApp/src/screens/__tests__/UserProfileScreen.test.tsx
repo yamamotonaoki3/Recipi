@@ -182,6 +182,29 @@ describe("表示", () => {
     );
   });
 
+  it("レシピの続きの読み込みに失敗しても一覧を残し、再試行で次のページを読む（Issue #132）", async () => {
+    mockListUserRecipes
+      .mockResolvedValueOnce({ items: [recipe], nextCursor: "cursor-1" })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({
+        items: [{ ...recipe, id: "r2", title: "[E2E_TEST] テスト肉じゃが" }],
+        nextCursor: null,
+      });
+    const { findByTestId, findByText, getByTestId, queryByTestId } = await renderLoaded();
+    await findByTestId("user-recipe-r1");
+
+    await fireEvent(getByTestId("user-profile-list"), "onEndReached");
+
+    expect(await findByText("続きを読み込めませんでした")).toBeTruthy();
+    expect(getByTestId("user-recipe-r1")).toBeTruthy();
+    // 上部の再試行は「まだ 1 件も読めていない失敗」だけに出す。
+    expect(queryByTestId("user-profile-recipes-retry")).toBeNull();
+
+    await fireEvent.press(getByTestId("user-profile-recipes-more-retry"));
+
+    expect(await findByTestId("user-recipe-r2")).toBeTruthy();
+  });
+
   it("フォロー数 / フォロワー数のタップで一覧の該当タブへ", async () => {
     const { getByTestId } = await renderLoaded();
     await fireEvent.press(getByTestId("user-profile-following"));

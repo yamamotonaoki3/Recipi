@@ -139,4 +139,29 @@ describe("MyRecipesScreen", () => {
     await fireEvent.press(await findByTestId("my-recipes-retry"));
     expect(await findByText("レシピ1")).toBeTruthy();
   });
+
+  it("続きの読み込みに失敗しても一覧と見出しを残し、再試行で次のページを読む（Issue #132）", async () => {
+    mockList
+      .mockResolvedValueOnce({ items: [card("1", true)], nextCursor: "cursor-1" })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ items: [card("2", true)], nextCursor: null });
+
+    const { findByText, getByTestId, getByText, queryByTestId } = await render(
+      <MyRecipesScreen basePath="/my-page" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+
+    await fireEvent(getByTestId("my-recipes-list"), "onEndReached");
+
+    expect(await findByText("続きを読み込めませんでした")).toBeTruthy();
+    // 以前は画面ごとエラーに差し替わり、見出しも一覧も消えていた。
+    expect(getByText("自分のレシピ")).toBeTruthy();
+    expect(getByText("レシピ1")).toBeTruthy();
+    expect(queryByTestId("my-recipes-retry")).toBeNull();
+
+    await fireEvent.press(getByTestId("my-recipes-more-retry"));
+
+    expect(await findByText("レシピ2")).toBeTruthy();
+  });
 });

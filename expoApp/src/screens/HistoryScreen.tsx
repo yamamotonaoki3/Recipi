@@ -20,7 +20,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FeedRecipeCard } from "@/components/FeedRecipeCard";
+import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { useClearHistory, useHistory } from "@/features/history/hooks";
+import { getListStatus } from "@/features/list/useListStatus";
 
 export function HistoryScreen({ basePath }: { basePath: string }) {
   const router = useRouter();
@@ -41,6 +43,8 @@ export function HistoryScreen({ basePath }: { basePath: string }) {
   }, [clearedNotice]);
 
   const items = history.data?.pages.flatMap((p) => p.items) ?? [];
+  // 失敗の種類（まだ何も読めていない / 続きの失敗 / 取り直しの失敗）。Issue #132。
+  const status = getListStatus(history);
 
   return (
     <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
@@ -75,7 +79,7 @@ export function HistoryScreen({ basePath }: { basePath: string }) {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
-      ) : history.isError ? (
+      ) : status.isInitialError ? (
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text className="text-neutral-600">読み込みに失敗しました</Text>
           <Pressable
@@ -100,10 +104,13 @@ export function HistoryScreen({ basePath }: { basePath: string }) {
               onPress={() => router.push(`${basePath}/recipes/${item.id}` as never)}
             />
           )}
+          // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
           ListEmptyComponent={
-            <Text testID="history-empty" className="mt-10 text-center text-neutral-500">
-              まだ見たレシピがありません
-            </Text>
+            status.hasListError ? null : (
+              <Text testID="history-empty" className="mt-10 text-center text-neutral-500">
+                まだ見たレシピがありません
+              </Text>
+            )
           }
           refreshControl={
             <RefreshControl
@@ -115,9 +122,7 @@ export function HistoryScreen({ basePath }: { basePath: string }) {
             if (history.hasNextPage && !history.isFetchingNextPage) void history.fetchNextPage();
           }}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            history.isFetchingNextPage ? <ActivityIndicator className="my-4" /> : null
-          }
+          ListFooterComponent={<ListFooterStatus query={history} testID="history" />}
         />
       )}
 

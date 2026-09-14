@@ -344,4 +344,62 @@ describe("HistoryScreen", () => {
     await fireEvent.press(await findByTestId("history-retry"));
     expect(await findByText("レシピ1")).toBeTruthy();
   });
+
+  it("続きの読み込みに失敗しても一覧を残し、再試行で次のページを読む（Issue #132）", async () => {
+    mockGetHistory
+      .mockResolvedValueOnce({ items: [item("1")], nextCursor: "cursor-1" })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ items: [item("2")], nextCursor: null });
+
+    const { findByText, getByTestId, getByText, queryByTestId } = await render(
+      <HistoryScreen basePath="/history" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+
+    await fireEvent(getByTestId("history-list"), "onEndReached");
+
+    expect(await findByText("続きを読み込めませんでした")).toBeTruthy();
+    // 読めていた一覧は残り、画面全体のエラーにはならない。
+    expect(getByText("レシピ1")).toBeTruthy();
+    expect(queryByTestId("history-retry")).toBeNull();
+
+    await fireEvent.press(getByTestId("history-more-retry"));
+
+    expect(await findByText("レシピ2")).toBeTruthy();
+    expect(mockGetHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: "cursor-1" }),
+    );
+  });
+
+  it("取り直しに失敗しても一覧を残し、取り直しの再試行で戻る（Issue #132）", async () => {
+    const originalOS = Platform.OS;
+    Platform.OS = "web";
+    try {
+      mockGetHistory
+        .mockResolvedValueOnce({ items: [item("1")], nextCursor: null })
+        .mockRejectedValueOnce(new Error("network"))
+        .mockResolvedValueOnce({ items: [item("1"), item("3")], nextCursor: null });
+
+      const { findByText, getByTestId, getByText, queryByTestId } = await render(
+        <HistoryScreen basePath="/history" />,
+        { wrapper },
+      );
+      await findByText("レシピ1");
+
+      // デスクトップの「更新」で取り直し → 失敗させる。
+      await fireEvent.press(getByTestId("history-refresh"));
+
+      expect(await findByText("最新の状態を読み込めませんでした")).toBeTruthy();
+      expect(getByText("レシピ1")).toBeTruthy();
+      expect(queryByTestId("history-more-retry")).toBeNull();
+
+      await fireEvent.press(getByTestId("history-refresh-retry"));
+
+      expect(await findByText("レシピ3")).toBeTruthy();
+      await waitFor(() => expect(queryByTestId("history-refresh-retry")).toBeNull());
+    } finally {
+      Platform.OS = originalOS;
+    }
+  });
 });
