@@ -41,4 +41,17 @@ test("signup → 自動ログイン確認 → logout → 再ログイン", async
   await page.getByTestId("login-submit").click();
 
   await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
+
+  // 再読み込みしてもログインしたまま（Web は HttpOnly Cookie で復元する。Issue #149）。
+  await page.reload();
+  await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId("nav-my-page").last().click();
+  await expect(page.getByTestId("my-page-display-name").last()).toHaveText("E2EUser B");
+
+  // ログアウト後の再読み込みではログイン画面のまま（Cookie も消えている）。
+  await page.getByTestId("my-page-logout").last().click();
+  await expect(page.getByTestId("login-email")).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("login-email")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("home-logo")).toHaveCount(0);
 });

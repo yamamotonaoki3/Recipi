@@ -2,7 +2,7 @@
  * ログイン画面のテスト（BB: フォーム入力→送信、401時のエラー表示）。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import LoginScreen from "../login";
@@ -10,12 +10,16 @@ import { ApiError, login, reactivate } from "@/features/auth/api";
 import { useSession } from "@/store/session";
 
 const mockReplace = jest.fn();
+const mockSetParams = jest.fn();
+// 画面を開いたときの URL パラメータ（再設定の成功は `reset=done`）。テストごとに差し替える。
+let mockParams: { reset?: string } = {};
 
 jest.mock("expo-router", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Text } = require("react-native") as typeof import("react-native");
   return {
-    useRouter: () => ({ replace: mockReplace }),
+    useRouter: () => ({ replace: mockReplace, setParams: mockSetParams }),
+    useLocalSearchParams: () => mockParams,
     Link: ({ children }: { children: ReactNode }) => <Text>{children}</Text>,
   };
 });
@@ -33,6 +37,8 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 beforeEach(() => {
+  mockParams = {};
+  mockSetParams.mockClear();
   mockReplace.mockClear();
   mockLogin.mockReset();
   mockReactivate.mockReset();
@@ -97,6 +103,34 @@ describe("LoginScreen", () => {
     await fireEvent.press(getByTestId("login-submit"));
 
     expect(await findByText("通信エラー。もう一度お試しください")).toBeTruthy();
+  });
+
+  describe("パスワード再設定の成功スナックバー（Issue #149）", () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("reset=done で開くとスナックバーを出し、パラメータを消して 3 秒で閉じる", async () => {
+      jest.useFakeTimers();
+      mockParams = { reset: "done" };
+
+      const { getByTestId, queryByTestId } = await render(<LoginScreen />, { wrapper });
+
+      expect(getByTestId("login-reset-success-snackbar")).toBeTruthy();
+      expect(mockSetParams).toHaveBeenCalledWith({ reset: undefined });
+
+      await act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+      expect(queryByTestId("login-reset-success-snackbar")).toBeNull();
+    });
+
+    it("パラメータ無しで開いたときは出さない", async () => {
+      const { queryByTestId } = await render(<LoginScreen />, { wrapper });
+
+      expect(queryByTestId("login-reset-success-snackbar")).toBeNull();
+      expect(mockSetParams).not.toHaveBeenCalled();
+    });
   });
 
   it("退会済みアカウントは確認後に再開してホームへ遷移する", async () => {

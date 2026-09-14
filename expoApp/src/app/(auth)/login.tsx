@@ -5,8 +5,8 @@
  * （useMutation）を呼ぶ。成功したら**常にホーム（`/(app)`）へ遷移する**
  * （Issue #53。以前の「弾かれる前に行こうとしていた画面へ戻す」挙動は廃止）。
  */
-import { Link, useRouter } from "expo-router";
-import { useState } from "react";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, Switch, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "@/features/auth/api";
@@ -24,6 +24,19 @@ export default function LoginScreen() {
   const login = useLogin();
   const reactivate = useReactivate();
   const router = useRouter();
+
+  // パスワード再設定の成功をスナックバーで知らせる（screens/password-reset.md §4）。
+  // 再設定画面は `?reset=done` を付けてここへ移る。表示するかは開いた時点で決め、
+  // 表示したらパラメータを消す（戻る・再マウントで出し直さないため）。数秒で自然に消す。
+  const params = useLocalSearchParams<{ reset?: string }>();
+  const [resetNotice, setResetNotice] = useState(() => params.reset === "done");
+
+  useEffect(() => {
+    if (!resetNotice) return;
+    router.setParams({ reset: undefined });
+    const timer = setTimeout(() => setResetNotice(false), 3000);
+    return () => clearTimeout(timer);
+  }, [resetNotice, router]);
 
   function handleSubmit() {
     setErrorMessage(null);
@@ -99,6 +112,15 @@ export default function LoginScreen() {
       <Link href="/(auth)/signup" className="text-center text-sm text-neutral-600">
         新規登録
       </Link>
+
+      {resetNotice && (
+        <View
+          testID="login-reset-success-snackbar"
+          className="absolute inset-x-4 bottom-6 rounded-lg bg-neutral-800 px-4 py-3"
+        >
+          <Text className="text-sm text-white">パスワードを再設定しました</Text>
+        </View>
+      )}
 
       <ConfirmDialog
         visible={confirmReactivate}
