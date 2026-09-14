@@ -64,10 +64,12 @@ def author_of(user: User) -> RecipeAuthor:
     すべてで同じ形を返すため、組み立てをここ 1 か所に集める。アバターの
     URL は `users.avatar_key` から作る（無ければ null）。
     """
+    if user.deleted_at is not None:
+        return RecipeAuthor(
+            id=user.id, display_name="アカウント削除済み", avatar_url=None, is_deleted=True
+        )
     return RecipeAuthor(
-        id=user.id,
-        display_name=user.display_name,
-        avatar_url=image_url(user.avatar_key),
+        id=user.id, display_name=user.display_name, avatar_url=image_url(user.avatar_key)
     )
 
 
@@ -685,7 +687,7 @@ def list_recipes_by_owner(
     存在しないユーザーは 404。並びとページングは自分のレシピ一覧と同じ。
     """
     owner = session.get(User, owner_id)
-    if owner is None:
+    if owner is None or (owner.deleted_at is not None and owner_id != viewer.id):
         raise not_found("ユーザーが見つかりません")
 
     stmt = select(Recipe).where(Recipe.user_id == owner_id)

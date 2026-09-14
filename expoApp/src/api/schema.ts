@@ -72,6 +72,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate
+         * @description 退会済みアカウントを、メールアドレスとパスワードで本人確認して再開する。
+         */
+        post: operations["reactivate_api_v1_auth_reactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/refresh": {
         parameters: {
             query?: never;
@@ -1014,6 +1034,24 @@ export interface components {
             /** X */
             x?: string | null;
         };
+        /**
+         * ReactivateRequest
+         * @description 退会済みアカウントの明示的な再開。ログインと同じ本人確認を要求する。
+         */
+        ReactivateRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /**
+             * Rememberme
+             * @default false
+             */
+            rememberMe: boolean;
+        };
         /** RecipeAuthor */
         RecipeAuthor: {
             /** Avatarurl */
@@ -1025,6 +1063,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Isdeleted */
+            isDeleted?: boolean | null;
         };
         /**
          * RecipeFeedItem
@@ -1492,6 +1532,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     logout_api_v1_auth_logout_post: {
@@ -1616,6 +1665,48 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reactivate_api_v1_auth_reactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokenResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

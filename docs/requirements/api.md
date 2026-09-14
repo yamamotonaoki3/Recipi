@@ -44,7 +44,7 @@
 | PATCH | `/users/me` | 必要 | `displayName`, `bio`, `emailPublic`, `xUrl`, `xPublic`, `instagramUrl`, `instagramPublic`, `otherUrl`, `otherPublic` |
 | PUT | `/users/me/avatar` | 必要 | アバター画像アップロード（multipart）。200 `{ avatarUrl }`。形式・サイズ不正は 400 |
 | DELETE | `/users/me/avatar` | 必要 | アバター削除。設定していなくても 204（冪等） |
-| DELETE | `/users/me` | 必要 | アカウント削除。削除は成功時 204。削除に伴いアクセストークン・リフレッシュトークンが無効化されるため、以降の同トークンでのリクエストは 401。専用の冪等機構は設けない。関連データを CASCADE 削除 |
+| DELETE | `/users/me` | 必要 | 復帰可能なアカウント退会。成功時 204。投稿レシピは保持して匿名表示、本人の行動データとトークンを削除する。以降の同トークンは 401 |
 | GET | `/users/{id}/recipes` | 必要 | そのユーザーのレシピ一覧（他人には公開のみ、本人には非公開も）。query: `limit`, `cursor`。1 件は `GET /users/me/recipes` と同じ `RecipeSummary`（`author` / `favoriteCount` / `isPublic` を含む） |
 
 ### レシピ — [features/recipe.md](features/recipe.md) / フィード = [features/home-feed.md](features/home-feed.md) / 検索 = [features/search.md](features/search.md)

@@ -175,7 +175,7 @@ def test_all_four_types_have_the_right_shape(client: TestClient) -> None:
     }
     for n in by_type.values():
         assert n["actor"]["id"] == actor.id
-        assert set(n["actor"]) == {"id", "displayName", "avatarUrl"}
+        assert set(n["actor"]) == {"id", "displayName", "avatarUrl", "isDeleted"}
         assert n["readAt"] is None
         assert set(n) == {"id", "type", "readAt", "actor", "recipe", "comment", "createdAt"}
     assert by_type["followed"]["recipe"] is None and by_type["followed"]["comment"] is None

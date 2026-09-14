@@ -11,7 +11,7 @@
  */
 import { useMutation } from "@tanstack/react-query";
 
-import { login as loginApi } from "./api";
+import { login as loginApi, reactivate as reactivateApi } from "./api";
 import { usesCookieAuth } from "@/lib/authPlatform";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
@@ -65,6 +65,48 @@ export function useLogin() {
           await secureStorage.deleteUser();
         } catch {
           // 無視する。
+        }
+      }
+      useSession.getState().setAuth({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken ?? "",
+        user: result.user,
+        rememberMe: input.rememberMe,
+      });
+      return result;
+    },
+  });
+}
+
+/** ログイン画面で確認を受けた後にだけ呼ぶ、退会済みアカウントの再開操作。 */
+export function useReactivate() {
+  return useMutation({
+    mutationFn: async (input: LoginInput) => {
+      const result = await reactivateApi(input);
+      if (input.rememberMe) {
+        const refreshToken = result.refreshToken ?? "";
+        if (!usesCookieAuth() && !refreshToken) {
+          throw new Error("refresh token was not returned for a token-storage client");
+        }
+        if (!usesCookieAuth()) await secureStorage.setRefreshToken(refreshToken);
+        try {
+          await secureStorage.setUser(JSON.stringify(result.user));
+        } catch (error) {
+          await secureStorage.deleteRefreshToken();
+          throw error;
+        }
+      } else {
+        // 「保持しない」で再開した場合も、以前の保持ログインの残りを消す。
+        // 失敗しても今回の再開自体は成功として扱う。
+        try {
+          await secureStorage.deleteRefreshToken();
+        } catch {
+          // 副次的な後始末なので無視する。
+        }
+        try {
+          await secureStorage.deleteUser();
+        } catch {
+          // 副次的な後始末なので無視する。
         }
       }
       useSession.getState().setAuth({

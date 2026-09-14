@@ -51,7 +51,11 @@ def get_current_user(
         raise unauthorized() from exc
 
     user = session.get(User, user_id)
-    if user is None or user.token_version != payload["token_version"]:
+    if (
+        user is None
+        or user.deleted_at is not None
+        or user.token_version != payload["token_version"]
+    ):
         raise unauthorized()
 
     return user

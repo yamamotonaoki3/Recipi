@@ -6,7 +6,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import LoginScreen from "../login";
-import { ApiError, login } from "@/features/auth/api";
+import { ApiError, login, reactivate } from "@/features/auth/api";
 import { useSession } from "@/store/session";
 
 const mockReplace = jest.fn();
@@ -21,10 +21,11 @@ jest.mock("expo-router", () => {
 });
 jest.mock("@/features/auth/api", () => {
   const actual = jest.requireActual<typeof import("@/features/auth/api")>("@/features/auth/api");
-  return { ...actual, login: jest.fn() };
+  return { ...actual, login: jest.fn(), reactivate: jest.fn() };
 });
 
 const mockLogin = login as jest.Mock;
+const mockReactivate = reactivate as jest.Mock;
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -34,6 +35,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   mockReplace.mockClear();
   mockLogin.mockReset();
+  mockReactivate.mockReset();
   useSession.getState().clear();
 });
 
@@ -95,5 +97,27 @@ describe("LoginScreen", () => {
     await fireEvent.press(getByTestId("login-submit"));
 
     expect(await findByText("通信エラー。もう一度お試しください")).toBeTruthy();
+  });
+
+  it("退会済みアカウントは確認後に再開してホームへ遷移する", async () => {
+    mockLogin.mockRejectedValue(new ApiError("アカウントは退会中です", "ACCOUNT_DEACTIVATED", 409));
+    mockReactivate.mockResolvedValue({
+      user: { id: "u1", displayName: "太郎" },
+      accessToken: "access-1",
+      refreshToken: "refresh-1",
+    });
+
+    const { getByTestId, findByTestId } = await render(<LoginScreen />, { wrapper });
+    await fireEvent.changeText(getByTestId("login-email"), "testuser_010@example.com");
+    await fireEvent.changeText(getByTestId("login-password"), "TestPass123!");
+    await fireEvent.press(getByTestId("login-submit"));
+    await fireEvent.press(await findByTestId("account-reactivate-dialog-confirm"));
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/home"));
+    expect(mockReactivate).toHaveBeenCalledWith({
+      email: "testuser_010@example.com",
+      password: "TestPass123!",
+      rememberMe: false,
+    });
   });
 });

@@ -2,10 +2,9 @@
 
 features/profile.md §5・data-model.md「アカウント削除時の CASCADE」。
 
-`DELETE FROM users WHERE id = :me` の 1 文で、外部キーの ON DELETE CASCADE により
-本人のレシピ・フォロー（両方向）・お気に入り・感想・通知・閲覧履歴・リフレッシュ
-トークン・アップロード管理行・通知 outbox がまとめて消える。ただし DB が勝手に
-やってくれないことが 2 つあり、それを**同じトランザクションの中で、DELETE より前に**行う。
+退会では users 行と投稿レシピを残す。退会中の公開レシピは匿名表示し、再開時に
+元の投稿者情報へ戻る。CASCADE は users 行を削除したときしか動かないため、退会時に
+消すべき本人の関係行は同一トランザクションで明示削除する。
 
 ## 1. 画像キーを CASCADE より前に集める
 
@@ -58,10 +57,7 @@ def collect_account_keys(session: Session, user_id: uuid.UUID) -> list[tuple[str
     **CASCADE より前に呼ぶこと**（行が消えた後では何も返らない）。ORM のオブジェクト
     ではなく列の値だけを SQL で読むので、セッションに残った古い値を見ない。
 
-    - 自分のレシピのサムネイル・手順画像
-    - 自分のレシピに付いた感想（他人が書いたものも）の画像
     - 自分が書いた感想（他人のレシピへのものも）の画像
-    - アバター
     - 本人所有で未使用（pending / stored）のアップロード。pending（PUT がまだ
       終わっていないかもしれない）は、期限にさらに同じ長さの猶予を足した時刻まで
       実削除を遅らせる（delete_after）
@@ -69,17 +65,7 @@ def collect_account_keys(session: Session, user_id: uuid.UUID) -> list[tuple[str
     rows = session.execute(
         text(
             """
-            SELECT thumbnail_key AS key FROM recipes WHERE user_id = :me
-            UNION ALL
-            SELECT s.image_key FROM steps s JOIN recipes r ON r.id = s.recipe_id
-             WHERE r.user_id = :me
-            UNION ALL
-            SELECT c.image_key FROM recipe_comments c JOIN recipes r ON r.id = c.recipe_id
-             WHERE r.user_id = :me
-            UNION ALL
             SELECT image_key FROM recipe_comments WHERE user_id = :me
-            UNION ALL
-            SELECT avatar_key FROM users WHERE id = :me
             """
         ),
         {"me": user_id},
@@ -120,7 +106,7 @@ def _ids(session: Session, sql: str, me: uuid.UUID) -> list[uuid.UUID]:
 
 
 def delete_account(session: Session, user: User) -> None:
-    """本人のアカウントを削除する（コミットはしない）。"""
+    """本人を退会状態にする（投稿レシピを残す。コミットはしない）。"""
     me = user.id
 
     # --- 1. 本人行をロックして読み直す -------------------------------------
@@ -152,11 +138,9 @@ def delete_account(session: Session, user: User) -> None:
         """
         SELECT id FROM recipes WHERE user_id = :me
         UNION
-        SELECT f.recipe_id FROM favorites f JOIN recipes r ON r.id = f.recipe_id
-         WHERE f.user_id = :me AND r.user_id <> :me
+        SELECT f.recipe_id FROM favorites f WHERE f.user_id = :me
         UNION
-        SELECT c.recipe_id FROM recipe_comments c JOIN recipes r ON r.id = c.recipe_id
-         WHERE c.user_id = :me AND r.user_id <> :me
+        SELECT c.recipe_id FROM recipe_comments c WHERE c.user_id = :me
         """,
         me,
     )
@@ -181,11 +165,34 @@ def delete_account(session: Session, user: User) -> None:
     # --- 5. 生き残る他人のカウント列を減らす（DELETE の前。行が消えると数えられない） --
     _subtract_counts(session, me)
 
-    # --- 6. 本人を消す（CASCADE で関連行も消える） ------------------------------
-    # ORM の `session.delete(user)` だと、関係のある子を ORM が個別に扱おうとする
-    # ことがあるので、SQL 1 文で DB の CASCADE に任せる。
-    session.execute(text("DELETE FROM users WHERE id = :me"), {"me": me})
-    session.expunge(user)
+    # --- 6. 投稿レシピ以外の本人データを消し、退会状態へ -------------------------
+    # 投稿レシピと、他人が付けたお気に入り / 感想は残す。users 行も残すため、
+    # 外部キー CASCADE に依存せず、本人側の関係行だけを明示削除する。
+    session.execute(text("DELETE FROM refresh_tokens WHERE user_id = :me"), {"me": me})
+    session.execute(text("DELETE FROM recipe_views WHERE user_id = :me"), {"me": me})
+    session.execute(text("DELETE FROM favorites WHERE user_id = :me"), {"me": me})
+    session.execute(
+        text("DELETE FROM follows WHERE follower_id = :me OR followee_id = :me"), {"me": me}
+    )
+    # 感想を削除すると comment_id を参照する通知は FK の CASCADE で消える。
+    session.execute(text("DELETE FROM recipe_comments WHERE user_id = :me"), {"me": me})
+    session.execute(
+        text("DELETE FROM notifications WHERE user_id = :me OR actor_id = :me"), {"me": me}
+    )
+    session.execute(text("DELETE FROM notification_outbox WHERE author_id = :me"), {"me": me})
+    session.execute(text("DELETE FROM uploads WHERE user_id = :me"), {"me": me})
+    session.execute(
+        text(
+            "UPDATE users SET deleted_at = clock_timestamp(), following_count = 0, "
+            "follower_count = 0 WHERE id = :me"
+        ),
+        {"me": me},
+    )
+
+
+def reactivate_account(session: Session, user: User) -> None:
+    """明示的な再開操作で退会状態を解除する。"""
+    session.execute(text("UPDATE users SET deleted_at = NULL WHERE id = :me"), {"me": user.id})
 
 
 def _subtract_counts(session: Session, me: uuid.UUID) -> None:
@@ -193,7 +200,7 @@ def _subtract_counts(session: Session, me: uuid.UUID) -> None:
 
     どれも「消える行を相手ごとに数えて、その数だけ引く」を 1 文でまとめて行う。
     相手の行は手順 3 でロック済みなので、引いている間に他の処理が割り込まない。
-    自分自身の行・自分のレシピは一緒に消えるので対象外。
+    投稿レシピは残るため、自分のレシピに付けたお気に入り・感想も減算対象にする。
     """
     # 本人がフォローしていた相手の follower_count を −1。
     session.execute(
@@ -217,25 +224,25 @@ def _subtract_counts(session: Session, me: uuid.UUID) -> None:
         ),
         {"me": me},
     )
-    # 本人がお気に入りしていた他人のレシピの favorite_count を −1（1 人 1 レシピ 1 行）。
+    # 本人がお気に入りしていたレシピの favorite_count を −1（1 人 1 レシピ 1 行）。
     session.execute(
         text(
             """
             UPDATE recipes r SET favorite_count = r.favorite_count - 1
               FROM favorites f
-             WHERE f.user_id = :me AND r.id = f.recipe_id AND r.user_id <> :me
+             WHERE f.user_id = :me AND r.id = f.recipe_id
             """
         ),
         {"me": me},
     )
-    # 本人が感想を書いた他人のレシピの comment_count を、書いた件数ぶん減らす。
+    # 本人が感想を書いたレシピの comment_count を、書いた件数ぶん減らす。
     session.execute(
         text(
             """
             UPDATE recipes r SET comment_count = r.comment_count - c.n
               FROM (SELECT recipe_id, count(*) AS n FROM recipe_comments
                      WHERE user_id = :me GROUP BY recipe_id) c
-             WHERE r.id = c.recipe_id AND r.user_id <> :me
+             WHERE r.id = c.recipe_id
             """
         ),
         {"me": me},

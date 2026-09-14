@@ -74,6 +74,10 @@ class LoginRequest(CamelModel):
     _normalize_email = field_validator("email", mode="before")(_normalize_email)
 
 
+class ReactivateRequest(LoginRequest):
+    """退会済みアカウントの明示的な再開。ログインと同じ本人確認を要求する。"""
+
+
 class RefreshRequest(CamelModel):
     refresh_token: str | None = None
 

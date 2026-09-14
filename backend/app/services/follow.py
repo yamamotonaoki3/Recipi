@@ -84,7 +84,7 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
 
 def _load_user_or_404(session: Session, user_id: uuid.UUID) -> User:
     user = session.get(User, user_id)
-    if user is None:
+    if user is None or user.deleted_at is not None:
         raise not_found("ユーザーが見つかりません")
     return user
 
@@ -181,6 +181,9 @@ def follow(session: Session, follower: User, followee_id: uuid.UUID) -> None:
     if followee_id not in locked:
         # ロックを待っている間に相手が退会した（Issue #71）。このまま INSERT すると
         # 外部キー違反の 500 になるので、ロック前の確認と同じ 404 にそろえる。
+        raise not_found("ユーザーが見つかりません")
+    followee = session.get(User, followee_id)
+    if followee is None or followee.deleted_at is not None:
         raise not_found("ユーザーが見つかりません")
 
     # 「まだ無ければ 1 行作る」。すでにあれば何もしない（例外にはならない）。

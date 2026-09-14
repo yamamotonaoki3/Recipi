@@ -260,7 +260,7 @@ class _World:
 # --- BB --------------------------------------------------------------------------
 
 
-def test_delete_account_removes_everything_and_fixes_counts(
+def test_deactivate_account_keeps_recipes_and_fixes_counts(
     client: TestClient, keys: list[str]
 ) -> None:
     w = _World(client, keys)
@@ -270,12 +270,15 @@ def test_delete_account_removes_everything_and_fixes_counts(
     res = client.delete(ME_URL, headers=me.headers)
 
     assert res.status_code == 204, res.text
-    # 本人の行が 1 件も残らない（users 行そのものも）
-    assert _owned(me.uuid) == dict.fromkeys(_OWNED_COUNTS, 0)
-    # 本人のレシピに他人が付けた行も消える（recipe_id 側の CASCADE）
+    # 本人・投稿レシピ・他人が投稿レシピに付けた関係は保持する。
+    owned = _owned(me.uuid)
+    assert owned["users"] == owned["recipes"] == 1
+    assert owned["favorites"] == owned["recipe_comments"] == 0
+    assert _scalar("SELECT deleted_at IS NOT NULL FROM users WHERE id = :id", id=me.uuid) is True
+    assert _scalar("SELECT avatar_key FROM users WHERE id = :id", id=me.uuid) == w.avatar
     rid = uuid.UUID(w.my_recipe)
-    for table in ("favorites", "recipe_comments", "recipe_views", "notifications"):
-        assert _scalar(f"SELECT count(*) FROM {table} WHERE recipe_id = :r", r=rid) == 0
+    for table in ("favorites", "recipe_comments", "recipe_views"):
+        assert _scalar(f"SELECT count(*) FROM {table} WHERE recipe_id = :r", r=rid) > 0
     # 本人が他人のレシピに書いた感想への通知も消える（comment_id 側の CASCADE）
     assert (
         _scalar(
@@ -283,6 +286,18 @@ def test_delete_account_removes_everything_and_fixes_counts(
         )
         == 0
     )
+
+    # 公開レシピは閲覧できるが、投稿者プロフィールと所有者一覧は公開しない。
+    detail = client.get(f"{RECIPES_URL}/{w.my_recipe}", headers=w.friend.headers)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["author"] == {
+        "id": me.id,
+        "displayName": "アカウント削除済み",
+        "avatarUrl": None,
+        "isDeleted": True,
+    }
+    assert client.get(f"{USERS_URL}/{me.id}", headers=w.friend.headers).status_code == 404
+    assert client.get(f"/api/v1/users/{me.id}/recipes", headers=w.friend.headers).status_code == 404
 
     # 旧トークンは 401、リフレッシュもできない
     assert client.patch(ME_URL, json={}, headers=me.headers).status_code == 401
@@ -295,13 +310,15 @@ def test_delete_account_removes_everything_and_fixes_counts(
     assert _user_counts(w.friend.uuid) == (0, 0)
     assert _recipe_counts(w.friend_recipe) == _real_recipe_counts(w.friend_recipe) == (0, 0)
 
-    # 画像キー 7 種が削除キューに 1 回ずつ
-    for key in w.image_keys():
+    # 削除した本人の感想画像・未使用アップロードだけが削除キューに載る。
+    for key in (w.my_comment_img, w.stored, w.pending):
         rows = _queued(key)
         assert [r.reason for r in rows] == ["account_deleted"], key
+    for key in (w.thumb, w.step_img, w.friends_comment_img, w.avatar):
+        assert _queued(key) == []
     # pending だけは遅延削除（delete_after が未来）
     assert _queued(w.pending)[0].delete_after is not None
-    assert all(_queued(k)[0].delete_after is None for k in w.image_keys() if k != w.pending)
+    assert all(_queued(k)[0].delete_after is None for k in (w.my_comment_img, w.stored))
 
     # 補正ジョブを流しても、関係者の数字は変わらない（＝ 削除 Tx の時点で正しい）
     before = [_user_counts(u.uuid) for u in (w.friend, w.fan, w.idol)]
@@ -322,24 +339,29 @@ def test_anonymous_is_401(client: TestClient) -> None:
 def test_user_without_relations_can_be_deleted(client: TestClient) -> None:
     lonely = _User(client)
     assert client.delete(ME_URL, headers=lonely.headers).status_code == 204
-    assert _owned(lonely.uuid)["users"] == 0
+    assert _owned(lonely.uuid)["users"] == 1
+    assert (
+        _scalar("SELECT deleted_at IS NOT NULL FROM users WHERE id = :id", id=lonely.uuid) is True
+    )
 
 
 # --- WB --------------------------------------------------------------------------
 
 
-def test_keys_cannot_be_collected_after_cascade(client: TestClient, keys: list[str]) -> None:
-    """キーの収集は CASCADE の前でないと空になる（順番を入れ替えると取りこぼす）。"""
-    me = _User(client)
+def test_collect_account_keys_only_includes_data_removed_on_deactivation(
+    client: TestClient, keys: list[str]
+) -> None:
+    """保持するレシピ画像・アバターは、退会時の削除キューに入れない。"""
+    me, other = _User(client), _User(client)
     thumb = _image(client, me, keys)
     _recipe(client, me, thumbnailKey=thumb)
+    comment_image = _image(client, me, keys)
+    other_recipe_id = _recipe(client, other)
+    _comment(client, me, other_recipe_id, comment_image)
     with Session(engine) as s:
-        before = account_service.collect_account_keys(s, me.uuid)
-        s.execute(text("DELETE FROM users WHERE id = :me"), {"me": me.uuid})
-        after = account_service.collect_account_keys(s, me.uuid)
-        s.rollback()
-    assert (thumb, None) in before
-    assert after == []
+        collected = account_service.collect_account_keys(s, me.uuid)
+    assert (comment_image, None) in collected
+    assert (thumb, None) not in collected
     assert client.delete(ME_URL, headers=me.headers).status_code == 204
 
 
@@ -574,11 +596,14 @@ def test_concurrent_operations_keep_invariants(client: TestClient, keys: list[st
         t.join(timeout=60)
 
     assert results["delete"] == 204, results
-    assert _owned(me.uuid)["users"] == 0
+    assert _owned(me.uuid)["users"] == 1
+    assert _scalar("SELECT deleted_at IS NOT NULL FROM users WHERE id = :id", id=me.uuid) is True
     assert results["follow"] in (204, 404), results
     assert results["comment"] in (201, 404), results
     assert results["upload"] in (401, 500), results  # 本人のアップロードは失敗（孤児なし）
-    assert results["create"] in (401,), results
+    # 作成が本人行のロックを先に取れば、退会より先に確定して投稿は保持される。
+    # 退会が先なら 401。どちらでも退会後に新規投稿が確定することはない。
+    assert results["create"] in (201, 401), results
     for u in (friend, stranger):
         assert _user_counts(u.uuid) == _real_user_counts(u.uuid)
     # 本人に紐づくアップロード行もオブジェクトも残っていない（PUT されたものは削除キューへ）

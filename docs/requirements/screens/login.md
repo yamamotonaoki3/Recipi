@@ -27,6 +27,7 @@
 | --- | --- |
 | 送信中 | ボタンをローディング表示、入力を無効化 |
 | error（401） | 「メールアドレスまたはパスワードが違います」（メール / パスワードのどちらが誤りかは示さない） |
+| error（409 / `ACCOUNT_DEACTIVATED`） | 「アカウントを再開しますか？」確認ダイアログ。再開するとプロフィール・レシピは戻るが、退会時に削除した行動データは戻らない |
 | error（通信失敗） | スナックバー「通信エラー。もう一度お試しください」 |
 
 ## 5. アクションと結果
@@ -34,12 +35,13 @@
 - ログインボタン → `POST /auth/login`（`email`, `password`, `rememberMe`）。
   - 成功 → アクセス / リフレッシュトークンを受け取り、`rememberMe` ON ならリフレッシュトークンを端末のセキュアストレージに永続保存。ホーム（または保留画面）へ。
   - 失敗 → 上記エラー。
+  - 退会中 → 確認後に `POST /auth/reactivate` を同じ入力値で呼ぶ。パスワードはこのリクエストにのみ使い、保存しない。
 - 「新規登録」→ [サインアップ](signup.md)。
 - 「パスワードをお忘れの方」→ [パスワードリセット](password-reset.md)。
 
 ## 6. 使用 API
 
-- `POST /auth/login`（[`../features/auth.md`](../features/auth.md)）
+- `POST /auth/login` / `POST /auth/reactivate`（[`../features/auth.md`](../features/auth.md)）
 
 ## 7. プラットフォーム差分
 

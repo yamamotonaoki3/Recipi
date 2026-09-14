@@ -161,7 +161,7 @@ export function MyPageScreen({ basePath }: { basePath: string }) {
           accessibilityRole="button"
           className="border-b border-neutral-200 px-4 py-4"
         >
-          <Text className="text-base text-red-600">アカウントを削除</Text>
+          <Text className="text-base text-red-600">退会する</Text>
         </Pressable>
         {deleteError && (
           <Text testID="my-page-delete-account-error" className="px-4 pt-2 text-sm text-red-600">
@@ -171,9 +171,9 @@ export function MyPageScreen({ basePath }: { basePath: string }) {
       </View>
       <ConfirmDialog
         visible={deleteConfirmVisible}
-        title="アカウントを削除しますか？"
-        message="アカウントを削除すると、投稿したレシピ・フォロー・お気に入り・感想がすべて削除され、元に戻せません。"
-        confirmLabel={deleteAccount.isPending ? "削除中…" : "削除する"}
+        title="退会しますか？"
+        message="公開・非公開のレシピとプロフィールは保持され、再開できます。フォロー・お気に入り・感想・通知・閲覧履歴は削除され、元に戻りません。"
+        confirmLabel={deleteAccount.isPending ? "退会処理中…" : "退会する"}
         onConfirm={handleDeleteAccount}
         onCancel={() => !deleteAccount.isPending && setDeleteConfirmVisible(false)}
         testID="my-page-delete-account-confirm"

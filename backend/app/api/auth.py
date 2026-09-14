@@ -32,6 +32,7 @@ from app.db import get_session
 from app.dependencies import get_current_user
 from app.errors import (
     ErrorEnvelope,
+    account_deactivated,
     conflict,
     not_found,
     too_many_requests,
@@ -50,6 +51,7 @@ from app.schemas.auth import (
     PasswordResetConfirmRequest,
     PasswordResetRequestRequest,
     PasswordResetRequestResponse,
+    ReactivateRequest,
     RefreshRequest,
     RefreshResponse,
     SignupRequest,
@@ -64,6 +66,7 @@ from app.security import (
     verify_password_or_dummy,
     verify_security_answer,
 )
+from app.services.account import reactivate_account
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -228,7 +231,7 @@ def signup(
     )
 
 
-@router.post("/login", responses=_error_responses(401))
+@router.post("/login", responses=_error_responses(401, 409))
 def login(
     body: LoginRequest,
     request: Request,
@@ -249,11 +252,43 @@ def login(
     # （verify_password_or_dummy は password_hash が None なら常に False を
     # 返すので、上の if で 401 になっていない = user is not None）。
     assert user is not None
+    if user.deleted_at is not None:
+        # 認証情報を知る本人にだけ退会状態を示す。トークンは発行しないので、
+        # 続く /reactivate の明示操作までアカウントは再開されない。
+        raise account_deactivated()
 
     # rememberMe でリフレッシュトークンの有効期限を調整する
     # （processing-model.md §6）。永続化するかどうか自体はフロントエンド
     # （#36）の責務だが、サーバー側の有効期限もそれに合わせて短くしておく
     # ことで、OFF 時に古いトークンが漏れても長期間使えてしまわないようにする。
+    raw_refresh_token = _issue_refresh_token(
+        session, user.id, chain_id=uuid.uuid4(), remember_me=body.remember_me
+    )
+    session.commit()
+    if _is_web_request(request):
+        _set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
+    return _auth_response(
+        session, user, raw_refresh_token, expose_refresh_token=not _is_web_request(request)
+    )
+
+
+@router.post("/reactivate", responses=_error_responses(401))
+def reactivate(
+    body: ReactivateRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> AuthTokenResponse:
+    """退会済みアカウントを、メールアドレスとパスワードで本人確認して再開する。"""
+    user = session.exec(select(User).where(User.email == body.email)).first()
+    password_hash = user.password_hash if user is not None else None
+    if (
+        not verify_password_or_dummy(body.password, password_hash)
+        or user is None
+        or user.deleted_at is None
+    ):
+        raise unauthorized("メールアドレスまたはパスワードが正しくありません")
+    reactivate_account(session, user)
     raw_refresh_token = _issue_refresh_token(
         session, user.id, chain_id=uuid.uuid4(), remember_me=body.remember_me
     )
@@ -295,6 +330,8 @@ def refresh(
     # 有効なセッションが残ってしまう（P1: リセットとリフレッシュの競合）。
     user = session.get(User, unlocked_peek.user_id, with_for_update=True)
     if user is None:
+        raise unauthorized("リフレッシュトークンが無効です")
+    if user.deleted_at is not None:
         raise unauthorized("リフレッシュトークンが無効です")
 
     # ユーザー行のロックを取った後で、トークン行をロック付きで読み直す。
