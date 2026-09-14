@@ -15,6 +15,7 @@ import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
 import { ImagePickerField } from "@/components/ImagePickerField";
+import { countChars } from "@/lib/textLength";
 
 /** 本文の上限（features/comment.md §6）。 */
 export const COMMENT_MAX_LENGTH = 1000;
@@ -66,7 +67,7 @@ export function CommentComposer({
   const trimmed = body.trim();
   // JavaScript の string.length は絵文字を 2 文字として数えることがある。
   // サーバーと同じコードポイント数で数えることで、入力欄とサーバーの上限をそろえる。
-  const trimmedLength = Array.from(trimmed).length;
+  const trimmedLength = countChars(trimmed);
   const tooLong = trimmedLength > COMMENT_MAX_LENGTH;
   const canSubmit = trimmedLength > 0 && !tooLong && !submitting && !uploading;
 

@@ -51,6 +51,11 @@ describe("validateRecipeForm", () => {
     expect(Boolean(validateRecipeForm(s).servings)).toBe(shouldError);
   });
 
+  it("タイトルは絵文字 120 個までOK、121 個でエラー（コードポイントで数える。Issue #134）", () => {
+    expect(validateRecipeForm({ ...validState(), title: "😋".repeat(120) }).title).toBeUndefined();
+    expect(validateRecipeForm({ ...validState(), title: "😋".repeat(121) }).title).toBeDefined();
+  });
+
   it("材料名が全部空 → form エラー（材料 0 件）", () => {
     const s = initialFormState();
     const withTitle = recipeFormReducer(s, { type: "setField", field: "title", value: "x" });

@@ -7,6 +7,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render } from "@testing-library/react-native";
 import type { ReactNode } from "react";
+import { Platform } from "react-native";
 
 import { HomeScreen } from "../HomeScreen";
 import * as feedApi from "@/features/feed/api";
@@ -122,6 +123,54 @@ describe("HomeScreen", () => {
     await fireEvent(getByTestId("home-search-input"), "submitEditing");
 
     expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ q: "玉ねぎ 豚肉" }));
+  });
+
+  it("検索語が 6 語だと送らずに理由を出し、5 語に直すと検索できる（Issue #134）", async () => {
+    mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
+    const { findByText, getByTestId, queryByTestId } = await render(
+      <HomeScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByText("レシピ1");
+    const callsBefore = mockListFeed.mock.calls.length;
+
+    await fireEvent.changeText(getByTestId("home-search-input"), "あ い う え お か");
+    await fireEvent.press(getByTestId("home-search-submit"));
+
+    expect(getByTestId("home-search-error").props.children).toBe("検索語は5語までにしてください");
+    // サーバーには送らない（送ると 400 で一覧が「読み込みに失敗しました」になるだけ）。
+    expect(mockListFeed.mock.calls.length).toBe(callsBefore);
+    expect(queryByTestId("home-search-chip")).toBeNull();
+
+    // 入力を直すとエラーは消え、確定すれば検索できる。
+    await fireEvent.changeText(getByTestId("home-search-input"), "あ い う え お");
+    expect(queryByTestId("home-search-error")).toBeNull();
+    await fireEvent.press(getByTestId("home-search-submit"));
+    expect(mockListFeed).toHaveBeenLastCalledWith(expect.objectContaining({ q: "あ い う え お" }));
+  });
+
+  it("web で Esc を押すと検索語エラーも消える（Issue #134）", async () => {
+    const originalOS = Platform.OS;
+    Platform.OS = "web";
+    try {
+      mockListFeed.mockResolvedValue({ items: [card("1")], nextCursor: null });
+      const { findByText, getByTestId, queryByTestId } = await render(
+        <HomeScreen basePath="/home" />,
+        { wrapper },
+      );
+      await findByText("レシピ1");
+
+      const input = getByTestId("home-search-input");
+      await fireEvent.changeText(input, "あ い う え お か");
+      await fireEvent.press(getByTestId("home-search-submit"));
+      expect(getByTestId("home-search-error")).toBeTruthy();
+
+      await fireEvent(input, "keyDown", { key: "Escape" });
+
+      expect(queryByTestId("home-search-error")).toBeNull();
+    } finally {
+      Platform.OS = originalOS;
+    }
   });
 
   it("検索語チップの × で通常フィードに戻る", async () => {

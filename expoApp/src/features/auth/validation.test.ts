@@ -88,6 +88,17 @@ describe("validateSecurityQuestion / validateSecurityAnswer", () => {
   });
 });
 
+describe("文字数はコードポイントで数える（絵文字も 1 文字。Issue #134）", () => {
+  it("パスワードは絵文字 72 個までOK、73 個でエラー", () => {
+    expect(validatePassword("😋".repeat(72))).toBeUndefined();
+    expect(validatePassword("😋".repeat(73))).toBeDefined();
+  });
+  it("秘密の質問は絵文字 120 個までOK、121 個でエラー", () => {
+    expect(validateSecurityQuestion("😋".repeat(120))).toBeUndefined();
+    expect(validateSecurityQuestion("😋".repeat(121))).toBeDefined();
+  });
+});
+
 describe("validateSignup", () => {
   const validValues = {
     email: "testuser_001@example.com",
