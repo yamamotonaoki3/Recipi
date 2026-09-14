@@ -16,6 +16,7 @@ pytestmark = pytest.mark.integration
 SIGNUP_URL = "/api/v1/auth/signup"
 LOGIN_URL = "/api/v1/auth/login"
 REACTIVATE_URL = "/api/v1/auth/reactivate"
+ME_URL = "/api/v1/auth/me"
 
 PASSWORD = "TestPass123!"
 
@@ -43,6 +44,28 @@ def test_login_succeeds_with_correct_credentials(client: TestClient, unique_emai
     assert body["refreshToken"]
 
 
+def test_me_returns_current_user(client: TestClient, unique_email: str):
+    _signup(client, unique_email)
+    login_res = client.post(LOGIN_URL, json={"email": unique_email, "password": PASSWORD})
+    access_token = login_res.json()["accessToken"]
+
+    res = client.get(ME_URL, headers={"Authorization": f"Bearer {access_token}"})
+
+    assert res.status_code == 200, res.text
+    assert res.json() == {
+        "id": login_res.json()["user"]["id"],
+        "displayName": "テスト太郎",
+        "avatarUrl": None,
+    }
+
+
+@pytest.mark.parametrize("headers", [{}, {"Authorization": "Bearer invalid-token"}])
+def test_me_requires_a_valid_access_token(client: TestClient, headers: dict[str, str]):
+    res = client.get(ME_URL, headers=headers)
+    assert res.status_code == 401
+    assert res.json()["error"]["code"] == "UNAUTHORIZED"
+
+
 def test_login_unregistered_email_returns_401(client: TestClient, unique_email: str):
     res = client.post(LOGIN_URL, json={"email": unique_email, "password": PASSWORD})
     assert res.status_code == 401
@@ -65,6 +88,9 @@ def test_deactivated_account_requires_explicit_reactivation(client: TestClient, 
     login_res = client.post(LOGIN_URL, json={"email": unique_email, "password": PASSWORD})
     assert login_res.status_code == 409
     assert login_res.json()["error"]["code"] == "ACCOUNT_DEACTIVATED"
+
+    deactivated_token_res = client.get(ME_URL, headers=headers)
+    assert deactivated_token_res.status_code == 401
 
     reactivate_res = client.post(
         REACTIVATE_URL,

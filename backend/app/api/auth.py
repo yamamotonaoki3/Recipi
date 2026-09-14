@@ -46,6 +46,7 @@ from app.schemas.auth import (
     PASSWORD_MAX_LENGTH,
     PASSWORD_MIN_LENGTH,
     AuthTokenResponse,
+    CurrentUserResponse,
     LoginRequest,
     LogoutRequest,
     PasswordResetConfirmRequest,
@@ -67,6 +68,7 @@ from app.security import (
     verify_security_answer,
 )
 from app.services.account import reactivate_account
+from app.services.image import image_url
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -191,6 +193,16 @@ def _auth_response(
         user=UserPublic(id=user.id, display_name=user.display_name),
         access_token=access_token,
         refresh_token=raw_refresh_token if expose_refresh_token else None,
+    )
+
+
+@router.get("/me", responses=_error_responses(401))
+def me(current_user: User = Depends(get_current_user)) -> CurrentUserResponse:
+    """有効なアクセストークンに紐づく現在ユーザーを返す。"""
+    return CurrentUserResponse(
+        id=current_user.id,
+        display_name=current_user.display_name,
+        avatar_url=image_url(current_user.avatar_key),
     )
 
 
