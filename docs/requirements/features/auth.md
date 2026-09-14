@@ -179,6 +179,16 @@ refresh tokenをJSON応答で受け取る。この印は開発・テスト環境
 
 - 401: 無効 / 期限切れ / 失効済み。リユース検知時はチェーン全体を失効。
 
+### GET `/auth/me`（認証必要）
+
+```json
+// response 200
+{ "id": "…", "displayName": "テスト太郎", "avatarUrl": null }
+```
+
+- 有効なアクセストークンに紐づく現在ユーザーを返す。Web クライアントは Cookie を使った `/auth/refresh` の成功後にこの API を呼び、画面表示に必要なユーザー情報を復元する。
+- 401: Authorization ヘッダーなし / 無効・失効したアクセストークン / 退会済みアカウント。
+
 ### POST `/auth/logout`（認証必要）
 
 ```json

@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description 有効なアクセストークンに紐づく現在ユーザーを返す。
+         */
+        get: operations["me_api_v1_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/password-reset/confirm": {
         parameters: {
             query?: never;
@@ -790,6 +810,21 @@ export interface components {
             body?: string;
             /** Imagekey */
             imageKey?: string | null;
+        };
+        /**
+         * CurrentUserResponse
+         * @description 認証済みユーザーを復元するための最小プロフィール。
+         */
+        CurrentUserResponse: {
+            /** Avatarurl */
+            avatarUrl: string | null;
+            /** Displayname */
+            displayName: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -1570,6 +1605,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    me_api_v1_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUserResponse"];
                 };
             };
             /** @description Unauthorized */

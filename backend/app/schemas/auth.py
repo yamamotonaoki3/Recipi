@@ -123,6 +123,12 @@ class UserPublic(CamelModel):
     display_name: str
 
 
+class CurrentUserResponse(UserPublic):
+    """認証済みユーザーを復元するための最小プロフィール。"""
+
+    avatar_url: str | None
+
+
 class AuthTokenResponse(CamelModel):
     user: UserPublic
     access_token: str

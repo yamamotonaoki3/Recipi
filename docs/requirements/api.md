@@ -31,6 +31,7 @@
 | --- | --- | --- | --- |
 | POST | `/auth/signup` | 不要 | 登録（`email`, `password`, `displayName`, `securityQuestion`, `securityAnswer`）→ ユーザー + アクセス/リフレッシュトークン |
 | POST | `/auth/login` | 不要 | ログイン（`email`, `password`, `rememberMe`）→ ユーザー + アクセス/リフレッシュトークン |
+| GET | `/auth/me` | 必要 | 有効なアクセストークンに対応する現在ユーザー（`id`, `displayName`, `avatarUrl`）を取得 |
 | POST | `/auth/refresh` | 不要（リフレッシュトークンを body で送る） | 新しいアクセス/リフレッシュトークンのペア。リユース検知でチェーン失効 |
 | POST | `/auth/logout` | 必要 | リフレッシュトークン（チェーン）を失効 |
 | POST | `/auth/password-reset/request` | 不要 | `email` → `{ securityQuestion }` |
