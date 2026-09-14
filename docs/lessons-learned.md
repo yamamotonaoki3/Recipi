@@ -49,8 +49,20 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-14 一覧の失敗表示（Issue #132）を画面で確かめるとき](#2026-09-14-一覧の失敗表示issue-132を画面で確かめるとき)
 - [2026-09-14 読み込み中・オフラインの表示（Issue #133）を仕上げるとき](#2026-09-14-読み込み中オフラインの表示issue-133を仕上げるとき)
 - [2026-09-14 入力の上限を backend とそろえる（Issue #134）とき](#2026-09-14-入力の上限を-backend-とそろえるissue-134とき)
+- [2026-09-15 ソーシャルの通し E2E と後始末スクリプト（Issue #135）を作るとき](#2026-09-15-ソーシャルの通し-e2e-と後始末スクリプトissue-135を作るとき)
 
 ---
+
+## 2026-09-15 ソーシャルの通し E2E と後始末スクリプト（Issue #135）を作るとき
+
+**きっかけ**: Issue #135（Phase 10 の P10-4）。Web の通し E2E（フォロー → お気に入り → 感想 → 通知 → 退会 → 再開）と Android の 1 本、E2E データを消す `backend/scripts/cleanup_e2e.py` を追加。計画の Codex レビュー 3 回（重大な指摘 2 → 2 → 0）、コードの Codex レビュー 3 回（指摘 0）。
+
+1. **`.last()` では「隠れている同じ要素」を掴むことがある**。Expo Router の web スタックは前の画面を DOM に残し、ホームは開いたタブの一覧を消さずに隠す（home.md §5）。「フォロー」タブを開いても「全体」タブの検索結果が DOM に残り、同じタイトルが複数ヒットした。**クリックする要素は `e2e/web/helpers.ts` の `visibleText`（`filter({ visible: true })`）で、見えているものだけを取る**。
+2. **E2E の前にローカルの api コンテナを今のコードで作り直す**。9/12 に作ったコンテナが動いたままで、退会が物理削除のまま（再開の 409 ではなく 401）になり、E2E が実装と違う結果になった。**`docker ps` の作成日時と直近のコミットを見比べ、古ければ `docker compose up -d --build api`**。
+3. **`expo prebuild` を Web E2E と並行で走らせない**。prebuild 中に Metro が固まり、Web E2E が `page.goto` の時間切れで落ちた。prebuild は `expoApp/package.json` の scripts（`android` / `ios`）も書き換えるので、**終わったら `git diff` で確かめて戻す**。
+4. **テストデータの物理削除は「E2E 以外の行に 1 件でも触れたら止める」**。手動確認で `testuser_` のアカウントが E2E のレシピを見たりフォローしたりしていると、後始末は何も消さずに止まる（実際にローカル DB で 9 件検知）。消すなら関係する行を確かめてから先に消し、`python -m app.jobs.recount_counts` でカウント列を直す。
+5. **ORM の保留中の削除と、生 SQL の CASCADE が同じ行を消すと SQLAlchemy が `SAWarning`（0 行を消そうとした）を出す**。`enqueue_object_deletion` が積んだ uploads 行の削除より先に `DELETE FROM users` の CASCADE が同じ行を消していた。**生 SQL の DELETE の前に `session.flush()`**。テストは `@pytest.mark.filterwarnings("error::sqlalchemy.exc.SAWarning")` で順番の誤りを検知する。
+6. **ローカルの Android E2E だけが落ちたら、既存の spec も同じ APK で流して切り分ける**。新しい spec だけでなく既存の登録 spec も「通信エラー」で落ち、CI（main）では 4 本とも通った → このマシンのエミュレータ環境の問題と判断できた。
 
 ## 2026-09-14 入力の上限を backend とそろえる（Issue #134）とき
 

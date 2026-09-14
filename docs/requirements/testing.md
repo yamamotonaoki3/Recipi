@@ -64,6 +64,7 @@
 - ユーザー名は `testuser_%` / `e2euser_%` 接頭辞、本文に `[E2E_TEST]` 等のタグ。
 - パスワードは `TestPass123!` のようなテスト専用固定値。
 - 識別子ベースで一括削除する `cleanup`（SQL / スクリプト）を用意し、テスト後に残数 0 を確認する。
+  - E2E: `backend/scripts/cleanup_e2e.py`（Issue #135）。`e2euser_…@example.com` のユーザーとその持ち物を物理削除し、残数 0 を確かめる。`backend` で `APP_ENV=development python -m scripts.cleanup_e2e --run-id <id> --yes`（1 回の実行分）／`E2E_CLEANUP_ALLOW_ALL=1 … --all --yes`（全部）。`--dry-run` で件数だけ見られる。接続先がローカル以外・E2E 以外の行に 1 件でも触れる場合は何も消さない。CI（`e2e.yml` / `e2e-android.yml`）はテスト後に毎回 `--all` で実行する
 - **テストは本番・ステージング DB に接続しない**。接続先はローカル（Docker）または CI の使い捨て DB に限定し、接続文字列をテストコードから確認できるようにする。
 
 ## 5. CI（GitHub Actions）
@@ -75,7 +76,7 @@
 | `backend.yml`     | `backend/**` を含む push / PR                                         | ruff（lint・format）→ mypy → Alembic マイグレーション → pytest（単体 ＋ 結合を 1 回で実行。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ `check_coverage.py` で行・分岐の下限を判定（PR へのコメントは未実装・#86） |
 | `frontend-ts.yml` | `expoApp/**` を含む push / PR                                         | `checks` ジョブ: ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、`--coverage` で行・分岐の下限を判定）→ Web ビルド（`npm run build:web`）                                                                                |
 | `contract.yml`    | backend / `openapi.json` / 生成設定の変更                             | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後）                                                                                                                                  |
-| `e2e.yml`         | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行                                                                                                                                                    |
+| `e2e.yml`         | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行 → E2E データの後始末（`cleanup_e2e.py`、残数 0 を確認）                                                                                            |
 | `e2e-android.yml` | **手動（`workflow_dispatch`）**                                       | docker-compose でフルスタック起動 → `expo prebuild` → release APK ビルド（Gradle cache）→ エミュレータ（AVD snapshot cache）→ **Android（Appium + WebdriverIO）** の E2E フロー実行                                                       |
 | `tauri.yml`       | **手動（`workflow_dispatch`）**                                       | Web ビルド → Tauri の Rust を `cargo check`                                                                                                                                                                                               |
 
