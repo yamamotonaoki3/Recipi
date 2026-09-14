@@ -37,6 +37,11 @@ type CommentItemProps = {
   onSave: (draft: CommentDraft) => Promise<boolean>;
   saving: boolean;
   saveError?: string | null;
+  /**
+   * 削除の通信中なら true。その間は「編集」「削除」を押せなくし、行を薄く出す
+   * （同じ感想をもう一度削除して、2 回目の失敗が表示されるのを防ぐ。Issue #130）。
+   */
+  deleting?: boolean;
 };
 
 export function CommentItem({
@@ -49,12 +54,16 @@ export function CommentItem({
   onSave,
   saving,
   saveError,
+  deleting = false,
 }: CommentItemProps) {
   const [editing, setEditing] = useState(false);
   const canDelete = isMine || isRecipeOwner;
 
   return (
-    <View testID={testID} className="gap-2 border-b border-neutral-100 pb-3">
+    <View
+      testID={testID}
+      className={`gap-2 border-b border-neutral-100 pb-3 ${deleting ? "opacity-50" : ""}`}
+    >
       <View className="flex-row items-center justify-between">
         <Pressable
           testID={`${testID}-author`}
@@ -112,7 +121,9 @@ export function CommentItem({
                 <Pressable
                   testID={`${testID}-edit`}
                   onPress={() => setEditing(true)}
+                  disabled={deleting}
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: deleting }}
                 >
                   <Text className="text-sm text-orange-600">編集</Text>
                 </Pressable>
@@ -121,7 +132,9 @@ export function CommentItem({
                 <Pressable
                   testID={`${testID}-delete`}
                   onPress={onRequestDelete}
+                  disabled={deleting}
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: deleting }}
                 >
                   <Text className="text-sm text-red-600">削除</Text>
                 </Pressable>

@@ -459,6 +459,44 @@ describe("RecipeDetailScreen の感想", () => {
     await waitFor(() => expect(queryByTestId("comment-more-retry")).toBeNull());
   });
 
+  it("投稿のあとの取り直しに失敗しても一覧を残し、「続き」ではなく取り直しの再試行を出す（Issue #130）", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe({ commentCount: 1 }));
+    mockListComments.mockResolvedValueOnce({
+      items: [makeComment("c1", { author: { id: "u2", displayName: "別の人", avatarUrl: null } })],
+      nextCursor: null,
+    });
+    mockCreateComment.mockResolvedValue(makeComment("c2", { body: "おいしかった" }));
+    const { findByTestId, findByText, getByTestId, queryByTestId } = await render(
+      <RecipeDetailScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByTestId("comment-c1");
+
+    // 投稿のあとの取り直しだけ失敗させる（続きのページは無い）。
+    mockListComments.mockRejectedValueOnce(new Error("network"));
+    await fireEvent.changeText(getByTestId("comment-composer-input"), "おいしかった");
+    await fireEvent.press(getByTestId("comment-composer-submit"));
+
+    expect(await findByText("最新の感想を読み込めませんでした")).toBeTruthy();
+    // 表示済みの感想は残し、「続き」の失敗としては扱わない。
+    expect(getByTestId("comment-c1")).toBeTruthy();
+    expect(getByTestId("comment-c2")).toBeTruthy();
+    expect(queryByTestId("comment-more-retry")).toBeNull();
+
+    // 再試行は取り直し（refetch）。成功すればエラー表示が消える。
+    mockListComments.mockResolvedValueOnce({
+      items: [
+        makeComment("c2", { body: "おいしかった" }),
+        makeComment("c1", { author: { id: "u2", displayName: "別の人", avatarUrl: null } }),
+      ],
+      nextCursor: null,
+    });
+    await fireEvent.press(getByTestId("comment-refresh-retry"));
+
+    await waitFor(() => expect(queryByTestId("comment-refresh-retry")).toBeNull());
+    expect(getByTestId("comment-c2")).toBeTruthy();
+  });
+
   it("画面を末尾近くまでスクロールしても、次のページを読む", async () => {
     mockGetRecipe.mockResolvedValue(makeRecipe());
     mockListComments
@@ -802,6 +840,31 @@ describe("RecipeDetailScreen の感想", () => {
     expect(getByTestId("comment-heading").props.children).toEqual(["感想（", 0, "）"]);
   });
 
+  it("最後の感想を削除したあとの取り直しに失敗しても、空状態より再試行を優先する（Issue #130）", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe({ commentCount: 1 }));
+    mockListComments
+      .mockResolvedValueOnce({ items: [makeComment("c1")], nextCursor: null })
+      // 削除後の取り直しは失敗するが、再試行では空の一覧を返す。
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ items: [], nextCursor: null });
+    mockDeleteComment.mockResolvedValue(undefined);
+    const { findByTestId, getByTestId, queryByTestId } = await render(
+      <RecipeDetailScreen basePath="/home" />,
+      { wrapper },
+    );
+
+    await fireEvent.press(await findByTestId("comment-c1-delete"));
+    await fireEvent.press(getByTestId("comment-delete-dialog-confirm"));
+
+    expect(await findByTestId("comment-refresh-retry")).toBeTruthy();
+    expect(queryByTestId("comment-empty")).toBeNull();
+
+    await fireEvent.press(getByTestId("comment-refresh-retry"));
+
+    expect(await findByTestId("comment-empty")).toBeTruthy();
+    expect(queryByTestId("comment-refresh-retry")).toBeNull();
+  });
+
   it("削除に失敗したらエラーを出す", async () => {
     mockGetRecipe.mockResolvedValue(makeRecipe({ commentCount: 1 }));
     mockListComments.mockResolvedValue({ items: [makeComment("c1")], nextCursor: null });
@@ -816,6 +879,28 @@ describe("RecipeDetailScreen の感想", () => {
     expect((await findByTestId("comment-delete-error")).props.children).toBe(
       "感想を削除できませんでした",
     );
+  });
+
+  it("削除の通信中はその感想の「削除」「編集」を押せず、DELETE を二重に送らない（Issue #130）", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe({ commentCount: 1 }));
+    mockListComments.mockResolvedValue({ items: [makeComment("c1")], nextCursor: null });
+    // 返事が来ないまま（通信が遅い状態）にする。
+    mockDeleteComment.mockReturnValue(new Promise(() => undefined));
+    const { findByTestId, getByTestId } = await render(<RecipeDetailScreen basePath="/home" />, {
+      wrapper,
+    });
+
+    await fireEvent.press(await findByTestId("comment-c1-delete"));
+    await fireEvent.press(getByTestId("comment-delete-dialog-confirm"));
+
+    await waitFor(() =>
+      expect(getByTestId("comment-c1-delete").props.accessibilityState.disabled).toBe(true),
+    );
+    expect(getByTestId("comment-c1-edit").props.accessibilityState.disabled).toBe(true);
+
+    // もう一度「削除」を押しても、2 回目の DELETE は送られない。
+    await fireEvent.press(getByTestId("comment-c1-delete"));
+    expect(mockDeleteComment).toHaveBeenCalledTimes(1);
   });
 
   it("ユーザー情報が無いと入力欄・編集・削除を出さず、ログイン案内を出す", async () => {
