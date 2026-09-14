@@ -30,7 +30,8 @@
 | 状態管理（クライアント状態） | **Zustand**（Issue #34 で確定） | 認証トークン・UI トグルなど「サーバーから取らない」少量の状態。サーバーデータは TanStack Query |
 | テスト | jest（`jest-expo` preset）＋ `@testing-library/react-native` ＋ `test-renderer` | ESLint 9 ＋ Prettier ＋ `tsc --noEmit`。MSW は jest-expo の RN 環境と相性が悪く Phase 1 で node 環境用に整える（[testing.md](testing.md)） |
 | バージョン固定 | `expoApp/package-lock.json`（CI は `npm ci`） | `.npmrc` に `legacy-peer-deps=true`（RN/Expo の peer 依存ずれを許容する実務的設定）。Issue #34 で確定 |
-| ネイティブ機能 | Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
+| ネイティブ機能 | Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store` / `expo-network`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
+| 通信状態（オンライン / オフライン） | **expo-network**（`~57.0.2`。Issue #133 で確定） | Android / iOS の通信状態の変化を TanStack Query の `onlineManager` に伝える（オフライン中の一時停止と自動のやり直し、オフラインの案内）。Web / Tauri はブラウザの online / offline の知らせを TanStack Query が既定で使う |
 | ビルド / 配布 | EAS Build（クラウド）or ローカルビルド、Tauri の `.msi` / `.dmg` | iOS のローカルビルドは Windows では不可 → EAS Build（クラウド）。詳細 → [todo.md](todo.md) |
 
 ### (B) Kotlin Multiplatform トラック（随時）

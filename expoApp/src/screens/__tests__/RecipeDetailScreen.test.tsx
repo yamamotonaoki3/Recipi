@@ -333,6 +333,16 @@ describe("RecipeDetailScreen", () => {
     expect(queryByTestId("recipe-detail-edit")).toBeNull();
   });
 
+  it("初回の読み込み中はスケルトンを出す（recipe-detail.md §4。Issue #133）", async () => {
+    mockGetRecipe.mockReturnValue(new Promise(() => undefined));
+    const { getByTestId, queryByTestId } = await render(<RecipeDetailScreen basePath="/home" />, {
+      wrapper,
+    });
+
+    expect(getByTestId("recipe-detail-skeleton")).toBeTruthy();
+    expect(queryByTestId("recipe-detail-title")).toBeNull();
+  });
+
   it("404 は「表示できません」を出す", async () => {
     mockGetRecipe.mockRejectedValue(new ApiError("レシピが見つかりません", "NOT_FOUND", 404));
     const { findByText } = await render(<RecipeDetailScreen basePath="/home" />, { wrapper });
