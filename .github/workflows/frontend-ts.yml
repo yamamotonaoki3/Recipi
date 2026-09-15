@@ -11,15 +11,33 @@ on:
       - "expoApp/**"
       - "openapi/**"
       - ".github/workflows/frontend-ts.yml"
+  # PR では paths で絞らない（必須チェックが「待ち」で詰まらないように）。
+  # 関係ない変更かどうかは下の changes ジョブで判定する（Issue #87）。
   pull_request:
     branches: [main]
-    paths:
-      - "expoApp/**"
-      - "openapi/**"
-      - ".github/workflows/frontend-ts.yml"
 
 jobs:
+  # PR の変更ファイルを見て、本体のジョブを走らせるかを決める（Issue #87）。
+  # 本体を条件でスキップすると、必須チェックは「成功」扱いになる（docs だけの
+  # PR でも待ちのまま詰まらない）。判定自体が失敗したら本体は全部走らせる。
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.changes.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: 変更ファイルを判定
+        id: changes
+        run: bash scripts/ci/changed.sh '^(expoApp/|openapi/)'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+
   checks:
+    needs: changes
+    # 判定が「対象の変更なし」のときだけ飛ばす。判定が失敗・未完了なら安全側で走らせる。
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     defaults:
       run:
