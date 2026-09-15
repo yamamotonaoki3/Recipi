@@ -17,10 +17,12 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type TextInput as RNTextInput,
 } from "react-native";
 
@@ -50,6 +52,7 @@ import {
 } from "./validation";
 import { ApiError } from "@/features/auth/api";
 import { resolveRecipeStackDestination } from "@/features/navigation/destinations";
+import { NAV_RAIL_MIN_WIDTH } from "@/components/AppNavBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImagePickerField } from "@/components/ImagePickerField";
 
@@ -73,6 +76,15 @@ const emptyErrors: RecipeFormErrors = { groups: {}, ingredients: {}, steps: {} }
 
 /** 「最初のエラーへ移動」でスクロールしたとき、対象の上に残す余白（px）。 */
 const SCROLL_MARGIN = 16;
+
+/**
+ * 広い画面（ナビゲーションレールと同じ 600px 以上）で出すダイアログの最大幅（px）。
+ * 材料の 1 行（名前・数量・単位・候補ボタン）が窮屈にならず横に並ぶ幅（Issue #158）。
+ */
+export const EDITOR_DIALOG_MAX_WIDTH = 768;
+
+/** ダイアログの高さ = 画面の高さ × この割合。上下に少し背景を見せる。 */
+const EDITOR_DIALOG_HEIGHT_RATIO = 0.9;
 
 /** エラー箇所の View を `anchorKey` で登録するための関数。 */
 export type RegisterAnchor = (anchorKey: string, node: View | null) => void;
@@ -139,6 +151,59 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
   }
 
   const guard = useUnsavedChangesGuard(hasUnsavedWork, leaveEditor);
+
+  // --- 広い画面ではダイアログで出す（Issue #158） ---------------------
+  //
+  // 幅 600px 以上（デスクトップ・タブレット・広いブラウザ）は、画面いっぱいではなく
+  // 中央のカードにする。判定はナビゲーションレールと同じ境界を使い、
+  // useWindowDimensions なのでウィンドウの幅を変えるとその場で切り替わる。
+  // ルートの presentation は変えない（表示中に切り替えると画面の状態が崩れうるため）。
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isDialog = windowWidth >= NAV_RAIL_MIN_WIDTH;
+
+  // Esc キーで閉じる（web / Tauri のみ）。キーを押した時点の最新の状態を読むため、
+  // 状態は ref に入れておき、リスナーは 1 回だけ登録する。
+  const escapeStateRef = useRef({
+    confirmVisible: false,
+    busy: false,
+    requestClose: guard.requestClose,
+    cancelLeave: guard.cancelLeave,
+  });
+  useEffect(() => {
+    escapeStateRef.current = {
+      confirmVisible: guard.confirmVisible,
+      // 保存中・エラーのポップアップ・レシピ選択を開いている間は、Esc で画面ごと
+      // 閉じない（それぞれのポップアップが自分で Esc を扱う）。
+      busy: save.isPending || errorDialog !== null || pickerForIngredient !== null,
+      requestClose: guard.requestClose,
+      cancelLeave: guard.cancelLeave,
+    };
+  });
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const target = globalThis.window;
+    if (!target?.addEventListener) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const current = escapeStateRef.current;
+      if (current.confirmVisible) {
+        // 破棄の確認が出ているときは、確認を閉じるだけ（編集に戻る）。
+        event.preventDefault();
+        current.cancelLeave();
+        return;
+      }
+      if (current.busy) return;
+      event.preventDefault();
+      // 「×」と同じ入口。未保存なら確認ダイアログが出る。
+      current.requestClose();
+    }
+
+    // capture（イベントが下の要素へ届く前の段階）で受ける。web のモーダルや入力欄が
+    // Esc を先に止めてしまうと、通常の登録では届かないため。
+    target.addEventListener("keydown", onKeyDown, true);
+    return () => target.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   // 「+」で追加した行へフォーカスを移したら、フォーカス済みフラグを下ろす。
   useEffect(() => {
@@ -307,7 +372,7 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
 
   const unitOptions = units.data?.units ?? [];
 
-  return (
+  const editorBody = (
     // 画面ルートで上下のセーフエリアを確保する（上端: Issue #57 / #58、
     // 下端: Issue #74）。ヘッダー側の `py-3` を上書きしないよう、
     // パディングはここで足す。
@@ -323,7 +388,8 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
     <View
       testID="editor-screen"
       className="flex-1 bg-white"
-      style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+      // ダイアログのときは画面の端に接しないので、セーフエリアの余白は要らない。
+      style={isDialog ? undefined : { paddingTop: insets.top, paddingBottom: insets.bottom }}
     >
       {/* 未保存の変更または画像処理中は iOS モーダルのスワイプ down を無効化する
           （スワイプで閉じると requestClose を通らず確認ダイアログが出ないため。
@@ -563,6 +629,40 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
         onConfirm={guard.confirmLeave}
         onCancel={guard.cancelLeave}
       />
+    </View>
+  );
+
+  // 狭い画面（スマホ）は今までどおりフルスクリーン。
+  if (!isDialog) return editorBody;
+
+  // 広い画面: 半透明の背景の上に、中央の角丸カードを重ねる。背景とカードは
+  // **兄弟要素**にしてあるので、カードの中のクリックは背景に届かない
+  // （入力中にうっかり閉じない）。閉じる入口は「×」・背景・Esc とも
+  // guard.requestClose の 1 つだけ（未保存なら確認が出る）。
+  return (
+    <View
+      className="flex-1 items-center justify-center px-6"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}
+    >
+      <Pressable
+        testID="editor-backdrop"
+        style={StyleSheet.absoluteFill}
+        onPress={guard.requestClose}
+        accessibilityRole="button"
+        accessibilityLabel="閉じる"
+      />
+      <View
+        testID="editor-dialog"
+        className="w-full overflow-hidden rounded-2xl bg-white"
+        // 高さを数値で決めておくと、中の ScrollView がカードの中でスクロールする
+        // （親に高さが無いとページ全体が伸びてしまう）。
+        style={{
+          maxWidth: EDITOR_DIALOG_MAX_WIDTH,
+          height: Math.round(windowHeight * EDITOR_DIALOG_HEIGHT_RATIO),
+        }}
+      >
+        {editorBody}
+      </View>
     </View>
   );
 }

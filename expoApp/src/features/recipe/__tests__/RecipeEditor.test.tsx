@@ -5,6 +5,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
+import { Platform, useWindowDimensions } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 
 import * as recipeApi from "../api";
@@ -60,6 +61,14 @@ jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: ({ children }: { children: unknown }) => children,
 }));
 
+/** 画面の幅。広い画面（600px 以上）ではダイアログになる（Issue #158）。 */
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions");
+const mockUseWindowDimensions = useWindowDimensions as unknown as jest.Mock;
+
+function setWindowWidth(width: number) {
+  mockUseWindowDimensions.mockReturnValue({ width, height: 800, scale: 1, fontScale: 1 });
+}
+
 const mockGetUnits = recipeApi.getUnits as jest.Mock;
 const mockCreateRecipe = recipeApi.createRecipe as jest.Mock;
 const mockUploadImage = imageApi.uploadImage as jest.Mock;
@@ -73,6 +82,8 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockCanGoBack.mockReturnValue(true);
+  // 既存のテストはスマホ幅（フルスクリーン）で動かす。
+  setWindowWidth(400);
   mockGetUnits.mockResolvedValue({
     units: [
       { value: "g", placement: "suffix" },
@@ -530,5 +541,103 @@ describe("RecipeEditor（セーフエリア）", () => {
     const { getByTestId } = await render(<RecipeEditor mode="create" />, { wrapper });
 
     expect(getByTestId("editor-screen")).toHaveStyle({ paddingTop: 24, paddingBottom: 48 });
+  });
+});
+
+describe("RecipeEditor（広い画面のダイアログ・Issue #158）", () => {
+  it("幅 400（スマホ）ではダイアログにしない", async () => {
+    const { queryByTestId, getByTestId } = await render(<RecipeEditor mode="create" />, {
+      wrapper,
+    });
+    expect(getByTestId("editor-screen")).toBeTruthy();
+    expect(queryByTestId("editor-dialog")).toBeNull();
+    expect(queryByTestId("editor-backdrop")).toBeNull();
+  });
+
+  it("幅 1280 では中央のダイアログと背景を出す", async () => {
+    setWindowWidth(1280);
+    const { getByTestId } = await render(<RecipeEditor mode="create" />, { wrapper });
+    expect(getByTestId("editor-dialog")).toBeTruthy();
+    expect(getByTestId("editor-backdrop")).toBeTruthy();
+    // 中身（フォーム）はダイアログの中にそのまま出る。
+    expect(getByTestId("editor-title")).toBeTruthy();
+  });
+
+  it("変更が無ければ、背景を押すとそのまま閉じる", async () => {
+    setWindowWidth(1280);
+    const { getByTestId, queryByTestId } = await render(<RecipeEditor mode="create" />, {
+      wrapper,
+    });
+    await fireEvent.press(getByTestId("editor-backdrop"));
+    expect(mockBack).toHaveBeenCalled();
+    expect(queryByTestId("editor-discard-dialog-confirm")).toBeNull();
+  });
+
+  it("未保存の変更があれば、背景を押すと破棄の確認が出る", async () => {
+    setWindowWidth(1280);
+    const { getByTestId, findByTestId } = await render(<RecipeEditor mode="create" />, {
+      wrapper,
+    });
+    await fireEvent.changeText(getByTestId("editor-title"), "肉じゃが");
+    await fireEvent.press(getByTestId("editor-backdrop"));
+    expect(await findByTestId("editor-discard-dialog-confirm")).toBeTruthy();
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  describe("Esc キー（web）", () => {
+    const originalOS = Platform.OS;
+    let keydown: ((event: { key: string; preventDefault: () => void }) => void) | null = null;
+
+    beforeEach(() => {
+      keydown = null;
+      Object.defineProperty(Platform, "OS", { value: "web", configurable: true });
+      // jest の環境の window には addEventListener が無いので、テストの間だけ足して
+      // 登録されたリスナーを横取りする。
+      const win = globalThis.window as unknown as Record<string, unknown>;
+      win.addEventListener = (type: string, listener: unknown) => {
+        if (type === "keydown") keydown = listener as typeof keydown;
+      };
+      win.removeEventListener = () => {};
+    });
+
+    afterEach(() => {
+      Object.defineProperty(Platform, "OS", { value: originalOS, configurable: true });
+      const win = globalThis.window as unknown as Record<string, unknown>;
+      // 画面の片付け（リスナーの解除）はこの後に走るので、消さずに何もしない関数にする。
+      win.addEventListener = () => {};
+      win.removeEventListener = () => {};
+    });
+
+    async function pressKey(key: string) {
+      await act(async () => {
+        keydown?.({ key, preventDefault: () => {} });
+      });
+    }
+
+    it("未保存なら確認を出し、もう一度 Esc で確認だけ閉じる", async () => {
+      setWindowWidth(1280);
+      const { getByTestId, findByTestId, queryByTestId } = await render(
+        <RecipeEditor mode="create" />,
+        { wrapper },
+      );
+      await fireEvent.changeText(getByTestId("editor-title"), "肉じゃが");
+      await pressKey("Escape");
+      expect(await findByTestId("editor-discard-dialog-confirm")).toBeTruthy();
+      await pressKey("Escape");
+      await waitFor(() => expect(queryByTestId("editor-discard-dialog-confirm")).toBeNull());
+      expect(mockBack).not.toHaveBeenCalled();
+    });
+
+    it("変更が無ければ Esc でそのまま閉じる", async () => {
+      await render(<RecipeEditor mode="create" />, { wrapper });
+      await pressKey("Escape");
+      expect(mockBack).toHaveBeenCalled();
+    });
+
+    it("Esc 以外のキーでは何もしない", async () => {
+      await render(<RecipeEditor mode="create" />, { wrapper });
+      await pressKey("Enter");
+      expect(mockBack).not.toHaveBeenCalled();
+    });
   });
 });
