@@ -27,6 +27,14 @@ resource "aws_apigatewayv2_integration" "api" {
   connection_type    = "VPC_LINK"
   connection_id      = aws_apigatewayv2_vpc_link.main.id
   integration_uri    = aws_service_discovery_service.api.arn
+
+  # API Gateway が見たクライアントの IP を、専用ヘッダーに「上書き」で入れて ECS に渡す
+  # （Issue #166）。上書きなので、クライアントが同じ名前のヘッダーを送っても偽装できない。
+  # アプリは VPC Link（private サブネット）から来たときだけこのヘッダーを信じる
+  # （backend/app/request_utils.py の CLIENT_IP_HEADER と名前をそろえる）。
+  request_parameters = {
+    "overwrite:header.x-recipi-client-ip" = "$context.identity.sourceIp"
+  }
 }
 
 # `$default` ルート = どのパス・メソッドにも一致する既定のルート。

@@ -46,13 +46,18 @@ logger = logging.getLogger("app")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """アプリ起動時に、ローカル / テスト用ストレージを初期化する。"""
-    try:
-        storage.ensure_bucket()
-    except Exception:
-        # 本番の S3 ではバケットをインフラ側で作成済みで、アプリに作成権限が
-        # 無い構成が普通なので、初期化失敗だけで API 全体を起動不能にしない。
-        logger.warning("ストレージのバケット初期化に失敗しました", exc_info=True)
+    """アプリ起動時に、ローカル / テスト用ストレージを初期化する。
+
+    production では呼ばない（Issue #166）。本番のバケットは Terraform が用意し、
+    CloudFront（OAC）経由でだけ読めるよう非公開にしている。ensure_bucket() は
+    公開ポリシーを付けようとするため。
+    """
+    if settings.APP_ENV != "production":
+        try:
+            storage.ensure_bucket()
+        except Exception:
+            # MinIO が起動していないなどの初期化失敗だけで、API 全体を起動不能にしない。
+            logger.warning("ストレージのバケット初期化に失敗しました", exc_info=True)
     yield
 
 

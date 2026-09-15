@@ -33,7 +33,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from app.config import settings
+from app.config import Settings, settings
 
 logger = logging.getLogger(__name__)
 
@@ -41,25 +41,37 @@ logger = logging.getLogger(__name__)
 # boto3 は型スタブを同梱していないため、クライアントの型は `Any` になる
 # （厳密な型が欲しければ `boto3-stubs[s3]` を入れる手もあるが、依存を
 # 増やしてまで得るものは少ないと判断してこの層だけ Any を許容する）。
-@functools.lru_cache(maxsize=1)
-def get_s3_client() -> Any:
-    """設定から S3 クライアントを組み立てる（プロセス内で 1 つを使い回す）。
+def _client_kwargs(s: Settings) -> dict[str, Any]:
+    """設定から `boto3.client("s3", ...)` に渡す引数を組み立てる（純粋関数。Issue #166）。
 
-    `s3v4` 署名と `path` スタイルは MinIO 互換のために指定する。
-    AWS S3 は既定で「バケット名をホスト名に含める」virtual-hosted スタイルを
-    使うが、MinIO をローカルの `http://localhost:9000` で動かしていると
-    そのホスト名は解決できない。`addressing_style="path"` にすると
-    `http://localhost:9000/<バケット名>/<キー>` の形になり、両方で動く。
+    ローカル（MinIO）と本番（AWS の S3）で変わるのは次の 3 点:
+
+    - **エンドポイント**: MinIO は `http://localhost:9000` などを指定する。
+      本番は空にして `None` を渡し、AWS の標準のエンドポイントを使う。
+    - **認証情報**: MinIO はアクセスキーを渡す。本番はキーを空にして両方 `None` を
+      渡す。boto3 は「既定の認証情報チェーン」を探し、ECS の上ではタスクロールの
+      一時的な認証情報を自動で使う（アクセスキーをどこにも置かずに済む）。
+      片方だけ空は設定ミスなのでエラーにする。
+    - **URL の形式**: MinIO を `http://localhost:9000` で動かしていると、バケット名を
+      ホスト名に含める形（virtual-hosted）は名前解決できない。そのためエンドポイントを
+      指定したときだけ `path` 形式（`http://localhost:9000/<バケット名>/<キー>`）にする。
+      AWS の S3 では path 形式は非推奨なので、既定の形式に任せる。
     """
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.S3_ENDPOINT_URL,
-        region_name=settings.S3_REGION,
-        aws_access_key_id=settings.S3_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.S3_SECRET_ACCESS_KEY,
-        config=Config(
+    endpoint = s.S3_ENDPOINT_URL.strip() or None
+    key_id = s.S3_ACCESS_KEY_ID.strip()
+    secret = s.S3_SECRET_ACCESS_KEY.strip()
+    if bool(key_id) != bool(secret):
+        raise ValueError(
+            "S3_ACCESS_KEY_ID と S3_SECRET_ACCESS_KEY は、両方を設定するか両方を空にしてください"
+        )
+    return {
+        "endpoint_url": endpoint,
+        "region_name": s.S3_REGION.strip() or None,
+        "aws_access_key_id": key_id or None,
+        "aws_secret_access_key": secret or None,
+        "config": Config(
             signature_version="s3v4",
-            s3={"addressing_style": "path"},
+            s3={"addressing_style": "path"} if endpoint else {},
             # 一時的なネットワークエラーは boto3 側で数回リトライさせる。
             retries={"max_attempts": 3, "mode": "standard"},
             # 1 回の接続・読み取りの待ち時間の上限（botocore の既定値に頼らず明示する）。
@@ -69,7 +81,16 @@ def get_s3_client() -> Any:
             connect_timeout=10,
             read_timeout=60,
         ),
-    )
+    }
+
+
+@functools.lru_cache(maxsize=1)
+def get_s3_client() -> Any:
+    """設定から S3 クライアントを組み立てる（プロセス内で 1 つを使い回す）。
+
+    引数の組み立て（ローカルと本番の違い）は `_client_kwargs` を参照。
+    """
+    return boto3.client("s3", **_client_kwargs(settings))
 
 
 # 画像を置くキーの接頭辞。公開読み取りを許すのはこの配下だけに限定する。
@@ -84,9 +105,10 @@ def _public_read_policy() -> str:
     ランダムキー」方式を採っている（features/image.md §8 / Issue #39）。
     キーは `uploads/<uuid4>.<ext>` なので URL を総当たりで当てることはできない。
 
-    **本番で非公開 ＋ 署名付き URL に移行するときは**、このポリシーを外し、
-    `app/services/image.py` の `build_image_url()` を署名付き URL の生成に
-    差し替える（DB はキーしか持たないのでデータ移行は不要）。
+    **これはローカル（MinIO）と結合テスト用**。本番（AWS）のバケットは非公開で、
+    画像は CloudFront（OAC）経由で `uploads/*` だけを配信する（infra/terraform の
+    s3-images.tf / cloudfront.tf。Issue #165・#166）。本番ではこのポリシーを付けない
+    （`ensure_bucket()` が production では何もしない）。
 
     `Resource` をバケット全体ではなく `uploads/*` に絞っているのは、将来
     別用途のオブジェクト（バックアップ等）を同じバケットに置いても
@@ -114,9 +136,18 @@ def ensure_bucket() -> None:
     しかも作ったバケットは既定で非公開なので、そのままだと画像 URL が
     403 になる。毎回手で設定せずに済むようにここでまとめて面倒を見る。
 
-    本番のバケットは事前にインフラ側で用意する運用になるが、この関数は
-    「既にある」を成功として扱うので実行しても壊れない。
+    **production では何もしない**（Issue #166）。本番のバケットは Terraform が用意し、
+    CloudFront（OAC）経由でだけ読めるよう非公開にしている。ここで公開ポリシーを
+    付けると、その前提が崩れる。起動時（app/main.py）も production では呼ばないが、
+    ほかの場所から誤って呼ばれたときの保険としてここでも止める。
     """
+    if settings.APP_ENV == "production":
+        logger.warning(
+            "production では ensure_bucket を実行しない"
+            "（本番のバケットは Terraform が用意し、公開しない）"
+        )
+        return
+
     client = get_s3_client()
     exists = True
     try:

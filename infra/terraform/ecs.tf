@@ -57,6 +57,10 @@ resource "aws_ecs_task_definition" "api" {
         { name = "S3_BUCKET", value = aws_s3_bucket.images.id },
         # 画像の URL は https://<CloudFront>/uploads/...（backend/app/services/image.py）。
         { name = "S3_PUBLIC_URL_BASE", value = "https://${aws_cloudfront_distribution.images.domain_name}" },
+        # API Gateway の VPC Link の ENI が置かれる private サブネット。ここから来た
+        # リクエストだけ、専用ヘッダー X-Recipi-Client-Ip をクライアントの IP として使う
+        # （backend/app/request_utils.py。Issue #166）。VPC 全体にはしない。
+        { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.private_subnet_cidrs) },
       ]
 
       # 値は Secrets Manager から取り出される（Terraform にもタスク定義にも値は残らない）。
