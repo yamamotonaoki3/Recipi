@@ -124,6 +124,38 @@ def test_seed_main_rejects_non_positive_counts(capsys: pytest.CaptureFixture[str
     assert "1 以上" in capsys.readouterr().err
 
 
+def test_insert_stages_put_parents_before_children() -> None:
+    """外部キーの親（users → recipes → ingredient_groups）を、子より前の段階に置く。
+
+    まとめて add_all すると子が先に INSERT されて外部キー違反になった（Issue #145 の CI）。
+    """
+    data = _build(SeedPlan(users=3, recipes=6, follows_per_user=1, favorites_per_user=2))
+    stages = data.insert_stages()
+
+    def stage_of(row: object) -> int:
+        return next(i for i, rows in enumerate(stages) if any(r is row for r in rows))
+
+    for recipe in data.recipes:
+        owner = next(u for u in data.users if u.id == recipe.user_id)
+        assert stage_of(owner) < stage_of(recipe)
+    for group in data.groups:
+        recipe = next(r for r in data.recipes if r.id == group.recipe_id)
+        assert stage_of(recipe) < stage_of(group)
+    last = len(stages) - 1
+    for row in [*data.ingredients, *data.steps, *data.follows, *data.favorites]:
+        assert stage_of(row) == last
+    # 全行がちょうど 1 回ずつ入っている。
+    assert sum(len(rows) for rows in stages) == (
+        len(data.users)
+        + len(data.recipes)
+        + len(data.groups)
+        + len(data.ingredients)
+        + len(data.steps)
+        + len(data.follows)
+        + len(data.favorites)
+    )
+
+
 # --- 結合（実 DB）---------------------------------------------------------------
 
 
