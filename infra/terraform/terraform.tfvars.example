@@ -1,0 +1,10 @@
+# terraform.tfvars のひな形。コピーして値を入れる（terraform.tfvars は .gitignore 対象）:
+#   cp terraform.tfvars.example terraform.tfvars
+# 秘密（パスワード・鍵）はここに書かない。Terraform が自動で作り、Secrets Manager に入れる。
+
+# ECR に push した backend イメージのタグ（初回は README の手順で手動 push したタグ）。
+backend_image_tag = "changeme"
+
+# 以下は既定値のままでよい（変えたいときだけ行頭の # を外す）。
+# aws_region         = "ap-northeast-1"
+# cors_allow_origins = "tauri://localhost,http://tauri.localhost"
