@@ -60,10 +60,29 @@ def test_production_accepts_strong_jwt_secret(monkeypatch: pytest.MonkeyPatch, t
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
     monkeypatch.setenv("JWT_SECRET_KEY", "x" * 40)
+    monkeypatch.setenv("LOG_HASH_SECRET", "y" * 40)
     monkeypatch.setenv("AUTH_COOKIE_SECURE", "true")
 
     s = Settings(_env_file=tmp_path / ".env.missing")
     assert s.APP_ENV == "production"
+
+
+@pytest.mark.parametrize("log_hash_secret", [None, "changeme", "short-secret"])
+def test_production_rejects_weak_log_hash_secret(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, log_hash_secret: str | None
+):
+    """production では LOG_HASH_SECRET が未設定・ダミー・短すぎると起動できない（Issue #170）。"""
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("JWT_SECRET_KEY", "x" * 40)
+    monkeypatch.setenv("AUTH_COOKIE_SECURE", "true")
+    if log_hash_secret is None:
+        monkeypatch.delenv("LOG_HASH_SECRET", raising=False)  # デフォルト値のまま
+    else:
+        monkeypatch.setenv("LOG_HASH_SECRET", log_hash_secret)
+
+    with pytest.raises(ValidationError, match="LOG_HASH_SECRET"):
+        Settings(_env_file=tmp_path / ".env.missing")
 
 
 def test_non_production_allows_default_jwt_secret(monkeypatch: pytest.MonkeyPatch, tmp_path):

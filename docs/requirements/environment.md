@@ -51,8 +51,9 @@
 | `AUTH_COOKIE_SECURE` | Web用CookieをHTTPS通信だけに限定するか | per-env | `false`（開発）/ `true`（本番） | 本番は必ず`true`。Issue #104 |
 | `AUTH_COOKIE_SAMESITE` | Web用CookieのSameSite属性 | per-env | `lax` | CSRF対策として`lax`以上を使う。Issue #104 |
 | `AUTH_COOKIE_PATH` | Web用Cookieを送信するパス | per-env | `/api/v1/auth` | 認証APIに限定する。Issue #104 |
-| `LOG_LEVEL` | ログレベル | per-env | `INFO` | dev は `DEBUG` 可 |
+| `LOG_LEVEL` | ログレベル | per-env | `INFO` | dev も本番と同じ `INFO` を既定にする（調査時だけ `DEBUG`）。test は `WARNING`。Issue #170 |
 | `LOG_FORMAT` | ログ形式 | per-env | `json` | 本番は `json`（構造化ログ・[non-functional.md](non-functional.md) / [todo.md](todo.md) #44） |
+| `LOG_HASH_SECRET` | 監査ログの `email_hash`（メールアドレスの代わりに出す HMAC）の鍵 | secret | `changeme-generate-a-long-random-string` | production は 32 文字以上の本物のランダム値が必須（未設定・ダミーだと起動しない）。Issue #170 |
 | `AI_PROVIDER` | AI 校正プロバイダの選択（**Phase 11**） | per-env | `local`（dev）/ `stub`（test）/ `anthropic`（prod） | 契約はプロバイダ非依存（[features/ai-proofread.md](features/ai-proofread.md)） |
 | `NOTIFICATION_READ_RETENTION_DAYS` | 既読通知の保持日数（過ぎたら定期ジョブが削除。未読は残す） | fixed（目安） | `90` | 1 以上。Issue #72・[processing-model.md](processing-model.md) §8 |
 | `OUTBOX_PROCESSED_RETENTION_DAYS` | 配布済み `notification_outbox` の保持日数 | fixed（目安） | `7` | 1 以上。Issue #72 |

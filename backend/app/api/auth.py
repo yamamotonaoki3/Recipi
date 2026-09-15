@@ -27,6 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlmodel import Session, select
 
+from app.audit import audit_event
 from app.config import settings
 from app.db import get_session
 from app.dependencies import get_current_user
@@ -42,6 +43,7 @@ from app.errors import (
 from app.models.password_reset_attempt import PasswordResetAttempt
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
+from app.request_utils import client_ip
 from app.schemas.auth import (
     PASSWORD_MAX_LENGTH,
     PASSWORD_MIN_LENGTH,
@@ -146,18 +148,6 @@ def _delete_refresh_cookie(response: Response) -> None:
     )
 
 
-def _client_ip(request: Request) -> str:
-    """レート制限のキーに使う呼び出し元 IP アドレス。
-
-    既知の限界（暫定仕様・todo #16）: リバースプロキシ / ロードバランサ
-    配下で動かす場合、`request.client.host` はプロキシ自身のアドレスに
-    なり、全ユーザーが同じ IP バケットを共有してしまう（本番デプロイ先や
-    プロキシ構成は未確定のため、`X-Forwarded-For` 等をここで信頼するのは
-    見送る。信頼するプロキシの IP 範囲が決まってから対応する）。
-    """
-    return request.client.host if request.client is not None else "unknown"
-
-
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -215,6 +205,7 @@ def signup(
 ) -> AuthTokenResponse:
     existing = session.exec(select(User).where(User.email == body.email)).first()
     if existing is not None:
+        audit_event("auth.signup", "failure", reason="email_taken", email=body.email)
         raise conflict("このメールアドレスは既に登録されています")
 
     user = User(
@@ -232,10 +223,12 @@ def signup(
         # メールアドレスで先に登録を終えてしまう競合状態がありうる。
         # その場合は users.email の UNIQUE 制約違反になるので、素直に 409 にする。
         session.rollback()
+        audit_event("auth.signup", "failure", reason="email_taken", email=body.email)
         raise conflict("このメールアドレスは既に登録されています") from exc
 
     raw_refresh_token = _issue_refresh_token(session, user.id, chain_id=uuid.uuid4())
     session.commit()
+    audit_event("auth.signup", "success", user_id=user.id, email=body.email)
     if _is_web_request(request):
         _set_refresh_cookie(response, raw_refresh_token, remember_me=False)
     return _auth_response(
@@ -259,6 +252,9 @@ def login(
     # 差からメールアドレスの登録有無を推測されるタイミング攻撃を防ぐ）。
     password_hash = user.password_hash if user is not None else None
     if not verify_password_or_dummy(body.password, password_hash):
+        # 「メールが無い」か「パスワード違い」かはログでも区別しない（email_hash で
+        # 同じアドレスへの失敗の連続は数えられるので、総当たりの調査には足りる）。
+        audit_event("auth.login", "failure", reason="invalid_credentials", email=body.email)
         raise unauthorized("メールアドレスまたはパスワードが正しくありません")
     # ここまで来た時点で user は必ず存在する
     # （verify_password_or_dummy は password_hash が None なら常に False を
@@ -267,6 +263,7 @@ def login(
     if user.deleted_at is not None:
         # 認証情報を知る本人にだけ退会状態を示す。トークンは発行しないので、
         # 続く /reactivate の明示操作までアカウントは再開されない。
+        audit_event("auth.login", "failure", user_id=user.id, reason="account_deactivated")
         raise account_deactivated()
 
     # rememberMe でリフレッシュトークンの有効期限を調整する
@@ -277,6 +274,7 @@ def login(
         session, user.id, chain_id=uuid.uuid4(), remember_me=body.remember_me
     )
     session.commit()
+    audit_event("auth.login", "success", user_id=user.id)
     if _is_web_request(request):
         _set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
     return _auth_response(
@@ -299,12 +297,14 @@ def reactivate(
         or user is None
         or user.deleted_at is None
     ):
+        audit_event("auth.reactivate", "failure", reason="invalid_credentials", email=body.email)
         raise unauthorized("メールアドレスまたはパスワードが正しくありません")
     reactivate_account(session, user)
     raw_refresh_token = _issue_refresh_token(
         session, user.id, chain_id=uuid.uuid4(), remember_me=body.remember_me
     )
     session.commit()
+    audit_event("auth.reactivate", "success", user_id=user.id)
     if _is_web_request(request):
         _set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
     return _auth_response(
@@ -378,6 +378,8 @@ def refresh(
         # ここで raise すると get_session が rollback してしまい、せっかくの
         # チェーン失効が消えてしまう。先に commit してから 401 を返す。
         session.commit()
+        # 盗用の疑いがある操作なので、成功時と違って必ず監査ログに残す。
+        audit_event("auth.refresh", "failure", user_id=user.id, reason="token_reuse_detected")
         raise unauthorized("リフレッシュトークンの再利用を検知しました。再度ログインしてください")
 
     if token_row.expires_at < _utcnow():
@@ -442,6 +444,7 @@ def logout(
         t.revoked_at = now
         session.add(t)
     session.commit()
+    audit_event("auth.logout", "success", user_id=current_user.id)
     _delete_refresh_cookie(response)
     return None
 
@@ -471,20 +474,25 @@ def _count_recent_attempts(
     return len(session.exec(stmt).all())
 
 
-def _enforce_reset_rate_limit(session: Session, email: str, ip_address: str) -> None:
+def _enforce_reset_rate_limit(
+    session: Session, email: str, ip_address: str, *, audit_action: str
+) -> None:
     """メールアドレス単位・IP アドレス単位の両方でレート制限を確認する。
 
     メールアドレスだけを見ると、攻撃者が候補のメールアドレスを 1 回ずつ
     変えて総当たりすれば閾値に達しないままアカウントを列挙できてしまう
     （P1 指摘）。そのため同一 IP からの総試行数にも別途上限を設ける。
+    制限に引っかかったら、`audit_action` の名前で監査ログに残す。
     """
     _lock_reset_key(session, f"email:{email}")
     _lock_reset_key(session, f"ip:{ip_address}")
     if _count_recent_attempts(session, email=email) >= _RESET_LOCKOUT_MAX_ATTEMPTS:
+        audit_event(audit_action, "failure", reason="rate_limited_email", email=email)
         raise too_many_requests(
             "パスワードリセットの試行回数が多すぎます。しばらくしてから再度お試しください"
         )
     if _count_recent_attempts(session, ip_address=ip_address) >= _IP_LOCKOUT_MAX_ATTEMPTS:
+        audit_event(audit_action, "failure", reason="rate_limited_ip", email=email)
         raise too_many_requests(
             "パスワードリセットの試行回数が多すぎます。しばらくしてから再度お試しください"
         )
@@ -500,8 +508,10 @@ def password_reset_request(
     # 含む）にレート制限を課すことを要求している。ここを制限しないと、
     # 大量のメールアドレスを試して「登録済みかどうか」を高速に調べる
     # 総当たり（アカウント列挙）を許してしまう。
-    ip_address = _client_ip(request)
-    _enforce_reset_rate_limit(session, body.email, ip_address)
+    ip_address = client_ip(request)
+    _enforce_reset_rate_limit(
+        session, body.email, ip_address, audit_action="auth.password_reset.request"
+    )
 
     # 登録済みメールへの成功呼び出しもレート制限の対象に含める。404 の
     # ケースだけを記録すると、実在するメールアドレスを知っている（または
@@ -515,7 +525,9 @@ def password_reset_request(
         # 秘密の質問方式である以上、メールアドレスの登録有無を完全には
         # 隠せない（lessons-learned に記載の既知の制約）。ここでは素直に
         # 404 を返す。
+        audit_event("auth.password_reset.request", "failure", reason="not_found", email=body.email)
         raise not_found("このメールアドレスは登録されていません")
+    audit_event("auth.password_reset.request", "success", user_id=user.id)
     return PasswordResetRequestResponse(security_question=user.security_question)
 
 
@@ -529,8 +541,10 @@ def password_reset_confirm(
     body: PasswordResetConfirmRequest,
     session: Session = Depends(get_session),
 ) -> None:
-    ip_address = _client_ip(request)
-    _enforce_reset_rate_limit(session, body.email, ip_address)
+    ip_address = client_ip(request)
+    _enforce_reset_rate_limit(
+        session, body.email, ip_address, audit_action="auth.password_reset.confirm"
+    )
 
     # ユーザー行をロックする（refresh() 側の with_for_update と対になる）。
     # これにより、このリクエストが token_version 更新・トークン全失効を
@@ -555,6 +569,8 @@ def password_reset_confirm(
         # 消えてレート制限が効かなくなる。先に commit してから 400 を返す。
         session.add(PasswordResetAttempt(email=body.email, ip_address=ip_address))
         session.commit()
+        # 応答と同じく、ログでも失敗の理由（メール・回答・新パスワード）を区別しない。
+        audit_event("auth.password_reset.confirm", "failure", reason="invalid", email=body.email)
         raise validation_error("パスワードリセットに失敗しました。入力内容を確認してください")
 
     user.password_hash = hash_password(body.new_password)
@@ -576,4 +592,5 @@ def password_reset_confirm(
         session.add(t)
 
     session.commit()
+    audit_event("auth.password_reset.confirm", "success", user_id=user.id)
     return None

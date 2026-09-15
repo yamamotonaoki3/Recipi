@@ -29,6 +29,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # ソースを見た人が偽のトークンを作れてしまう。
 _INSECURE_JWT_SECRETS = {"", "dev-only-not-a-real-secret", "changeme"}
 
+# production で使ってはいけない、ログ用ハッシュ鍵（LOG_HASH_SECRET）のダミー値。
+# 鍵が知られると、ログの email_hash から元のメールアドレスを総当たりで割り出せる。
+_INSECURE_LOG_HASH_SECRETS = {"", "dev-only-log-hash-secret", "changeme"}
+
 # このファイル（app/config.py）から見た backend/ の 1 つ上 = リポジトリルート。
 # `.env.development` などはリポジトリルートに置く（environment.md §3）。
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -154,6 +158,9 @@ class Settings(BaseSettings):
     # --- ログ ----------------------------------------------------------
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: Literal["json", "text"] = "json"
+    # 監査ログでメールアドレスを平文の代わりに出す email_hash（HMAC）の鍵（Issue #170）。
+    # production では 32 文字以上の本物のランダム鍵が必須（下の検証）。
+    LOG_HASH_SECRET: str = "dev-only-log-hash-secret"
 
     # --- AI 校正プロバイダ — 使うのは Phase 11 ------------------------
     AI_PROVIDER: Literal["local", "anthropic", "stub"] = "local"
@@ -176,6 +183,11 @@ class Settings(BaseSettings):
         if self.JWT_SECRET_KEY in _INSECURE_JWT_SECRETS or len(self.JWT_SECRET_KEY) < 32:
             raise ValueError(
                 "production では JWT_SECRET_KEY に 32 文字以上の本物のランダム鍵を"
+                "設定してください（.env.production / シークレット管理で注入）。"
+            )
+        if self.LOG_HASH_SECRET in _INSECURE_LOG_HASH_SECRETS or len(self.LOG_HASH_SECRET) < 32:
+            raise ValueError(
+                "production では LOG_HASH_SECRET に 32 文字以上の本物のランダム鍵を"
                 "設定してください（.env.production / シークレット管理で注入）。"
             )
         if not self.AUTH_COOKIE_SECURE:

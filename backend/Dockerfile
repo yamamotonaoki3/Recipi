@@ -31,4 +31,6 @@ USER appuser
 
 EXPOSE 8000
 # 本番の worker 数・プロセス構成は未定（todo #40）。ここでは単一プロセス。
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --no-access-log: アクセスログは app/middleware.py が JSON で出す（Issue #170）ので、
+# uvicorn 標準のアクセスログは止めて 1 リクエスト 2 行にならないようにする。
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

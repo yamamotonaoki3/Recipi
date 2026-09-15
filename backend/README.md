@@ -10,8 +10,10 @@ FastAPI + SQLModel + Alembic の Python バックエンド。要件定義書は
 | `app/main.py` | FastAPI アプリの入口。`uvicorn app.main:app` の `app`。ヘルスチェックだけ実装済み |
 | `app/config.py` | 環境変数 / `.env.<APP_ENV>` から設定を読む（`pydantic-settings`）。`settings` を他モジュールが import する |
 | `app/db.py` | DB エンジンとセッション（`get_session` 依存性）。`check_db_connection()` は疎通確認 |
-| `app/logging_config.py` | JSON ログの設定。`request_id`（ContextVar）を各ログに付ける |
-| `app/middleware.py` | リクエストごとに `X-Request-ID` を採番して ContextVar にセットするミドルウェア |
+| `app/logging_config.py` | JSON ログの設定。全行に `request_id` / `user_id` / `service` / `env` を付け、パスワード・トークン等を `[REDACTED]` に伏せる |
+| `app/middleware.py` | リクエストごとに `X-Request-ID` を採番し、1 リクエスト 1 行のアクセスログ（`log_type="access"`）を出すミドルウェア |
+| `app/audit.py` | 監査イベント（ログイン・削除など。`log_type="audit"`）を出す `audit_event()`。メールアドレスは `email_hash` で出す |
+| `app/request_utils.py` | 呼び出し元 IP の取得（`client_ip()`）。IP を使う箇所はすべてここを通す |
 | `alembic/` | DB マイグレーション。`env.py` が接続先を `app.config` から取る。`versions/` に各リビジョン |
 | `tests/` | pytest。`conftest.py` が `APP_ENV=test` を強制。`@pytest.mark.integration` は実 DB が要る |
 | `scripts/export_openapi.py` | `openapi/openapi.json` を書き出す（契約テスト用） |

@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlmodel import Session
 
+from app.audit import audit_event
 from app.db import get_session, run_with_retry
 from app.dependencies import get_current_user
 from app.errors import ErrorEnvelope
@@ -73,6 +74,7 @@ def delete_me(
     `run_with_retry` がやり直す。以降、同じトークンでのリクエストは 401 になる。
     """
     run_with_retry(session, lambda: account_service.delete_account(session, current_user))
+    audit_event("account.delete", "success", user_id=current_user.id)
     return None
 
 

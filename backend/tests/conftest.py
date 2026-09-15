@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 # ---- ここは import の前に実行される。順序が重要。 ----------------------
 os.environ["APP_ENV"] = "test"
@@ -127,6 +128,55 @@ def unique_email() -> str:
     import uuid
 
     return f"testuser_{uuid.uuid4().hex}@example.com"
+
+
+class CapturedLogs:
+    """`json_logs` fixture が返す、捕まえたログの読み出し口。"""
+
+    def __init__(self, stream) -> None:
+        self._stream = stream
+
+    def raw(self) -> str:
+        """出力されたログの文字列そのもの（秘密が混ざっていないかの検査に使う）。"""
+        value: str = self._stream.getvalue()
+        return value
+
+    def records(self) -> list[dict[str, Any]]:
+        import json
+
+        return [json.loads(line) for line in self.raw().splitlines() if line.strip()]
+
+    def of_type(self, log_type: str) -> list[dict[str, Any]]:
+        return [r for r in self.records() if r.get("log_type") == log_type]
+
+    def audit(self, action: str) -> list[dict[str, Any]]:
+        return [r for r in self.of_type("audit") if r.get("action") == action]
+
+
+@pytest.fixture
+def json_logs():
+    """アプリと同じ JSON 形式（フィルタ込み）でログを捕まえる（Issue #170）。
+
+    `.env.test` は LOG_LEVEL=WARNING なので、INFO のログも見えるよう、
+    テストの間だけ root のレベルを INFO に下げる（終わったら戻す）。
+    DEBUG まで見たいテストは `logging.getLogger().setLevel(logging.DEBUG)` を自分で呼ぶ。
+    """
+    import io
+    import logging
+
+    from app.logging_config import build_handler
+
+    stream = io.StringIO()
+    handler = build_handler("json", stream=stream, app_env="test")
+    root = logging.getLogger()
+    previous_level = root.level
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+    try:
+        yield CapturedLogs(stream)
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(previous_level)
 
 
 @pytest.fixture
