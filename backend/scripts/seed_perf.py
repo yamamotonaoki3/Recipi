@@ -88,16 +88,19 @@ class SeedData:
     follows: list[Follow] = field(default_factory=list)
     favorites: list[Favorite] = field(default_factory=list)
 
-    def all_rows(self) -> list[Any]:
-        """外部キーの親から順に並べた全行（この順に INSERT する）。"""
+    def insert_stages(self) -> list[list[Any]]:
+        """外部キーの親から順に、段階ごとに分けた行（1 段階ずつ INSERT して flush する）。
+
+        モデルは外部キーの列だけを持ち `relationship()` を定義していないので、
+        まとめて `add_all` すると SQLAlchemy は親子の順番を決められず、子
+        （favorites など）を親（users）より先に INSERT して外部キー違反になる
+        （Issue #145 の CI で発生。seed_demo.py が段階ごとに flush するのと同じ理由）。
+        """
         return [
-            *self.users,
-            *self.recipes,
-            *self.groups,
-            *self.ingredients,
-            *self.steps,
-            *self.follows,
-            *self.favorites,
+            list(self.users),
+            list(self.recipes),
+            list(self.groups),
+            [*self.ingredients, *self.steps, *self.follows, *self.favorites],
         ]
 
 
@@ -216,7 +219,11 @@ def seed(session: Session, data: SeedData) -> None:
             "perfuser_ のデータがすでにあります。やり直すときは先に "
             "`python -m scripts.cleanup_perf --yes` を実行してください。"
         )
-    session.add_all(data.all_rows())
+    # 親の行を先に DB へ送ってから（flush）、それを参照する子を足す。commit は最後に 1 回
+    # なので、途中で失敗すれば全部取り消される（1 トランザクション）。
+    for rows in data.insert_stages():
+        session.add_all(rows)
+        session.flush()
     session.commit()
 
 
