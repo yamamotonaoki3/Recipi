@@ -20,6 +20,16 @@
  * 無視される**。それを利用して「＋」を素の Pressable にしてあり、押すと
  * レシピ作成をモーダルで開くだけでタブは選択状態にならない
  * （navigation.md「タブ自体は選択状態にしない」）。
+ *
+ * ## 別のタブから戻ると、どのタブも最初の画面を出す（Issue #156）
+ * destination ごとにスタックを持つので、何もしないと「前に開いていた詳細」などの
+ * 続きが出る。タブのアイコンは各機能の入口なので、別のタブから押したら
+ * 最初の画面（レシピ一覧 / 履歴一覧 / 通知一覧 / マイページメニュー）を出す。
+ * `TabTrigger` の `resetOnFocus` を付けると、切り替えたときにそのタブの
+ * スタックを捨てて最初の画面から作り直してくれる（expo-router の TabRouter）。
+ *
+ * ただしプロフィール編集を保存しないまま別のタブへ移っていた場合は、黙って捨てると
+ * 入力が消えるので、作り直しを止めて編集画面を出し、その画面の確認ダイアログを開く。
  */
 import { usePathname, useRouter } from "expo-router";
 import { TabList, TabSlot, TabTrigger, Tabs } from "expo-router/ui";
@@ -58,6 +68,8 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const isRail = useIsNavRail();
   const unread = useUnreadNotificationCount();
+  // 裏に残った未保存の編集画面（destination ごと）。変わったら resetOnFocus を付け直す。
+  const pendingByDestination = useUnsavedChangesStore((state) => state.pendingByDestination);
 
   /**
    * 既に選択中の destination をもう一度押したときに、そのタブのスタックを
@@ -82,6 +94,26 @@ export default function TabsLayout() {
       }
       router.dismissTo(href as never);
     }
+  };
+
+  /** 別のタブから押したとき、最初の画面へ作り直すか（未保存の編集が裏にあれば作り直さない）。 */
+  const shouldResetOnFocus = (href: string) => !pendingByDestination[href];
+
+  /**
+   * タブを押したとき。選択中なら従来どおり根まで戻す。
+   *
+   * 別のタブから来て、その destination に未保存の編集画面が裏に残っていれば、
+   * その画面の確認ダイアログを開く（Issue #156）。タブの切り替え自体は止めない。
+   * このとき `resetOnFocus` は外してあるので編集画面がそのまま表示され、
+   * 「破棄」なら編集画面が閉じて最初の画面へ、「キャンセル」なら入力が残る。
+   */
+  const handleTabPress = (href: string, event?: GestureResponderEvent) => {
+    const isInside = pathname === href || pathname.startsWith(`${href}/`);
+    if (isInside) {
+      popToDestinationRoot(href, event);
+      return;
+    }
+    useUnsavedChangesStore.getState().pendingByDestination[href]?.();
   };
 
   /**
@@ -139,7 +171,8 @@ export default function TabsLayout() {
             name={tab.name}
             href={tab.href}
             testID={tab.testID}
-            onPress={(event) => popToDestinationRoot(tab.href, event)}
+            resetOnFocus={shouldResetOnFocus(tab.href)}
+            onPress={(event) => handleTabPress(tab.href, event)}
             asChild
           >
             <NavTabButton icon={tab.icon} label={tab.label} />
@@ -162,7 +195,8 @@ export default function TabsLayout() {
             name={tab.name}
             href={tab.href}
             testID={tab.testID}
-            onPress={(event) => popToDestinationRoot(tab.href, event)}
+            resetOnFocus={shouldResetOnFocus(tab.href)}
+            onPress={(event) => handleTabPress(tab.href, event)}
             asChild
           >
             <NavTabButton
