@@ -61,8 +61,21 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-15 アイコンを lucide-react-native にそろえる（Issue #144）](#2026-09-15-アイコンを-lucide-react-native-にそろえるissue-144)
 - [2026-09-15 タブを押したら最初の画面へ戻す（Issue #156）](#2026-09-15-タブを押したら最初の画面へ戻すissue-156)
 - [2026-09-16 構造化ログにアクセスログ・監査イベントを足す（Issue #170）](#2026-09-16-構造化ログにアクセスログ監査イベントを足すissue-170)
+- [2026-09-16 Terraform で AWS 本番環境を書く（Issue #165）](#2026-09-16-terraform-で-aws-本番環境を書くissue-165)
 
 ---
+
+## 2026-09-16 Terraform で AWS 本番環境を書く（Issue #165）
+
+**きっかけ**: Issue #165（infra）。API Gateway HTTP API ＋ VPC Link ＋ Cloud Map、private の ECS、NAT 1 つ、RDS、CloudFront ＋ 非公開 S3 を Terraform で書いた。コスト削減のため本体は apply せず、`fmt`・`validate`・`plan` で確かめた（apply は tfstate 用バケットだけ）。計画の Codex レビュー 2 回（重大 4 → 0）、コードの Codex レビュー 1 回（指摘 0）。
+
+1. **`random_password` で作った値や Secrets Manager に入れた値は、tfstate に平文で残る**（計画レビューで重大として指摘）。S3 backend の暗号化だけでは、state を読める人に秘密が見えてしまう。Terraform 1.11+ ＋ AWS provider 6 系なら、`ephemeral "random_password"` で作り、`password_wo` / `secret_string_wo`（書き込み専用の引数）で渡せば、state にも plan にも値が残らない。値を作り直すときは `*_wo_version` を上げる。同じ apply の中では同じ ephemeral の値が使われるので、RDS のパスワードと `DATABASE_URL` は一致する。
+2. **値の入っていない Secrets Manager の秘密をタスク定義の `secrets` で参照すると、ECS はタスクを起動できない**（計画レビューで重大として指摘）。「入れ物だけ先に作って値は後で」は、使う機能（今回は Phase 11 の AI）ができるまで作らない。
+3. **Issue の本文は、下敷きにしたプロジェクトの値を写していることがある**。#165 の本文は RDS を PostgreSQL 17 としていたが、RaiseTimeLine の値の写しで、要件定義書（tech-stack.md）は 18。要件定義書を正にし、提供状況は `aws rds describe-orderable-db-instance-options`（読み取りのみ・無料）で確かめた。
+4. **API Gateway HTTP API から Cloud Map 経由で ECS に届けるには、SRV レコード ＋ ECS サービスの `service_registries`（`container_name`・`container_port`）が要る**。A レコードだとポートが登録されず、転送先が決まらない。
+5. **`.terraform.lock.hcl` は、手元の OS の検証値しか入らない**。Windows で作ったまま CI（Linux）で `init` すると失敗しうるので、`terraform providers lock -platform=windows_amd64 -platform=linux_amd64 -platform=darwin_arm64` で複数 OS 分を入れてからコミットする。
+6. **apply する前に、plan の JSON（`terraform show -json`）で「作るものの種類・操作」を機械的に検査する**。bootstrap は「S3 と random_id の create だけ」、本体は「ALB が無い・NAT が 1 つ・Gateway 型エンドポイントだけ・公開 IP なし・すべて create」を確かめてから進めた。条件を外れたら止まる。
+7. **SG どうしがお互いを参照するときは、ルールを `aws_vpc_security_group_*_rule` に分ける**。SG の中に書くと循環参照になる。
 
 ## 2026-09-16 構造化ログにアクセスログ・監査イベントを足す（Issue #170）
 

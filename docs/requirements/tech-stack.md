@@ -107,7 +107,9 @@
 ## インフラ / 実行環境
 
 - ローカル開発は **Docker Compose 中心**（`api` + `postgres` + `minio`）。詳細は [architecture.md](architecture.md)。
-- 本番デプロイ先は未定（別途検討 → [todo.md](todo.md)）。
+- 本番は **AWS**（学習用。確認するときだけ apply し、終わったら destroy する）。構成は `infra/terraform/README.md`、詳細は Issue #168 で [architecture.md](architecture.md) に反映する。
+- **Terraform**: `required_version = "~> 1.15"`（手元・CI は 1.15.5）。**AWS provider `~> 6.64`**、**random provider `~> 3.9`**（Issue #165 で確定。2026-09-16 時点の最新安定版）。ephemeral リソース（1.10+）と書き込み専用の引数（1.11+）を使い、DB のパスワードや鍵を tfstate に残さない。
+- **RDS for PostgreSQL 18**（ローカルの `postgres:18` と同じメジャー。東京リージョンの db.t4g.micro で提供を確認）。
 
 ## ライセンス・費用
 
