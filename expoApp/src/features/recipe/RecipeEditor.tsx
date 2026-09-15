@@ -26,6 +26,16 @@ import {
   type TextInput as RNTextInput,
 } from "react-native";
 
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronUp,
+  Link,
+  Minus,
+  Plus,
+  X,
+} from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { extractValidationErrors, type RecipeResponse } from "./api";
@@ -54,6 +64,7 @@ import { ApiError } from "@/features/auth/api";
 import { resolveRecipeStackDestination } from "@/features/navigation/destinations";
 import { NAV_RAIL_MIN_WIDTH } from "@/components/AppNavBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Icon, ICON_COLORS } from "@/components/Icon";
 import { ImagePickerField } from "@/components/ImagePickerField";
 
 /**
@@ -402,8 +413,13 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
           見た目が崩れるうえにアクセシビリティツリーからも剪定されて
           TalkBack / E2E から `editor-save` に到達できなくなる。 */}
       <View className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3">
-        <Pressable testID="editor-close" onPress={guard.requestClose} accessibilityRole="button">
-          <Text className="text-neutral-500">×</Text>
+        <Pressable
+          testID="editor-close"
+          onPress={guard.requestClose}
+          accessibilityRole="button"
+          accessibilityLabel="閉じる"
+        >
+          <Icon as={X} size={22} />
         </Pressable>
         <Text className="text-base font-bold text-neutral-900">
           {mode === "edit" ? "レシピを編集" : "レシピを作成"}
@@ -492,9 +508,10 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
                   })
                 }
                 accessibilityRole="button"
+                accessibilityLabel="人数を減らす"
                 className="h-9 w-9 items-center justify-center rounded-lg border border-neutral-300"
               >
-                <Text className="text-lg text-neutral-700">−</Text>
+                <Icon as={Minus} size={18} color={ICON_COLORS.strong} />
               </Pressable>
               <TextInput
                 testID="editor-servings"
@@ -515,9 +532,10 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
                   })
                 }
                 accessibilityRole="button"
+                accessibilityLabel="人数を増やす"
                 className="h-9 w-9 items-center justify-center rounded-lg border border-neutral-300"
               >
-                <Text className="text-lg text-neutral-700">＋</Text>
+                <Icon as={Plus} size={18} color={ICON_COLORS.strong} />
               </Pressable>
             </View>
             {errors.servings && (
@@ -781,9 +799,10 @@ function GroupEditor({
         testID={`group-${groupIndex}-add-ingredient`}
         onPress={() => dispatch({ type: "addIngredient", groupId: group.localId })}
         accessibilityRole="button"
-        className="self-start rounded-lg border border-neutral-200 px-2 py-1"
+        className="flex-row items-center gap-1 self-start rounded-lg border border-neutral-200 px-2 py-1"
       >
-        <Text className="text-xs text-neutral-600">＋ 材料を追加</Text>
+        <Icon as={Plus} size={14} />
+        <Text className="text-xs text-neutral-600">材料を追加</Text>
       </Pressable>
     </View>
   );
@@ -952,7 +971,7 @@ function IngredientEditor({
             accessibilityLabel="単位の候補を開閉"
             className="rounded-r border border-neutral-200 bg-neutral-100 px-1.5 py-1.5"
           >
-            <Text className="text-xs text-neutral-600">▼</Text>
+            <Icon as={showUnitList ? ChevronUp : ChevronDown} size={14} />
           </Pressable>
         </View>
       </View>
@@ -1009,8 +1028,14 @@ function IngredientEditor({
 
       <View className="flex-row items-center gap-2">
         {ingredient.refRecipeId ? (
-          <Pressable testID={`${testIDBase}-unlink`} onPress={onUnlink} accessibilityRole="button">
-            <Text className="text-xs text-orange-600">🔗 {ingredient.refRecipeTitle}（解除）</Text>
+          <Pressable
+            testID={`${testIDBase}-unlink`}
+            onPress={onUnlink}
+            accessibilityRole="button"
+            className="flex-row items-center gap-1"
+          >
+            <Icon as={Link} size={12} color={ICON_COLORS.accent} />
+            <Text className="text-xs text-orange-600">{ingredient.refRecipeTitle}（解除）</Text>
           </Pressable>
         ) : (
           <Pressable
@@ -1179,7 +1204,9 @@ function MoveButtons({
         accessibilityRole="button"
         accessibilityLabel="上へ移動"
       >
-        <Text className={`px-1 text-sm ${canUp ? "text-neutral-600" : "text-neutral-300"}`}>↑</Text>
+        <View className="px-1">
+          <Icon as={ArrowUp} size={16} color={canUp ? ICON_COLORS.muted : ICON_COLORS.disabled} />
+        </View>
       </Pressable>
       <Pressable
         testID={`${testIDPrefix}-move-down`}
@@ -1188,9 +1215,13 @@ function MoveButtons({
         accessibilityRole="button"
         accessibilityLabel="下へ移動"
       >
-        <Text className={`px-1 text-sm ${canDown ? "text-neutral-600" : "text-neutral-300"}`}>
-          ↓
-        </Text>
+        <View className="px-1">
+          <Icon
+            as={ArrowDown}
+            size={16}
+            color={canDown ? ICON_COLORS.muted : ICON_COLORS.disabled}
+          />
+        </View>
       </Pressable>
     </View>
   );

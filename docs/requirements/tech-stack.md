@@ -25,6 +25,7 @@
 | 対象プラットフォーム | iOS / Android（Expo ネイティブ）＋ **Desktop（Windows・macOS）** | Desktop は下記のとおり RN Web ビルドを Tauri で包む |
 | Desktop シェル | **Tauri 2**（core 2.11 系、システム WebView + Rust コア） | RN Web（React Native Web）ビルドを読み込み、`.msi` / `.dmg` を生成。Electron より軽量。**最低 Rust 1.77.2**、Windows は **MSVC C++ Build Tools ＋ WebView2**（WebView2 は導入済み）が前提 |
 | UI / スタイル | **NativeWind**（Tailwind for RN） | デザイントークン・ダークモード対応の詳細は → [todo.md](todo.md) |
+| アイコン | **lucide-react-native**（`1.46.0`）＋ **react-native-svg**（`15.15.4`）。Issue #144 で確定 | 線で描く SVG アイコン集（MIT）。絵文字は OS ごとに絵柄が変わるため使わない。大きさ・色の既定値は `src/components/Icon.tsx` にまとめる。react-native-svg はネイティブモジュールなので、追加・更新時は dev build を作り直す |
 | HTTP / 型 | **openapi-typescript**（型生成）＋ **openapi-fetch**（軽量クライアント） | `openapi.json` から型と fetch を生成。詳細は「型共有」節 |
 | データ取得 / キャッシュ | **TanStack Query** | 一覧のカーソルページング（`useInfiniteQuery`）、楽観更新 |
 | 状態管理（クライアント状態） | **Zustand**（Issue #34 で確定） | 認証トークン・UI トグルなど「サーバーから取らない」少量の状態。サーバーデータは TanStack Query |

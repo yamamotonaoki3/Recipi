@@ -7,7 +7,10 @@
  * Fragment と TabList の中しか降りていかない。自作コンポーネントで TabTrigger を
  * 包むと、タブとして認識されなくなる。
  */
+import { Plus, type LucideIcon } from "lucide-react-native";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
+
+import { Icon, ICON_COLORS } from "@/components/Icon";
 
 /**
  * ボトムナビ ⇔ ナビゲーションレールの切替幅（px）。
@@ -31,14 +34,19 @@ export function useIsNavRail(): boolean {
 }
 
 type NavItemLabelProps = {
-  icon: string;
+  icon: LucideIcon;
   label: string;
   focused: boolean;
   badge?: number;
+  /** アイコンの testID（テストで「どのアイコンを出したか」を確かめる用）。 */
+  iconTestID?: string;
 };
 
-/** タブ 1 つ分の中身（アイコン ＋ ラベル）。選択中はオレンジで示す。 */
-export function NavItemLabel({ icon, label, focused, badge = 0 }: NavItemLabelProps) {
+/**
+ * タブ 1 つ分の中身（アイコン ＋ ラベル）。
+ * 選択中はオレンジで線を太く、それ以外は灰色の細い線にして見分けやすくする。
+ */
+export function NavItemLabel({ icon, label, focused, badge = 0, iconTestID }: NavItemLabelProps) {
   const color = focused ? "text-orange-600" : "text-neutral-500";
   return (
     <View
@@ -46,7 +54,13 @@ export function NavItemLabel({ icon, label, focused, badge = 0 }: NavItemLabelPr
       accessibilityLabel={badge > 0 ? `${label}、未読${badge}件` : label}
     >
       <View>
-        <Text className={`text-lg ${color}`}>{icon}</Text>
+        <Icon
+          as={icon}
+          size={22}
+          color={focused ? ICON_COLORS.accent : ICON_COLORS.muted}
+          strokeWidth={focused ? 2.5 : 2}
+          testID={iconTestID}
+        />
         {badge > 0 && (
           <View
             testID="nav-notifications-badge"
@@ -82,7 +96,7 @@ export function NavCreateButton({ onPress }: NavCreateButtonProps) {
       accessibilityLabel="レシピを作成"
       className="h-12 w-12 items-center justify-center rounded-full bg-orange-500"
     >
-      <Text className="text-2xl leading-7 text-white">＋</Text>
+      <Icon as={Plus} size={26} color={ICON_COLORS.onAccent} strokeWidth={2.5} />
     </Pressable>
   );
 }

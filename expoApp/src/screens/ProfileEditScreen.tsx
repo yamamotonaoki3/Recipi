@@ -24,6 +24,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
+import { BackLabel } from "@/components/BackLabel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ApiError } from "@/features/auth/api";
 import type { UserSelfProfile } from "@/features/profile/api";
@@ -114,7 +115,7 @@ function AppBar({
   return (
     <View className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3">
       <Pressable testID="profile-edit-back" onPress={onBack} accessibilityRole="button">
-        <Text className="text-neutral-500">← 戻る</Text>
+        <BackLabel />
       </Pressable>
       <Text className="text-base font-bold text-neutral-900">プロフィール編集</Text>
       <Pressable

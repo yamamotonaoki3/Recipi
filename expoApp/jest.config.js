@@ -33,6 +33,11 @@ module.exports = {
       // テストでは中身を見ない空モジュールに差し替える。
       moduleNameMapper: {
         "\\.css$": "<rootDir>/jest.cssMock.js",
+        // lucide-react-native（アイコン。Issue #144）は jest-expo の解決条件だと
+        // ESM 版（.mjs）が選ばれ、Jest の CommonJS 実行で読み込めない。
+        // 同梱の CommonJS 版を直接指す（アプリ本体の Metro は従来どおり ESM 版を使う）。
+        "^lucide-react-native$":
+          "<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js",
       },
       // SafeArea（`useSafeAreaInsets`）のモック。理由は jest.setup.js のコメント。
       setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],

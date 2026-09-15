@@ -13,10 +13,12 @@
  */
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { Heart, X } from "lucide-react-native";
 import { FlatList, Platform, Pressable, RefreshControl, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FeedRecipeCard } from "@/components/FeedRecipeCard";
+import { Icon, ICON_COLORS } from "@/components/Icon";
 import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { RecipeCardSkeletonList } from "@/components/Skeleton";
 import type { FeedKind } from "@/features/feed/api";
@@ -183,7 +185,9 @@ export function HomeScreen({ basePath }: { basePath: string }) {
             accessibilityRole="button"
             accessibilityLabel="検索をクリア"
           >
-            <Text className="px-1 text-lg text-neutral-500">×</Text>
+            <View className="px-1">
+              <Icon as={X} size={20} />
+            </View>
           </Pressable>
         )}
         {/* 押して検索できる導線（home.md §5）。キーボードの確定キーだけに
@@ -217,16 +221,22 @@ export function HomeScreen({ basePath }: { basePath: string }) {
               onPress={() => selectTab(tab.key)}
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
-              className={`px-3 py-2 ${focused ? "border-b-2 border-orange-500" : ""}`}
+              className={`flex-row items-center gap-1 px-3 py-2 ${
+                focused ? "border-b-2 border-orange-500" : ""
+              }`}
             >
+              {/* SVG のアイコンは Text の中に入れられないので、Text の横に並べる。 */}
+              {"heart" in tab && tab.heart ? (
+                <Icon
+                  as={Heart}
+                  size={14}
+                  color={ICON_COLORS.favorite}
+                  testID={`home-subtab-${tab.key}-heart`}
+                />
+              ) : null}
               <Text
                 className={`text-sm ${focused ? "font-semibold text-orange-600" : "text-neutral-500"}`}
               >
-                {"heart" in tab && tab.heart ? (
-                  <Text testID={`home-subtab-${tab.key}-heart`} className="text-red-500">
-                    ♡{" "}
-                  </Text>
-                ) : null}
                 {tab.label}
               </Text>
             </Pressable>
@@ -244,7 +254,7 @@ export function HomeScreen({ basePath }: { basePath: string }) {
             className="flex-row items-center gap-1 rounded-full bg-neutral-100 px-3 py-1"
           >
             <Text className="text-sm text-neutral-700">{submittedQuery}</Text>
-            <Text className="text-sm text-neutral-500">×</Text>
+            <Icon as={X} size={14} />
           </Pressable>
         </View>
       )}
