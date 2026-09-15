@@ -6,14 +6,27 @@
 // `phase` など）。
 import http from "k6/http";
 import { check, sleep } from "k6";
+import { Counter } from "k6/metrics";
 
 import { API, THINK_TIME, vocabulary } from "./config.js";
 
 const FEED_PAGES = 3;
 const PAGE_SIZE = 20;
 
+// 5xx（サーバー側の失敗）の件数（Issue #147）。`http_req_failed` は 4xx も含むので、
+// 「サーバーが壊れたか」だけを見たいストレステストでは別に数えて判定する。
+// どのテストでも数えるが、閾値を付けているのは stress.js だけ。
+export const serverErrors = new Counter("server_errors");
+
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
+}
+
+/** GET して、5xx なら server_errors に数える。 */
+function get(url, headers, tags) {
+  const res = http.get(url, { headers, tags });
+  if (res.status >= 500) serverErrors.add(1, tags);
+  return res;
 }
 
 export function browse(headers, extraTags = {}) {
@@ -24,10 +37,7 @@ export function browse(headers, extraTags = {}) {
   let cursor = null;
   for (let page = 0; page < FEED_PAGES; page += 1) {
     const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
-    const res = http.get(`${API}/recipes?feed=all&limit=${PAGE_SIZE}${query}`, {
-      headers,
-      tags: tags("feed"),
-    });
+    const res = get(`${API}/recipes?feed=all&limit=${PAGE_SIZE}${query}`, headers, tags("feed"));
     const ok = check(res, { "feed 200": (r) => r.status === 200 }, tags("feed"));
     if (!ok) return;
     const body = res.json();
@@ -39,10 +49,11 @@ export function browse(headers, extraTags = {}) {
 
   // --- 検索（材料名。語彙はシードと同じなので必ずヒットする）---
   const term = pick(vocabulary.ingredients);
-  const search = http.get(`${API}/recipes?feed=all&limit=${PAGE_SIZE}&q=${encodeURIComponent(term)}`, {
+  const search = get(
+    `${API}/recipes?feed=all&limit=${PAGE_SIZE}&q=${encodeURIComponent(term)}`,
     headers,
-    tags: tags("search"),
-  });
+    tags("search"),
+  );
   check(
     search,
     {
@@ -54,10 +65,7 @@ export function browse(headers, extraTags = {}) {
 
   // --- 詳細（フィードで見えたレシピから 1 件）---
   if (recipeIds.length > 0) {
-    const detail = http.get(`${API}/recipes/${pick(recipeIds)}`, {
-      headers,
-      tags: tags("detail"),
-    });
+    const detail = get(`${API}/recipes/${pick(recipeIds)}`, headers, tags("detail"));
     check(detail, { "detail 200": (r) => r.status === 200 }, tags("detail"));
   }
 
