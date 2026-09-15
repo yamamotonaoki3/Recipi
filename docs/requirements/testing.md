@@ -48,7 +48,10 @@
 
 ## 3. カバレッジ
 
-- PR ごとに計測する。結果を PR にコメント表示するのは**未実装**（#86。CI は `coverage.xml` / `coverage.json` を出力するだけ）。
+- PR ごとに計測する。backend は `test` ジョブが結果を **PR にコメント**する（Issue #86）。全体の行・分岐と下限・合否、この PR で変わった `backend/app/` のファイルごとの行・分岐を出し、CI を再実行すると同じコメントを更新する（増やさない）。
+  - 本文は `backend/scripts/coverage_comment.py` が `coverage.json` から作り、計算は `check_coverage.py` と同じ関数を使う（コメントの合否と CI の合否が一致する）。投稿は `gh api`（外部 Action は使わない）。
+  - コメントは補助なので、本文作成・投稿に失敗しても CI は落とさない（合否は下限判定だけ）。フォーク・Dependabot の PR はトークンが読み取り専用のため投稿しない。
+  - backend に関係ない PR（`test` ジョブがスキップされる）ではコメントしない。frontend のコメントは未対応。
 - **行カバレッジと分岐カバレッジの両方**でゲートする。下限を割ったら CI を失敗させる。
   - backend: `pytest --cov-report=json` の結果を `backend/scripts/check_coverage.py` が行・分岐それぞれ下限と比べる（`--cov-fail-under` は行と分岐の合算しか見ないため使わない。Issue #76）
   - frontend: jest の `coverageThreshold`（`lines` / `branches` を別々に判定）。`npm test -- --coverage` のときだけ判定される
@@ -73,7 +76,7 @@
 
 | ワークフロー      | トリガー                                                              | 内容                                                                                                                                                                                                                                      |
 | ----------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend.yml`     | `backend/**` を含む push / PR                                         | ruff（lint・format）→ mypy → Alembic マイグレーション → pytest（単体 ＋ 結合を 1 回で実行。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ `check_coverage.py` で行・分岐の下限を判定（PR へのコメントは未実装・#86） |
+| `backend.yml`     | `backend/**` を含む push / PR                                         | ruff（lint・format）→ mypy → Alembic マイグレーション → pytest（単体 ＋ 結合を 1 回で実行。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ `check_coverage.py` で行・分岐の下限を判定 → PR にカバレッジをコメント（#86） |
 | `frontend-ts.yml` | `expoApp/**` を含む push / PR                                         | `checks` ジョブ: ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、`--coverage` で行・分岐の下限を判定）→ Web ビルド（`npm run build:web`）                                                                                |
 | `contract.yml`    | backend / `openapi.json` / 生成設定の変更                             | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後）                                                                                                                                  |
 | `e2e.yml`         | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行 → E2E データの後始末（`cleanup_e2e.py`、残数 0 を確認）                                                                                            |

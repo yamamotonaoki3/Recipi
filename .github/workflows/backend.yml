@@ -39,6 +39,14 @@ jobs:
     # 判定が「対象の変更なし」のときだけ飛ばす。判定が失敗・未完了なら安全側で走らせる。
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
     runs-on: ubuntu-latest
+    # PR にカバレッジをコメントするため、このジョブだけ PR への書き込みを許可する（Issue #86）。
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      # カバレッジの下限（testing.md §3）。下限判定とコメントで同じ値を使う。
+      COVERAGE_MIN_LINES: "85"
+      COVERAGE_MIN_BRANCHES: "75"
     defaults:
       run:
         working-directory: backend
@@ -127,12 +135,54 @@ jobs:
           APP_ENV: test
 
       - name: pytest（単体 ＋ 結合、行・分岐カバレッジ）
-        # coverage.xml は PR コメント用（投稿は未実装・Issue #86）、coverage.json は下の判定用。
-        run: pytest --cov-report=xml --cov-report=json
+        id: pytest
+        # coverage.json は下の下限判定と PR コメントで使う。
+        run: pytest --cov-report=json
         env:
           APP_ENV: test
 
       - name: カバレッジの下限を判定（行・分岐を別々に）
         # `--cov-fail-under` は行と分岐の合算しか見ないので、行と分岐をそれぞれ下限と
         # 比べるスクリプトで判定する（testing.md §3。MVP 目標値。Issue #76）。
-        run: python -m scripts.check_coverage coverage.json --lines 85 --branches 75
+        run: python -m scripts.check_coverage coverage.json --lines "$COVERAGE_MIN_LINES" --branches "$COVERAGE_MIN_BRANCHES"
+
+      # --- PR にカバレッジをコメント（Issue #86） ---------------------------
+      # 下限を割って上のステップが失敗したときこそ見えてほしいので always() で走らせる
+      # （pytest 自体が走らなかったときは出さない）。フォークの PR はトークンが
+      # 読み取り専用で書けないので出さない。コメントは補助なので、失敗しても
+      # CI は落とさない（continue-on-error。合否は上の下限判定だけで決まる）。
+      - name: カバレッジのコメント本文を作る
+        id: coverage_comment
+        if: >-
+          always() && github.event_name == 'pull_request' &&
+          steps.pytest.outcome != 'skipped' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # 変更ファイルは GitHub の API から取る（checkout の形に依存しない）。削除は除く。
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files"             --jq '.[] | select(.status != "removed") | .filename' > changed-files.txt
+          python -m scripts.coverage_comment coverage.json             --changed-files changed-files.txt             --lines "$COVERAGE_MIN_LINES" --branches "$COVERAGE_MIN_BRANCHES"             --output coverage-comment.md
+
+      - name: PR にカバレッジをコメント（あれば更新）
+        if: always() && steps.coverage_comment.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # 目印を含み、かつ github-actions[bot] が書いたコメントだけを更新対象にする
+          # （他人が同じ目印を書いても触らない）。無ければ新しく書く。
+          marker='<!-- recipi-coverage:backend -->'
+          id=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments"             --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"$marker\"))) | .id"             | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@coverage-comment.md > /dev/null
+            echo "既存のコメント（$id）を更新しました"
+          else
+            gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -F body=@coverage-comment.md > /dev/null
+            echo "コメントを新しく書きました"
+          fi
