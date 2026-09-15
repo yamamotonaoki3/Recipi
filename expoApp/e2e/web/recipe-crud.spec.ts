@@ -13,6 +13,8 @@ import path from "node:path";
 
 import { test, expect } from "@playwright/test";
 
+import { createRecipe, makeRunId, signUp } from "./helpers";
+
 type Page = import("@playwright/test").Page;
 
 const detailTitle = (page: Page) => page.getByTestId("recipe-detail-title").last();
@@ -194,4 +196,64 @@ test("必須未入力のまま保存するとエラーがポップアップで�
   await page.getByTestId("editor-error-dialog-jump").last().click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("editor-title").last()).toBeInViewport({ timeout: 10_000 });
+});
+
+/**
+ * 広い画面（Desktop Chrome = 1280 × 720）では、作成・編集画面が中央のダイアログで出る
+ * （Issue #158）。閉じ方（Esc・背景クリック）と、狭い画面では今までどおりの
+ * フルスクリーンになることを確かめる。
+ */
+test("広い画面ではエディタが中央のダイアログで開き、Esc・背景で閉じられる", async ({ page }) => {
+  const shown = (testId: string) => page.getByTestId(testId).filter({ visible: true }).first();
+  const runId = makeRunId();
+  await signUp(page, `e2euser_dialog_${runId}@example.com`, "E2E Dialog User");
+
+  // --- ＋ で開くと、中央のカード（最大幅 768px）と背景が出る ---
+  await page.getByTestId("nav-create").last().click();
+  const dialog = shown("editor-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(shown("editor-backdrop")).toBeVisible();
+  const box = await dialog.boundingBox();
+  expect(box, "ダイアログの位置が取れること").not.toBeNull();
+  const viewport = page.viewportSize();
+  if (box && viewport) {
+    expect(box.width).toBeLessThanOrEqual(768);
+    // 左右の余白がほぼ同じ（中央に置かれている）。
+    expect(Math.abs(box.x - (viewport.width - box.x - box.width))).toBeLessThan(4);
+  }
+
+  // --- 入力してから Esc → 破棄の確認。もう一度 Esc で確認だけ閉じる ---
+  await shown("editor-title").fill("[E2E_TEST] ダイアログ");
+  await page.keyboard.press("Escape");
+  await expect(shown("editor-discard-dialog-confirm")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("editor-discard-dialog-confirm")).toBeHidden();
+  await expect(shown("editor-title")).toHaveValue("[E2E_TEST] ダイアログ");
+
+  // --- 背景（カードの外）をクリック → 破棄の確認 → 破棄で閉じてホームに戻る ---
+  await shown("editor-backdrop").click({ position: { x: 8, y: 8 } });
+  await shown("editor-discard-dialog-confirm").click();
+  await expect(page.getByTestId("editor-dialog").filter({ visible: true })).toHaveCount(0);
+  await expect(shown("home-logo")).toBeVisible();
+
+  // --- 作成 → 保存後は詳細へ（ダイアログは閉じる） ---
+  const title = `[E2E_TEST] ダイアログ保存 ${runId}`;
+  await createRecipe(page, title, "たまねぎ", { isPublic: false });
+  await expect(page.getByTestId("editor-dialog").filter({ visible: true })).toHaveCount(0);
+
+  // --- 詳細から編集もダイアログ。変更なしの Esc はそのまま詳細へ戻る ---
+  await shown("recipe-detail-edit").click();
+  await expect(shown("editor-dialog")).toBeVisible();
+  await expect(shown("editor-title")).toHaveValue(title);
+  await page.screenshot({ path: "test-results/editor-dialog-wide.png" });
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("editor-dialog").filter({ visible: true })).toHaveCount(0);
+  await expect(shown("recipe-detail-title")).toHaveText(title);
+
+  // --- 狭い画面（スマホ幅）では今までどおりフルスクリーン ---
+  await page.setViewportSize({ width: 400, height: 800 });
+  await shown("recipe-detail-edit").click();
+  await expect(shown("editor-title")).toBeVisible();
+  await expect(page.getByTestId("editor-dialog").filter({ visible: true })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/editor-dialog-narrow.png" });
 });
