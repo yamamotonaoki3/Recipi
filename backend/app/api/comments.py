@@ -20,6 +20,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
+from app.audit import audit_event
 from app.db import get_session, run_with_retry
 from app.dependencies import get_current_user, get_current_user_optional
 from app.errors import ErrorEnvelope
@@ -109,4 +110,6 @@ def delete_comment(
     run_with_retry(
         session, lambda: comment_service.delete_comment(session, current_user, comment_id)
     )
+    # 他人の感想をレシピ投稿者が消すこともあるので、誰が消したかを残す。
+    audit_event("comment.delete", "success", user_id=current_user.id, comment_id=comment_id)
     return None

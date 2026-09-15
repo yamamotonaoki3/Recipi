@@ -40,7 +40,7 @@ from app.errors import AppError
 from app.logging_config import configure_logging
 from app.middleware import RequestIdMiddleware
 
-configure_logging(level=settings.LOG_LEVEL, fmt=settings.LOG_FORMAT)
+configure_logging(level=settings.LOG_LEVEL, fmt=settings.LOG_FORMAT, app_env=settings.APP_ENV)
 logger = logging.getLogger("app")
 
 
@@ -63,7 +63,6 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
     lifespan=lifespan,
 )
-app.add_middleware(RequestIdMiddleware)
 
 # CORS: Web（Expo）/ Tauri はページと API のオリジンが違うので許可が要る。
 # 許可するオリジンは環境変数 CORS_ALLOW_ORIGINS（カンマ区切り）で設定する。
@@ -95,6 +94,13 @@ async def enforce_web_origin(request: Request, call_next: Any) -> Any:
     return await call_next(request)
 
 
+# リクエスト ID ＋ アクセスログのミドルウェアは「最後に」登録する。
+# Starlette では後から登録したミドルウェアほど外側で動くので、こうすると
+# 上の Origin チェック（403）や CORS の応答も含め、すべてのリクエストが
+# アクセスログに 1 行ずつ残る（Issue #170）。
+app.add_middleware(RequestIdMiddleware)
+
+
 @app.exception_handler(AppError)
 def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
     """`AppError`（とそのファクトリ関数）を api.md の統一エラー形式に変換する。"""
@@ -118,8 +124,11 @@ def handle_validation_error(request: Request, exc: RequestValidationError) -> JS
 
 @app.exception_handler(Exception)
 def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-    """想定外の例外は 500 + INTERNAL にする（詳細はログにのみ出す）。"""
-    logger.exception("unhandled exception")
+    """想定外の例外は 500 + INTERNAL にする（詳細はログにのみ出す）。
+
+    スタックトレースのログは app/middleware.py が request_id 付きで出す。
+    このハンドラはミドルウェアの外側で動くため、ここでは出さない（二重に出さない）。
+    """
     return JSONResponse(
         status_code=500,
         content={

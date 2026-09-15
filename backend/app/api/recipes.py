@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from sqlmodel import Session
 
+from app.audit import audit_event
 from app.db import get_session, run_with_retry
 from app.dependencies import get_current_user, get_current_user_optional
 from app.errors import ErrorEnvelope, forbidden, not_found, validation_error
@@ -174,6 +175,7 @@ def delete_recipe(
     recipe = _load_for_write(session, current_user, recipe_id)
     recipe_service.delete_recipe(session, recipe)
     session.commit()
+    audit_event("recipe.delete", "success", user_id=current_user.id, recipe_id=recipe_id)
     return None
 
 

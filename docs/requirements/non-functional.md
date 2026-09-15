@@ -106,7 +106,38 @@
 
 ## ログ / エラーハンドリング
 
-- サーバーは構造化ログ（JSON、リクエスト ID 付き）を出力する。実現手段は標準 `logging` の JSON フォーマッタまたは `structlog`（実装時に確定 → [todo.md](todo.md)）。
+- サーバーは構造化ログ（JSON、リクエスト ID 付き）を標準出力に 1 行 1 JSON で出力する。実現手段は標準 `logging` ＋ `python-json-logger`（[todo.md](todo.md) #44）。
+- **ログの集約は実行基盤に任せる**。本番は AWS の **CloudWatch Logs** を想定し、アプリは標準出力に書くだけ（コンテナのログドライバが送る。アプリから CloudWatch の API は呼ばない）。Issue #170。
+- **共通フィールド**（全行）: `time`（ISO 8601・UTC）/ `level` / `logger` / `message` / `request_id` / `user_id`（未認証は `-`。ログイン成功時のアクセスログにもユーザー ID を載せる）/ `service`（`recipi-api`）/ `env`（`APP_ENV`）。`warnings.warn()` による警告も同じ JSON 形式で出力する。
+- **ログの種類**は `log_type` で区別する（レベルでは区別しない）:
+
+| `log_type` | 出す場所 | 主な項目 | レベル |
+| --- | --- | --- | --- |
+| `access` | `app/middleware.py`（1 リクエスト 1 行。uvicorn 標準のアクセスログは止める） | `method` / `path`（ルートのテンプレート。クエリ文字列は出さない）/ `status` / `duration_ms` / `client_ip` / `user_agent` | 2xx・3xx は INFO、4xx は WARNING、5xx は ERROR。`/healthz` 系は DEBUG |
+| `audit` | `app/audit.py` の `audit_event()` | `action` / `outcome`（`success` / `failure`）/ `reason` / `user_id` / `email_hash` / `client_ip` / 対象の ID | 成功は INFO、失敗・不審な操作は WARNING |
+| （なし） | 各モジュールの `logging.getLogger(__name__)` | 自由 | 用途に応じて |
+
+- **監査イベント**（DB テーブルには保存しない。ログイン履歴画面などアプリが読み返す必要が出たら `audit_event()` にテーブルへの書き込みを足す）:
+
+| `action` | 記録する結果 |
+| --- | --- |
+| `auth.signup` | success / failure（`email_taken`） |
+| `auth.login` | success / failure（`invalid_credentials` / `account_deactivated`） |
+| `auth.reactivate` | success / failure（`invalid_credentials`） |
+| `auth.refresh` | failure（`token_reuse_detected`）のみ。成功はアクセスログで足りる |
+| `auth.logout` | success |
+| `auth.password_reset.request` | success / failure（`not_found` / `rate_limited_email` / `rate_limited_ip`） |
+| `auth.password_reset.confirm` | success / failure（`invalid` / `rate_limited_email` / `rate_limited_ip`） |
+| `account.delete` | success |
+| `recipe.delete` / `comment.delete` | success（`recipe_id` / `comment_id` 付き） |
+
+- **ログに出さないもの**: パスワード・トークン・Cookie・秘密の質問の回答・JWT 等は出さない（`extra` のキー名に `password` / `token` / `authorization` / `cookie` / `secret` / `security_answer` を含む値は `[REDACTED]` に置き換える安全網もある）。**メールアドレスは平文で出さず** `email_hash`（`LOG_HASH_SECRET` を鍵にした HMAC-SHA256 の先頭 16 文字）で出す。クエリ文字列（検索語）も出さない。
+- **本番のログレベルは `INFO`**。開発も同じ `INFO` を既定にし、調査時だけ `DEBUG` に下げる。
+- **保存期間（推奨・インフラ構築時に設定）**: アプリ・アクセスログは 30 日、監査ログは 1 年（メトリクスフィルタ等で別ロググループへ分けるか、同じロググループなら 1 年に合わせる）。
+- **CloudWatch Logs Insights のクエリ例**:
+  - 同じアドレスへのログイン失敗を数える: `filter log_type = "audit" and action = "auth.login" and outcome = "failure" | stats count() by email_hash`
+  - 1 リクエストのログを全部見る: `filter request_id = "<X-Request-ID の値>" | sort @timestamp asc`
+  - 遅いエンドポイント: `filter log_type = "access" | stats avg(duration_ms), max(duration_ms) by path`
 - 想定内エラーは [api.md](api.md) の統一エラー形式で返す。5xx はスタックトレースをクライアントに返さない。
 - バリデーションはリクエスト受信時に一括で行い、複数エラーを返せる形にする。
 

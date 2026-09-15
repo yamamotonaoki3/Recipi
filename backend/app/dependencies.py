@@ -16,6 +16,7 @@ from sqlmodel import Session
 
 from app.db import get_session
 from app.errors import unauthorized
+from app.logging_config import set_current_user_id
 from app.models.user import User
 from app.security import InvalidAccessTokenError, decode_access_token
 
@@ -58,6 +59,8 @@ def get_current_user(
     ):
         raise unauthorized()
 
+    # このリクエストのログ（アクセスログ・監査ログ等）に user_id を載せる。
+    set_current_user_id(user.id)
     return user
 
 
