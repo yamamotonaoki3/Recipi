@@ -77,8 +77,26 @@ def _percent(covered: int, total: int, *, name: str) -> float:
     return 100.0 * covered / total
 
 
-def load_totals(path: Path) -> tuple[float, float]:
-    """coverage.json を読み、(行 %, 分岐 %) を返す。"""
+def summary_percents(summary: dict[str, Any]) -> tuple[float, float]:
+    """coverage.json の集計（`totals` やファイルごとの `summary`）から (行 %, 分岐 %) を返す。
+
+    PR コメント用の scripts/coverage_comment.py も同じ計算を使う（Issue #86。
+    コメントの合否と CI の合否を必ず一致させるため）。
+    """
+    statements, lines, branches, covered_branches = (_count(summary, k) for k in _REQUIRED_KEYS)
+    return (
+        _percent(lines, statements, name="行"),
+        _percent(covered_branches, branches, name="分岐"),
+    )
+
+
+def meets(actual: float, minimum: float) -> bool:
+    """下限を満たすか（ちょうど下限は合格）。"""
+    return actual >= minimum
+
+
+def load_coverage(path: Path) -> dict[str, Any]:
+    """coverage.json を読み、JSON 全体（dict）を返す。読めなければ InputError。"""
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
@@ -88,15 +106,17 @@ def load_totals(path: Path) -> tuple[float, float]:
         data = json.loads(text, parse_constant=_reject_constant)
     except json.JSONDecodeError as exc:
         raise InputError(f"JSON として読めません: {path}（{exc}）") from exc
-    totals = data.get("totals") if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        raise InputError("coverage.json の中身がオブジェクトではありません")
+    return data
+
+
+def load_totals(path: Path) -> tuple[float, float]:
+    """coverage.json を読み、全体の (行 %, 分岐 %) を返す。"""
+    totals = load_coverage(path).get("totals")
     if not isinstance(totals, dict):
         raise InputError("coverage.json に totals がありません")
-
-    statements, lines, branches, covered_branches = (_count(totals, k) for k in _REQUIRED_KEYS)
-    return (
-        _percent(lines, statements, name="行"),
-        _percent(covered_branches, branches, name="分岐"),
-    )
+    return summary_percents(totals)
 
 
 def _reject_constant(name: str) -> float:
@@ -128,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         ("行", line_pct, args.lines),
         ("分岐", branch_pct, args.branches),
     ):
-        if actual >= minimum:
+        if meets(actual, minimum):
             print(f"OK  {name}カバレッジ {actual:.2f}%（下限 {minimum:.2f}%）")
         else:
             ok = False
