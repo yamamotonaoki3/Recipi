@@ -9,9 +9,11 @@
  * `HistoryItem` は `RecipeFeedItem` ＋ `viewedAt` なのでそのまま渡せる。
  */
 import { Image } from "expo-image";
+import { Heart } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 
 import { Avatar } from "@/components/Avatar";
+import { Icon, ICON_COLORS } from "@/components/Icon";
 import type { RecipeFeedItem } from "@/features/feed/api";
 
 type FeedRecipeCardProps = {
@@ -63,7 +65,10 @@ export function FeedRecipeCard({ recipe, onPress, testID }: FeedRecipeCardProps)
           </Text>
           {/* お気に入り数（サーバーの値）。カードでは表示だけで、登録 / 解除は
               レシピ詳細の ♡ ボタンで行う（favorite.md §2。Issue #100）。 */}
-          <Text className="text-xs text-neutral-400">♡ {recipe.favoriteCount}</Text>
+          <View className="flex-row items-center gap-0.5">
+            <Icon as={Heart} size={12} color={ICON_COLORS.subtle} />
+            <Text className="text-xs text-neutral-400">{recipe.favoriteCount}</Text>
+          </View>
         </View>
       </View>
     </Pressable>

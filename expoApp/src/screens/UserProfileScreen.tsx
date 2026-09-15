@@ -13,6 +13,7 @@ import { ActivityIndicator, FlatList, Linking, Pressable, Text, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
+import { BackLabel } from "@/components/BackLabel";
 import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { RecipeCard } from "@/components/RecipeCard";
 import { FollowButton } from "@/components/UserRow";
@@ -73,7 +74,7 @@ export function UserProfileScreen({ basePath }: { basePath: string }) {
   const header = (title: string) => (
     <View className="flex-row items-center gap-3 border-b border-neutral-200 px-4 py-3">
       <Pressable testID="user-profile-back" onPress={goBack} accessibilityRole="button">
-        <Text className="text-neutral-500">← 戻る</Text>
+        <BackLabel />
       </Pressable>
       <Text numberOfLines={1} className="flex-1 text-base font-bold text-neutral-900">
         {title}

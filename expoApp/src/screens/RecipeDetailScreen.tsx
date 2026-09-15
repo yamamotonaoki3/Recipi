@@ -18,8 +18,11 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 
+import { Heart } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/components/Avatar";
+import { BackLabel } from "@/components/BackLabel";
+import { Icon, ICON_COLORS } from "@/components/Icon";
 import { CommentComposer, type CommentDraft } from "@/components/CommentComposer";
 import { CommentItem } from "@/components/CommentItem";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -126,7 +129,7 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
       {/* アプリバー */}
       <View className="flex-row items-center justify-between border-b border-neutral-200 px-4 py-3">
         <Pressable testID="recipe-detail-header-back" onPress={() => router.back()}>
-          <Text className="text-neutral-500">← 戻る</Text>
+          <BackLabel />
         </Pressable>
         {isOwner && (
           <View className="flex-row gap-3">
@@ -234,9 +237,13 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
             toggleFavorite.isPending ? "opacity-60" : ""
           }`}
         >
-          <Text className={`text-lg ${recipe.isFavorited ? "text-red-500" : "text-neutral-400"}`}>
-            {recipe.isFavorited ? "♥" : "♡"}
-          </Text>
+          {/* お気に入り済みは赤く塗りつぶし、未登録は灰色の線だけ。 */}
+          <Icon
+            as={Heart}
+            size={20}
+            color={recipe.isFavorited ? ICON_COLORS.favorite : ICON_COLORS.subtle}
+            fill={recipe.isFavorited ? ICON_COLORS.favorite : "none"}
+          />
           <Text testID="recipe-detail-favorite-count" className="text-sm text-neutral-700">
             {recipe.favoriteCount}
           </Text>

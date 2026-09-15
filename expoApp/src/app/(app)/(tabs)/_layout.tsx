@@ -23,6 +23,7 @@
  */
 import { usePathname, useRouter } from "expo-router";
 import { TabList, TabSlot, TabTrigger, Tabs } from "expo-router/ui";
+import { Bell, History, House, User, type LucideIcon } from "lucide-react-native";
 import { Pressable, type GestureResponderEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -31,10 +32,13 @@ import { DESTINATIONS_WITH_RECIPE_STACK } from "@/features/navigation/destinatio
 import { useUnreadNotificationCount } from "@/features/notification/hooks";
 import { useUnsavedChangesStore } from "@/features/navigation/unsavedChanges";
 
-/** タブの定義（並び順は navigation.md: ホーム / 履歴 / ＋ / 通知 / マイページ）。 */
+/**
+ * タブの定義（並び順は navigation.md: ホーム / 履歴 / ＋ / 通知 / マイページ）。
+ * `icon` は lucide-react-native のアイコン部品（Issue #144 で絵文字から置き換え）。
+ */
 const LEFT_TABS = [
-  { name: "home", href: "/home", testID: "nav-home", icon: "🏠", label: "ホーム" },
-  { name: "history", href: "/history", testID: "nav-history", icon: "🕘", label: "履歴" },
+  { name: "home", href: "/home", testID: "nav-home", icon: House, label: "ホーム" },
+  { name: "history", href: "/history", testID: "nav-history", icon: History, label: "履歴" },
 ] as const;
 
 const RIGHT_TABS = [
@@ -42,10 +46,10 @@ const RIGHT_TABS = [
     name: "notifications",
     href: "/notifications",
     testID: "nav-notifications",
-    icon: "🔔",
+    icon: Bell,
     label: "通知",
   },
-  { name: "my-page", href: "/my-page", testID: "nav-my-page", icon: "👤", label: "マイページ" },
+  { name: "my-page", href: "/my-page", testID: "nav-my-page", icon: User, label: "マイページ" },
 ] as const;
 
 export default function TabsLayout() {
@@ -189,7 +193,7 @@ function NavTabButton({
   isFocused,
   ...pressableProps
 }: {
-  icon: string;
+  icon: LucideIcon;
   label: string;
   badge?: number;
   isFocused?: boolean;

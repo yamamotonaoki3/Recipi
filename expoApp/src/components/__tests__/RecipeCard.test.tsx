@@ -17,11 +17,11 @@ const recipe = {
 };
 
 describe("RecipeCard", () => {
-  it("お気に入り数（♡ + 数）を出す", async () => {
+  it("お気に入り数（ハートのアイコン + 数）を出す", async () => {
     const { getByTestId } = await render(
       <RecipeCard testID="card" recipe={recipe} onPress={jest.fn()} />,
     );
-    expect(getByTestId("card-favorite-count").props.children).toEqual(["♡ ", 4]);
+    expect(getByTestId("card-favorite-count").props.children).toBe(4);
   });
 
   it("非公開のレシピには「非公開」バッジを出す", async () => {

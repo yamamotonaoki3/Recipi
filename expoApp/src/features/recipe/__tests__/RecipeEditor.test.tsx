@@ -433,6 +433,14 @@ describe("RecipeEditor（作成）", () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
+  it("アイコンだけの操作ボタンに読み上げ用の名前がある", async () => {
+    const { getByLabelText } = await render(<RecipeEditor mode="create" />, { wrapper });
+
+    expect(getByLabelText("閉じる")).toBeTruthy();
+    expect(getByLabelText("人数を減らす")).toBeTruthy();
+    expect(getByLabelText("人数を増やす")).toBeTruthy();
+  });
+
   it("編集モードの保存成功はモーダルを閉じるだけ（詳細を二重に積まない）", async () => {
     (recipeApi.updateRecipe as jest.Mock).mockResolvedValue({ id: "r1" });
     const recipe = {

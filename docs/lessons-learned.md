@@ -58,8 +58,20 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-15 広い画面のエディタをダイアログにする（Issue #158）](#2026-09-15-広い画面のエディタをダイアログにするissue-158)
 - [2026-09-15 必須チェックとパスフィルタの両立（Issue #87）](#2026-09-15-必須チェックとパスフィルタの両立issue-87)
 - [2026-09-15 カバレッジを PR にコメントする（Issue #86）](#2026-09-15-カバレッジを-pr-にコメントするissue-86)
+- [2026-09-15 アイコンを lucide-react-native にそろえる（Issue #144）](#2026-09-15-アイコンを-lucide-react-native-にそろえるissue-144)
 
 ---
+
+## 2026-09-15 アイコンを lucide-react-native にそろえる（Issue #144）
+
+**きっかけ**: Issue #144。絵文字・記号（🏠 ♡ ▼ ← など）で描いていた UI アイコンを lucide-react-native に置き換えた。Codex レビュー 2 回（1 回目 P2 が 1 件、2 回目 指摘 0）。
+
+1. **アイコンだけのボタンには、必ず `accessibilityLabel` を付ける**。記号の文字（× − ＋）は読み上げられていたが、アイコンを飾りとして隠すとボタンの名前が無くなる（Codex 指摘）。文字を消してアイコンにするときは、ボタン側に名前があるかを一緒に確かめる。
+2. **Web では Native 専用の props を SVG に渡すと React の警告になる**（`accessibilityElementsHidden` / `importantForAccessibility` が DOM に届く）。Web は `aria-hidden`、Android / iOS は Native の指定と、`Platform.OS` で分ける。単体テストでは出ず、Chrome で画面を開いて初めて気づいた。
+3. **lucide は jest-expo の解決条件だと ESM 版（.mjs）が選ばれて読み込めない**。`moduleNameMapper` で同梱の CommonJS 版を指す。また **lucide の SVG は `testID` を描画結果に渡さない**ので、テストで探すときは View で包むか、偽のアイコン部品を渡して受け取った props を見る（RNTL v14 に `UNSAFE_getByType` は無い）。
+4. **SVG は `Text` の中に入れられない**。「♡ お気に入り」のように文字と一緒に並べていた所は、`flex-row` の View でアイコンと Text を横に並べる形に組み替える。
+5. **依存を足したら、起動中の Expo（Metro）はキャッシュを消して起動し直す**（`expo start -c`）。古いキャッシュのままだと「Unable to resolve module ./icons/*.mjs」で画面が 500 になる。
+6. **`codex exec` に `--full-auto` は無い**（今の版）。ファイルを書かせるときは `-s workspace-write` を使う。また Git Bash からは Windows のプロセス ID が見えないため、進捗監視は PowerShell の `Get-Process` / `Get-CimInstance` でプロセスの有無を見る。
 
 ## 2026-09-15 未署名 .msi（Issue #136）を作って Tauri のアプリを確かめるとき
 

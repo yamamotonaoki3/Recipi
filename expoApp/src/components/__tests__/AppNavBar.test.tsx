@@ -6,6 +6,7 @@
  * 切り替わることを見る。
  */
 import { fireEvent, render } from "@testing-library/react-native";
+import { Bell, House } from "lucide-react-native";
 import { Text, useWindowDimensions } from "react-native";
 
 import {
@@ -54,18 +55,33 @@ describe("useIsNavRail", () => {
 
 describe("NavItemLabel", () => {
   it("アイコンとラベルを出す", async () => {
-    const { getByText } = await render(<NavItemLabel icon="🏠" label="ホーム" focused={false} />);
-    expect(getByText("🏠")).toBeTruthy();
+    const { getByTestId, getByText } = await render(
+      <NavItemLabel icon={House} label="ホーム" focused={false} iconTestID="icon" />,
+    );
+    expect(getByTestId("icon")).toBeTruthy();
     expect(getByText("ホーム")).toBeTruthy();
+  });
+
+  it("選択中はアイコンの線を太くし、選択外は細くする", async () => {
+    // 描かれた SVG ではなく「アイコン部品に何を渡したか」を見るため、
+    // 受け取った props を記録するだけの偽アイコンを渡す。
+    const FakeIcon = jest.fn((_props: { strokeWidth?: number }) => null);
+    const icon = FakeIcon as unknown as typeof House;
+    const lastStrokeWidth = () => FakeIcon.mock.calls.at(-1)?.[0].strokeWidth;
+
+    const { rerender } = await render(<NavItemLabel icon={icon} label="ホーム" focused />);
+    expect(lastStrokeWidth()).toBe(2.5);
+    await rerender(<NavItemLabel icon={icon} label="ホーム" focused={false} />);
+    expect(lastStrokeWidth()).toBe(2);
   });
 
   it("未読件数を99+上限で表示し、0件ならバッジを隠す", async () => {
     const { getByTestId, getByText, rerender, queryByTestId } = await render(
-      <NavItemLabel icon="🔔" label="通知" focused={false} badge={120} />,
+      <NavItemLabel icon={Bell} label="通知" focused={false} badge={120} />,
     );
     expect(getByTestId("nav-notifications-badge")).toBeTruthy();
     expect(getByText("99+")).toBeTruthy();
-    await rerender(<NavItemLabel icon="🔔" label="通知" focused={false} badge={0} />);
+    await rerender(<NavItemLabel icon={Bell} label="通知" focused={false} badge={0} />);
     expect(queryByTestId("nav-notifications-badge")).toBeNull();
   });
 });

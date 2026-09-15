@@ -13,6 +13,7 @@ import { useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackLabel } from "@/components/BackLabel";
 import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { UserRow } from "@/components/UserRow";
 import type { ConnectionTab, UserRow as UserRowData } from "@/features/follow/api";
@@ -66,7 +67,7 @@ export function ConnectionsScreen({
     <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
       <View className="flex-row items-center gap-3 border-b border-neutral-200 px-4 py-3">
         <Pressable testID="connections-back" onPress={goBack} accessibilityRole="button">
-          <Text className="text-neutral-500">← 戻る</Text>
+          <BackLabel />
         </Pressable>
         <Text numberOfLines={1} className="flex-1 text-base font-bold text-neutral-900">
           {title}

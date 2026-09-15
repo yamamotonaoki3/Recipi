@@ -5,9 +5,11 @@
  * プレースホルダ。投稿者はアバターと表示名を表示する。
  */
 import { Image } from "expo-image";
+import { Heart } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 
 import { Avatar } from "@/components/Avatar";
+import { Icon, ICON_COLORS } from "@/components/Icon";
 import type { RecipeSummary } from "@/features/recipe/api";
 
 type RecipeCardProps = {
@@ -68,12 +70,15 @@ export function RecipeCard({ recipe, onPress, testID }: RecipeCardProps) {
           <Text className="text-xs text-neutral-400">{formatDate(recipe.createdAt)}</Text>
           {/* お気に入り数（components.md §レシピカード「♡ + favorite_count」）。
               カードでは表示だけで、登録 / 解除はレシピ詳細の ♡ ボタンで行う。 */}
-          <Text
-            testID={testID ? `${testID}-favorite-count` : undefined}
-            className="text-xs text-neutral-400"
-          >
-            ♡ {recipe.favoriteCount}
-          </Text>
+          <View className="flex-row items-center gap-0.5">
+            <Icon as={Heart} size={12} color={ICON_COLORS.subtle} />
+            <Text
+              testID={testID ? `${testID}-favorite-count` : undefined}
+              className="text-xs text-neutral-400"
+            >
+              {recipe.favoriteCount}
+            </Text>
+          </View>
           {!recipe.isPublic && (
             <Text
               testID={testID ? `${testID}-private-badge` : undefined}
