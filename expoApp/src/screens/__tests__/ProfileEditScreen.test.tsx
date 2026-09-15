@@ -117,6 +117,7 @@ beforeEach(() => {
   if (requestClose) {
     useUnsavedChangesStore.getState().clearRequestClose(requestClose);
   }
+  useUnsavedChangesStore.setState({ pendingByDestination: {} });
   useSession.getState().clear();
   useSession.getState().setAuth({
     accessToken: "a",
@@ -377,6 +378,55 @@ describe("未保存ガード", () => {
     await waitFor(() => {
       expect(useUnsavedChangesStore.getState().requestClose).toBeNull();
     });
+  });
+
+  it("フォーカスが外れても、未保存の間はマイページの pending に残す（Issue #156）", async () => {
+    const utils = await renderLoaded();
+    const pending = () => useUnsavedChangesStore.getState().pendingByDestination["/my-page"];
+    expect(pending()).toBeUndefined();
+
+    await fireEvent(utils.getByTestId("profile-edit-x-public"), "valueChange", false);
+    await waitFor(() => expect(pending()).toBeDefined());
+
+    await act(async () => {
+      setMockFocus(false);
+    });
+    expect(pending()).toBeDefined();
+
+    // 変更を元に戻すと、確認は要らないので外れる。
+    await fireEvent(utils.getByTestId("profile-edit-x-public"), "valueChange", true);
+    await waitFor(() => expect(pending()).toBeUndefined());
+  });
+
+  it("pending を呼ぶと確認ダイアログが出て、破棄で戻る（Issue #156）", async () => {
+    const utils = await renderLoaded();
+    await fireEvent.changeText(utils.getByTestId("profile-edit-display-name"), "新名前");
+    await act(async () => {
+      setMockFocus(false);
+    });
+
+    await act(async () => {
+      useUnsavedChangesStore.getState().pendingByDestination["/my-page"]?.();
+    });
+    await act(async () => {
+      setMockFocus(true);
+    });
+    expect(mockBack).not.toHaveBeenCalled();
+
+    await fireEvent.press(await utils.findByTestId("profile-edit-discard-confirm"));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("画面を閉じたら pending も外す（Issue #156）", async () => {
+    const utils = await renderLoaded();
+    await fireEvent(utils.getByTestId("profile-edit-x-public"), "valueChange", false);
+    await waitFor(() =>
+      expect(useUnsavedChangesStore.getState().pendingByDestination["/my-page"]).toBeDefined(),
+    );
+
+    await utils.unmount();
+
+    expect(useUnsavedChangesStore.getState().pendingByDestination["/my-page"]).toBeUndefined();
   });
 
   it("未保存の変更がある間は iOS のスワイプバックを無効にする", async () => {

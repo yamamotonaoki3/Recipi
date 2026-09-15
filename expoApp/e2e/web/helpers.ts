@@ -102,18 +102,10 @@ export async function createPublicRecipe(
 export async function searchHome(page: Page, query: string): Promise<void> {
   // 見えている要素だけを取る（前の画面が DOM に隠れて残るため）。
   const shown = (testId: string) => page.getByTestId(testId).filter({ visible: true }).first();
-  const navHome = page.getByTestId("nav-home").filter({ visible: true }).first();
-  await navHome.click();
-  // ホームのタブの中でレシピを作ったり開いたりしていると、別のタブから「ホーム」に戻っても
-  // その詳細が出る（タブごとにスタックを持つ）。検索窓が見えなければ、選択中のホームを
-  // もう一度押してスタックの根（ホームの一覧）まで戻る（Issue #151 で発生）。
-  const searchInput = shown("home-search-input");
-  const onHomeRoot = await searchInput
-    .waitFor({ state: "visible", timeout: 3_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!onHomeRoot) await navHome.click();
-  await expect(searchInput).toBeVisible({ timeout: 15_000 });
+  // 「ホーム」は 1 回押せばレシピ一覧へ戻る。別のタブからなら最初の画面から作り直し
+  // （Issue #156）、ホームの中で詳細を開いていたなら再タップで根まで戻る。
+  await shown("nav-home").click();
+  await expect(shown("home-search-input")).toBeVisible({ timeout: 15_000 });
   await shown("home-search-input").fill(query);
   await shown("home-search-submit").click();
   await expect(shown("home-search-chip")).toBeVisible();

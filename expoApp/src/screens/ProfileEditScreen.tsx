@@ -185,6 +185,20 @@ function ProfileEditForm({ profile, onLeave }: { profile: UserSelfProfile; onLea
     }, [dirty, guard.requestClose]),
   );
 
+  // 別のタブへ移ってから「マイページ」を押して戻ってきたときにも確認を出す（Issue #156）。
+  // マイページのタブは、戻ってきたら最初の画面（メニュー）を表示する。そのままだと
+  // 入力途中の内容が黙って消えるので、未保存の変更がある間はここに登録しておき、
+  // タブ側が最初の画面へ戻すのを止めて、この画面の確認ダイアログを開く。
+  // 上の登録と違い、裏に残っている間に使うものなので、フォーカスに関係なく
+  // 画面が開いている間は登録を残す（使うのは「マイページ」を押したときだけなので、
+  // 他のタブの操作を横取りしない。lessons #94-4）。
+  useEffect(() => {
+    if (!dirty) return;
+
+    useUnsavedChangesStore.getState().registerPending(FALLBACK_PATH, guard.requestClose);
+    return () => useUnsavedChangesStore.getState().clearPending(FALLBACK_PATH, guard.requestClose);
+  }, [dirty, guard.requestClose]);
+
   function setField<K extends keyof ProfileFormValues>(field: K, value: ProfileFormValues[K]) {
     setValues((prev) => ({ ...prev, [field]: value }));
     // 直した欄のエラーはその場で消す（他の欄のエラーは残す）。

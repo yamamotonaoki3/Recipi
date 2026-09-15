@@ -8,6 +8,8 @@ import { useUnsavedChangesStore } from "@/features/navigation/unsavedChanges";
 const mockDismissTo = jest.fn();
 const mockPush = jest.fn();
 const mockTabPress = jest.fn();
+/** 各 TabTrigger に渡った resetOnFocus（testID ごと）。 */
+const mockResetOnFocus: Record<string, boolean | undefined> = {};
 let mockPathname = "/home";
 
 jest.mock("expo-router", () => ({
@@ -29,11 +31,14 @@ jest.mock("expo-router/ui", () => {
       children,
       onPress,
       testID,
+      resetOnFocus,
     }: {
       children: ReactNode;
       onPress?: PressableProps["onPress"];
       testID: string;
+      resetOnFocus?: boolean;
     }) => {
+      mockResetOnFocus[testID] = resetOnFocus;
       const handlePress = () => {
         const event = {
           defaultPrevented: false,
@@ -65,6 +70,7 @@ function clearRequestClose() {
   if (requestClose) {
     useUnsavedChangesStore.getState().clearRequestClose(requestClose);
   }
+  useUnsavedChangesStore.setState({ pendingByDestination: {} });
 }
 
 beforeEach(() => {
@@ -94,6 +100,56 @@ describe("TabsLayout のタブ再タップ", () => {
     await fireEvent.press(getByTestId("nav-home"));
 
     expect(mockDismissTo).toHaveBeenCalledWith("/home");
+    expect(mockTabPress).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("TabsLayout の別タブからの切り替え（Issue #156）", () => {
+  it("全タブで、切り替えたときに最初の画面へ作り直す", async () => {
+    await render(<TabsLayout />);
+
+    expect(mockResetOnFocus["nav-home"]).toBe(true);
+    expect(mockResetOnFocus["nav-history"]).toBe(true);
+    expect(mockResetOnFocus["nav-notifications"]).toBe(true);
+    expect(mockResetOnFocus["nav-my-page"]).toBe(true);
+  });
+
+  it("未保存の編集が裏にあれば作り直さず、切り替えたうえで確認を出す", async () => {
+    mockPathname = "/history";
+    const pending = jest.fn();
+    useUnsavedChangesStore.getState().registerPending("/my-page", pending);
+
+    const { getByTestId } = await render(<TabsLayout />);
+    expect(mockResetOnFocus["nav-my-page"]).toBe(false);
+    expect(mockResetOnFocus["nav-home"]).toBe(true);
+
+    await fireEvent.press(getByTestId("nav-my-page"));
+
+    expect(pending).toHaveBeenCalledTimes(1);
+    // タブの切り替えは止めない（編集画面を出してダイアログを見せる）。
+    expect(mockTabPress).toHaveBeenCalledTimes(1);
+    expect(mockDismissTo).not.toHaveBeenCalled();
+  });
+
+  it("未保存の編集がなければ、別のタブから押しても何も呼ばずに切り替える", async () => {
+    mockPathname = "/notifications";
+
+    const { getByTestId } = await render(<TabsLayout />);
+    await fireEvent.press(getByTestId("nav-home"));
+
+    expect(mockTabPress).toHaveBeenCalledTimes(1);
+    expect(mockDismissTo).not.toHaveBeenCalled();
+  });
+
+  it("別の destination の未保存編集は呼ばない", async () => {
+    mockPathname = "/history";
+    const pending = jest.fn();
+    useUnsavedChangesStore.getState().registerPending("/my-page", pending);
+
+    const { getByTestId } = await render(<TabsLayout />);
+    await fireEvent.press(getByTestId("nav-home"));
+
+    expect(pending).not.toHaveBeenCalled();
     expect(mockTabPress).toHaveBeenCalledTimes(1);
   });
 });
