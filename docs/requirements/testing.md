@@ -83,7 +83,13 @@
 - **通常 PR のトリガー**: `pull_request`（→ `main`。マージの必須チェックにする）＋必要な feature ブランチへの `push`。
 - **時間のかかるプラットフォーム検証**: Android E2E と Tauri は通常 PR の必須チェックから外し、Phase 完了時・リリース前・各プラットフォーム固有または認証・ナビゲーション・API クライアントなど共通基盤の変更時に手動実行する。手動結果が必要な変更は、成功を確認してからマージする。
 - **パスフィルタ**: `backend/**` の変更で frontend ジョブを回さない（逆も同様）。共通ファイル（`openapi.json` 等）は両方を回す。
-- **ブランチ保護**: `main` への直接 push 禁止（既存ルール）＋ 上記チェックを必須にする（**未設定。#87 で対応**。それまではマージ前に `gh pr checks` で、期待するチェック名がそろっていて全部 pass であることを確かめる）。
+  - **push** は従来どおりワークフローの `paths` で絞る。
+  - **PR** は `paths` で絞らず、ワークフローは毎回起動する（Issue #87）。各ワークフローの `changes` ジョブが `scripts/ci/changed.sh` で変更ファイルを判定し、関係ない変更なら本体のジョブを**条件でスキップ**する（スキップされたジョブは必須チェック上「成功」扱い）。`paths` で起動しないと必須チェックが「待ち」のままになり、docs だけ・backend だけの PR がマージできなくなるため。
+  - `.github/workflows/` と `scripts/ci/` の変更では全ジョブを走らせる。判定が失敗した（変更ファイルが取れない）ときも、安全側で本体を全部走らせる（判定の失敗で素通りさせない）。
+- **ブランチ保護**: `main` への直接 push・削除・force push の禁止 ＋ 次の 5 つを**必須チェック**にする（Issue #87 で設定）: `test`（backend）/ `checks`（frontend-ts）/ `openapi-in-sync`・`schema-ts-in-sync`（contract）/ `web`（e2e）。手動の `android`・`tauri`・`msi` は必須にしない（上の方針）。
+  - **ジョブ名（＝チェック名）は変えない**。変えると必須チェックが永久に「待ち」になる。変えるときはブランチ保護の設定も同時に直す。
+  - 「main の最新に追いついていること」（`strict`）は求めない。1 人開発で毎回の取り込み直しは負担が大きく、main は squash マージのみで衝突は PR 側で気づけるため。
+  - 管理者は保護を迂回できる設定（`enforce_admins: false`）のままにする。緊急時の逃げ道で、通常は使わない。使ったときは PR に理由を書く。
 - **ローカルでの再現**（CI と同じ内容）: `backend/` は `ruff check .` / `ruff format --check .` / `mypy .` / `pytest --cov-report=json` → `python -m scripts.check_coverage coverage.json --lines 85 --branches 75`、`expoApp/` は `npm run lint` / `npm run format` / `npm run typecheck` / `npm test -- --coverage`。E2E は `npm run e2e:web`（Playwright）/ `npm run e2e:android`（要 Appium サーバー起動・エミュレータ）。手順はルート `README.md`（Issue で作成）。
 
 ## 6. CD（継続的デリバリー）
