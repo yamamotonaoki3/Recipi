@@ -54,8 +54,19 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-15 個人情報を含む記録の掃除ジョブ（Issue #85）を足すとき](#2026-09-15-個人情報を含む記録の掃除ジョブissue-85を足すとき)
 - [2026-09-15 プロフィール編集とフォロー一覧の E2E（Issue #150）で手順を組むとき](#2026-09-15-プロフィール編集とフォロー一覧の-e2eissue-150で手順を組むとき)
 - [2026-09-15 削除・非公開・解除・編集の E2E（Issue #151）で画面の状態を追うとき](#2026-09-15-削除非公開解除編集の-e2eissue-151で画面の状態を追うとき)
+- [2026-09-15 未署名 .msi（Issue #136）を作って Tauri のアプリを確かめるとき](#2026-09-15-未署名-msiissue-136を作って-tauri-のアプリを確かめるとき)
 
 ---
+
+## 2026-09-15 未署名 .msi（Issue #136）を作って Tauri のアプリを確かめるとき
+
+**きっかけ**: Issue #136（Phase 10）。ローカルと手動の `tauri.yml`（Windows ジョブ）で未署名 `.msi` を作り、README に手順を書いた。レシピ作成画面はデスクトップでは大きめのダイアログにすると判断（実装は #158）。計画の Codex レビュー 2 回（P0 なし）、コードの Codex レビュー 1 回（指摘 0）。
+
+1. **Tauri のアプリ（Windows は WebView2）は、インストールせずに Playwright で操作して確かめられる**。`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` を付けて `app.exe` を起動し、`chromium.connectOverCDP("http://127.0.0.1:9222")` でつなぐ。ログイン → 閉じて開き直す → ログインしたまま（Stronghold の復元）まで自動で確かめられた。Chrome DevTools MCP では Tauri のウィンドウは操作できない。
+2. **実行ファイルの名前は `tauri.conf.json` の `productName` ではなく、`src-tauri/Cargo.toml` の package name になる**（今は `app` → `target/release/app.exe`）。MSI の名前は `productName` と version から（`Recipi_0.1.0_x64_en-US.msi`）。README や artifact のパスは、推測でなくビルドの出力で確かめてから書く。
+3. **`.msi` に要る WiX は、初回の `tauri build` で Tauri が自動でダウンロードする**（WiX 3.14）。事前のインストールは不要。`bundle.targets: "all"` のままでも `--bundles msi` で MSI だけを作れる。
+4. **Stronghold の保存先は `appDataDir()`（Windows は `%APPDATA%\com.recipi.app\recipi-vault.hold`）で、インストールしなくても同じ場所に作られる**。「ログインを保持」ON のときだけトークンが書かれる（ファイルのサイズが増える）ので、保持の確認の手がかりになる。
+5. **Codex の結論が「重大な問題あり」でも、指摘が P1 / P2 だけのことがある**。結論の一文ではなく中身（P0 の有無）で判断し、P1 / P2 は計画に取り込んで進めた。
 
 ## 2026-09-15 削除・非公開・解除・編集の E2E（Issue #151）で画面の状態を追うとき
 
