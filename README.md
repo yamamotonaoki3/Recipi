@@ -131,6 +131,29 @@ npm run e2e:web                 # Web（Playwright）
 npm run e2e:android             # Android（Appium + WebdriverIO。Appium サーバーとエミュレータが必要）
 ```
 
+**5. デスクトップ（Windows）の未署名 `.msi` を作る**（デモ用。コード署名・ストア配布は対象外。Issue #136）
+
+前提: Rust の stable（Windows は MSVC 版。`rustup show` で `x86_64-pc-windows-msvc`）と、Visual Studio の C++ ビルドツール。WebView2 ランタイム（Windows 10/11 には同梱）。`.msi` を作るための WiX は、初回のビルドで Tauri が自動でダウンロードする（失敗したらビルドのログでネットワーク等を確かめる）。
+
+API の接続先はビルド時にアプリへ埋め込まれる（`EXPO_PUBLIC_API_BASE_URL`。未指定なら `http://localhost:8000`）。先に 2. の手順でバックエンドを `http://localhost:8000` で動かしておく。
+
+```powershell
+# Windows PowerShell（expoApp/ で実行）
+$env:EXPO_PUBLIC_API_BASE_URL = "http://localhost:8000"
+npx tauri build --bundles msi   # Web ビルド（expo export）→ Rust のビルド → .msi
+```
+
+```bash
+# bash（Git Bash など。expoApp/ で実行）
+EXPO_PUBLIC_API_BASE_URL=http://localhost:8000 npx tauri build --bundles msi
+```
+
+- できるもの: `src-tauri/target/release/bundle/msi/Recipi_0.1.0_x64_en-US.msi`（インストーラー）と `src-tauri/target/release/app.exe`（インストールせずに直接起動できる本体）。作るのは `.msi` だけ（`--bundles msi`。macOS の `.dmg` はこの手順の対象外）
+- インストールせずに試すときは、`src-tauri/target/release/app.exe` をその場で起動する（単体で別の場所へコピーしない）
+- ログイン情報（リフレッシュトークン）は Stronghold の `%APPDATA%\com.recipi.app\recipi-vault.hold` に保存される。「ログインを保持」ON なら、閉じて開き直してもログインしたまま
+- 未署名なので、配布先の Windows の設定・評価状況によって SmartScreen の警告が出ることがある
+- GitHub Actions の手動ワークフロー `tauri`（「Run workflow」）でも、Windows で `.msi` を作って artifact `recipi-msi` に保存できる（ローカルの api 向けのデモ用）
+
 ### テストの方針
 
 - **単体 / 結合 / Web E2E ＋ 静的解析（品質チェック）＋ 契約テスト**を通常の CI（GitHub Actions）で回す。

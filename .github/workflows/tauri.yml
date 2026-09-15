@@ -45,3 +45,52 @@ jobs:
       - name: Tauri の Rust をコンパイル確認（cargo check）
         working-directory: expoApp/src-tauri
         run: cargo check
+
+  # Windows で未署名の .msi を作り、artifact として保存する（Issue #136）。
+  # - コード署名・ストア配布は対象外。配布先では Windows の設定によって SmartScreen の警告が出ることがある
+  # - API の接続先はビルド時に埋め込まれる。この .msi はローカルの api（http://localhost:8000）に
+  #   向けたデモ用
+  # - WiX は Tauri の bundler が毎回自動でダウンロードする（失敗したらこのジョブのログで原因を確かめる）
+  # - WebView2 は Windows 10/11 と windows-latest のランナーに同梱されているので入れない
+  msi:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: expoApp
+    env:
+      EXPO_PUBLIC_API_BASE_URL: http://localhost:8000
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: expoApp/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust の依存をキャッシュ
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: expoApp/src-tauri
+
+      - name: 依存をインストール
+        run: npm ci
+
+      # tauri build の beforeBuildCommand でも Web ビルドは走るが、Web と Tauri のどちらで
+      # 失敗したかをログで区別できるよう、先に明示的に実行しておく。
+      - name: Web ビルド
+        run: npm run build:web
+
+      - name: 未署名の .msi を作る
+        run: npx tauri build --bundles msi
+
+      - name: .msi を保存
+        uses: actions/upload-artifact@v7
+        with:
+          name: recipi-msi
+          path: expoApp/src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 7
