@@ -9,12 +9,12 @@
  * 削除の確認ダイアログは親（レシピ詳細）が 1 つだけ持つ。ここは「削除したい」と
  * 知らせるだけにして、行ごとにダイアログを作らない。
  */
-import { Image } from "expo-image";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { Avatar } from "@/components/Avatar";
 import { CommentComposer, type CommentDraft } from "@/components/CommentComposer";
+import { RemoteImage } from "@/components/RemoteImage";
 import type { Comment } from "@/features/comment/api";
 
 /** 投稿日時を「2026/09/12 18:05」の形にする（端末の時刻で表示）。 */
@@ -108,9 +108,10 @@ export function CommentItem({
             {comment.body}
           </Text>
           {comment.imageUrl ? (
-            <Image
+            // 感想画像も署名付き URL（Issue #185）なので RemoteImage を使う。
+            <RemoteImage
               testID={`${testID}-image`}
-              source={{ uri: comment.imageUrl }}
+              uri={comment.imageUrl}
               style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 8 }}
               contentFit="cover"
             />

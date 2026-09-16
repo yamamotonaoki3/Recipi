@@ -1,0 +1,10 @@
+# backend.hcl のひな形。コピーして bucket を書き換える（backend.hcl は .gitignore 対象）:
+#   cp backend.hcl.example backend.hcl
+#   terraform init -backend-config=backend.hcl
+# bucket は infra/bootstrap を apply したときの出力（tfstate_bucket）。
+
+bucket       = "recipi-tfstate-xxxxxxxx"
+key          = "recipi/terraform.tfstate"
+region       = "ap-northeast-1"
+encrypt      = true
+use_lockfile = true # S3 のファイルでロックする（同時に 2 人が apply して state を壊さないように）

@@ -16,7 +16,7 @@
 - **DB**: PostgreSQL
 - **画像保存**: S3 互換クラウドストレージ（ローカルは MinIO）
 - **型共有**: FastAPI が出力する OpenAPI 3.1 →（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）で各クライアントの型を自動生成（コンパイル時共有はしない）
-- **インフラ**: ローカルは Docker Compose（api + postgres + minio。フロントは compose 外）。本番デプロイ先は未定
+- **インフラ**: ローカルは Docker Compose（api + postgres + minio。フロントは compose 外）。本番は **AWS**（Terraform で管理。API Gateway ＋ ECS Fargate ／ RDS PostgreSQL 18 ／ S3 ＋ CloudFront。[infra/terraform/README.md](infra/terraform/README.md)）
 - **リポジトリ構成**: モノレポ。`backend/`（Python、Gradle 非登録）、`expoApp/`（TS、Gradle 非登録）、Kotlin フロントは Gradle（`shared` / `composeApp` / `iosApp` / `desktopApp`）
 - バージョンは実装着手前に `resolve-tech-stack` で確定する（バックエンドの Python 構成・フロントの 2 トラック構成は確定済み）
 

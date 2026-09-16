@@ -5,7 +5,6 @@
  * グループ別材料（名前なしはフラット） / 番号付き手順 / 参照材料リンク /
  * 本人なら編集・削除。♡ は Issue #100、感想セクションは Issue #102 で追加した。
  */
-import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -27,6 +26,7 @@ import { CommentComposer, type CommentDraft } from "@/components/CommentComposer
 import { CommentItem } from "@/components/CommentItem";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { RecipeDetailSkeleton } from "@/components/Skeleton";
+import { RemoteImage } from "@/components/RemoteImage";
 import { ApiError } from "@/features/auth/api";
 import {
   useComments,
@@ -172,9 +172,10 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
           style={{ aspectRatio: 4 / 3 }}
         >
           {recipe.thumbnailUrl ? (
-            <Image
+            // 署名付き URL の期限切れに備えて RemoteImage を使う（Issue #186）。
+            <RemoteImage
               testID="recipe-detail-thumbnail"
-              source={{ uri: recipe.thumbnailUrl }}
+              uri={recipe.thumbnailUrl}
               style={{ width: "100%", height: "100%" }}
               contentFit="cover"
             />
@@ -315,9 +316,9 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
               <View className="flex-1 gap-2">
                 <Text className="text-base text-neutral-800">{step.body}</Text>
                 {step.imageUrl && (
-                  <Image
+                  <RemoteImage
                     testID={`detail-step-${si}-image`}
-                    source={{ uri: step.imageUrl }}
+                    uri={step.imageUrl}
                     style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 8 }}
                     contentFit="cover"
                   />

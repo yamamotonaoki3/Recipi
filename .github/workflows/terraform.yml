@@ -1,0 +1,50 @@
+# Terraform の書式と構成の検査（Issue #165）。
+#
+# - AWS には接続しない（認証情報を持たない）。plan も apply もしない。
+#   plan は手元で行い、apply は README の手順で人が行う。
+# - infra/ に変更がある PR・push のときだけ動く。マージの必須チェックには入れていない
+#   （必須チェックは test / checks / openapi-in-sync / schema-ts-in-sync / web の 5 つ）。
+
+name: terraform
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          # 手元（Windows）と同じバージョンに固定する（versions.tf は ~> 1.15）。
+          terraform_version: 1.15.5
+
+      - name: 書式の検査（terraform fmt）
+        run: terraform fmt -check -recursive -diff infra
+
+      # backend（S3）には接続しない: -backend=false でプロバイダだけを取得して検査する。
+      - name: 構成の検査（bootstrap）
+        working-directory: infra/bootstrap
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: 構成の検査（本体）
+        working-directory: infra/terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate

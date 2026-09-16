@@ -8,12 +8,12 @@
  *
  * `HistoryItem` は `RecipeFeedItem` ＋ `viewedAt` なのでそのまま渡せる。
  */
-import { Image } from "expo-image";
 import { Heart } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 
 import { Avatar } from "@/components/Avatar";
 import { Icon, ICON_COLORS } from "@/components/Icon";
+import { RemoteImage } from "@/components/RemoteImage";
 import type { RecipeFeedItem } from "@/features/feed/api";
 
 type FeedRecipeCardProps = {
@@ -32,9 +32,10 @@ export function FeedRecipeCard({ recipe, onPress, testID }: FeedRecipeCardProps)
     >
       <View className="h-16 w-16 items-center justify-center rounded-lg bg-neutral-100">
         {recipe.thumbnailUrl ? (
-          <Image
+          // 署名付き URL の期限切れに備えて RemoteImage を使う（Issue #186）。
+          <RemoteImage
             testID={testID ? `${testID}-thumbnail` : undefined}
-            source={{ uri: recipe.thumbnailUrl }}
+            uri={recipe.thumbnailUrl}
             style={{ width: 64, height: 64, borderRadius: 8 }}
             contentFit="cover"
           />

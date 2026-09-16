@@ -44,6 +44,11 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
+# 保存先の接頭辞（実体は app/storage.py）。呼び出し側がこのモジュールだけを
+# import すれば済むように、ここから使えるようにしておく。
+PUBLIC_PREFIX = storage.PUBLIC_PREFIX
+PRIVATE_PREFIX = storage.PRIVATE_PREFIX
+
 # Pillow が返す形式名 → (Content-Type, 拡張子)。
 # ここに無い形式は受け付けない（features/image.md §6）。
 _ALLOWED_FORMATS: Final[dict[str, tuple[str, str]]] = {
@@ -206,11 +211,36 @@ def build_image_url(key: str) -> str:
     **画像の正はキーで、URL はそこから導出する派生値**という設計
     （features/image.md §4）。DB には URL を保存しない。
 
-    現在は公開バケット運用なので `S3_PUBLIC_URL_BASE` に連結するだけ。
-    本番で非公開バケット ＋ 署名付き URL に移行するときは、**この関数の
-    中身だけを差し替えればよい**（DB の移行は不要）。
+    ## キーの置き場所だけで URL の種類が決まる（Issue #185）
+
+    - `uploads/`（アバター）… `S3_PUBLIC_URL_BASE` に連結した**安定 URL**。
+      本番は CloudFront が配信するので CDN のキャッシュが効く
+    - それ以外（`private/` のレシピ・手順・感想画像）… **期限付きの署名付き URL**
+
+    **判定を「レシピが公開かどうか」で行わない**のが要点。置き場所だけで決まる
+    ので、この関数の呼び出し側（15 箇所以上ある）は何も知らなくてよいし、
+    レシピの公開・非公開が切り替わってもオブジェクトを動かす必要が無い。
+
+    未知の接頭辞は**安全側に倒して署名付き**にする。将来新しい置き場所を足した
+    ときに、うっかり公開経路へ落とさないため。
+
+    ## Issue #185 より前に保存した画像について
+
+    #185 より前は、レシピの画像も `uploads/` に置いていた。**その古いキーは
+    ここでは安定 URL のまま**になる（キーだけを見ても、アバターなのか昔の
+    レシピ画像なのか区別が付かないため）。
+
+    DB のキーだけを書き換えても、実体（オブジェクト）は `uploads/` に残って
+    公開されたままなので**画像が壊れるだけで穴は塞がらない**。塞ぐには
+    オブジェクトごと置き直す必要がある。
+
+    本番環境は #185 の時点でまだ一度も作られておらず（Issue #184 が未実施）、
+    移行すべき本番データは存在しない。ローカルの開発・デモのデータは作り直す
+    （手順は Issue #185 の PR 本文）。
     """
-    return f"{settings.S3_PUBLIC_URL_BASE.rstrip('/')}/{key.lstrip('/')}"
+    if key.startswith(PUBLIC_PREFIX):
+        return f"{settings.S3_PUBLIC_URL_BASE.rstrip('/')}/{key.lstrip('/')}"
+    return storage.presigned_url(key, settings.IMAGE_URL_TTL_SECONDS)
 
 
 def image_url(key: str | None) -> str | None:
@@ -229,7 +259,9 @@ def image_url(key: str | None) -> str | None:
     return build_image_url(key)
 
 
-def stage_upload(session: Session, user_id: uuid.UUID, image: ProcessedImage) -> str:
+def stage_upload(
+    session: Session, user_id: uuid.UUID, image: ProcessedImage, *, prefix: str
+) -> str:
     """加工済みの画像を「①管理行を作る → ②ストレージに保存する」まで進め、キーを返す。
 
     `POST /images`（一時アップロード）と `PUT /users/me/avatar` の共通部分。
@@ -250,7 +282,7 @@ def stage_upload(session: Session, user_id: uuid.UUID, image: ProcessedImage) ->
 
     **この関数は①で commit する**（②の前にキーを確定させる必要があるため）。
     """
-    key = build_object_key(image.extension)
+    key = build_object_key(image.extension, prefix=prefix)
 
     # --- ① Tx1: pending 行を作ってキーを確定する ------------------------
     now = datetime.now(UTC)
@@ -296,14 +328,22 @@ def stage_upload(session: Session, user_id: uuid.UUID, image: ProcessedImage) ->
     return key
 
 
-def build_object_key(extension: str) -> str:
+def build_object_key(extension: str, *, prefix: str) -> str:
     """保存先のオブジェクトキーを作る。
 
-    公開バケット運用なので、**キーは推測できてはいけない**。
-    ユーザー ID や連番を含めると他人の画像 URL を総当たりできてしまうため、
-    ランダムな UUID だけを使う。
+    **キーは推測できてはいけない**。ユーザー ID や連番を含めると他人の画像を
+    総当たりできてしまうため、ランダムな UUID だけを使う。
+
+    `prefix` で置き場所（＝配信の経路）が決まる（Issue #185。app/storage.py）:
+
+    - `PUBLIC_PREFIX`（`uploads/`）… アバター。安定 URL で配信する
+    - `PRIVATE_PREFIX`（`private/`）… レシピのサムネ・手順画像・感想画像。
+      署名付き URL でのみ取得できる
+
+    **呼び出し側が必ず選ぶ**（キーワード専用引数にして、既定値を置かない）。
+    既定値を置くと、新しい保存経路を足したときに、意図せず公開側へ落ちる。
     """
-    return f"uploads/{uuid.uuid4()}.{extension}"
+    return f"{prefix}{uuid.uuid4()}.{extension}"
 
 
 def consume_upload_keys(

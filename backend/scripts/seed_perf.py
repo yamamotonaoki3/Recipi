@@ -3,7 +3,8 @@
 投入するもの（件数は引数で変えられる）:
 
 - ユーザー ``perfuser_001@example.com`` 〜（既定 200 人）
-- 公開レシピ（既定 3,000 件）。タイトルに ``[PERF_TEST]`` を付け、材料 3 つ・手順 3 つを持つ
+- 公開レシピ（既定 3,000 件）。タイトルに ``[PERF_TEST]`` を付け、材料 3 つ・手順 3 つ・
+  サムネイルのキー（``private/`` 配下）を持つ
 - フォロー（1 人あたり 5 人）・お気に入り（1 人あたり 10 件）。カウント列もそろえる
 
 実行例（リポジトリルートの ``.env.<APP_ENV>`` を読む。``backend`` で実行する）::
@@ -58,12 +59,43 @@ PERF_PASSWORD = "TestPass123!"
 PERF_TAG = "[PERF_TEST]"
 # cleanup_perf が使う LIKE パターン（`_` は 1 文字の意味なのでエスケープ）。
 PERF_EMAIL_PATTERN = r"perfuser\_%@example.com"
+# サムネイルのキーの接頭辞。非公開側なので、表示用 URL は署名付きになる
+# （app/storage.py の PRIVATE_PREFIX と同じ値。Issue #185）。
+PERF_THUMBNAIL_PREFIX = "private/"
 VOCABULARY_PATH = Path(__file__).resolve().parents[1] / "perf" / "data" / "vocabulary.json"
 
 # 乱数の種を固定して、何度投入しても同じデータになるようにする（測定を比べやすくする）。
 _RANDOM_SEED = 145
 INGREDIENTS_PER_RECIPE = 3
 STEPS_PER_RECIPE = 3
+
+
+def perf_thumbnail_key(index: int) -> str:
+    """レシピのサムネイルのオブジェクトキー（``private/`` 配下）。
+
+    ## なぜサムネイルを入れるのか（Issue #185 以降）
+
+    レシピの画像は**非公開側（``private/``）に置き、表示用 URL は期限付きの
+    署名付き URL** になった（`app/services/image.py` の `build_image_url`）。
+    そのため一覧 API は **1 件ごとに署名（HMAC）を計算する**。20 件のページなら
+    20 回で、これは #185 より前には無かった処理。
+
+    サムネイルの無いレシピばかりを投入すると**この処理を一度も通らず**、
+    本番より軽い状態を測ってしまう。
+
+    ## ストレージに実体は要らない
+
+    署名は**キーから計算する**だけで、オブジェクトの有無を確かめない
+    （`storage.presigned_url`）。k6 の閲覧シナリオは画像自体を取得しないので、
+    MinIO に実体を置かなくても API 側の負荷は本番と同じになる。
+
+    ## なぜ UUID を使わないのか
+
+    このスクリプトは乱数の種を固定して「何度投入しても同じデータ」にしている。
+    `uuid4()` は毎回変わり、`rng` を新たに消費すると後続の抽選（料理名・材料・
+    お気に入り）までずれるため、**インデックスから決定的に**作る。
+    """
+    return f"{PERF_THUMBNAIL_PREFIX}perf-{index + 1:012d}.jpg"
 
 
 @dataclass(frozen=True)
@@ -159,6 +191,8 @@ def build_seed(
             description=f"{PERF_TAG} 性能テスト用のレシピです。",
             servings=rng.randint(1, 6),
             is_public=True,
+            # 一覧・詳細の応答で署名付き URL の生成を通すため（Issue #185・#145）。
+            thumbnail_key=perf_thumbnail_key(i),
             created_at=created_at,
             updated_at=created_at,
         )
