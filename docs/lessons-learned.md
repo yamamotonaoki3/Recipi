@@ -65,8 +65,25 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-16 本番の S3 とクライアント IP を AWS に合わせる（Issue #166）](#2026-09-16-本番の-s3-とクライアント-ip-を-aws-に合わせるissue-166)
 - [2026-09-16 デプロイの手動ワークフローを書く（Issue #167）](#2026-09-16-デプロイの手動ワークフローを書くissue-167)
 - [2026-09-16 CloudWatch の監視を足す（Issue #172）](#2026-09-16-cloudwatch-の監視を足すissue-172)
+- [2026-09-16 定期ジョブを EventBridge Scheduler で動かす（Issue #173）](#2026-09-16-定期ジョブを-eventbridge-scheduler-で動かすissue-173)
 
 ---
+
+## 2026-09-16 定期ジョブを EventBridge Scheduler で動かす（Issue #173）
+
+**きっかけ**: Issue #173（infra）。`backend/app/jobs/` の 8 本を、EventBridge Scheduler から ECS のタスクとして定期実行する仕組みを Terraform で書いた。計画の Codex レビュー 3 回（重大 4 → 1 → 0 件）。AWS では apply していない。
+
+1. **ジョブの失敗は 1 通りではない。4 つの経路を分けて拾う**（計画レビューで 2 回にわたり指摘）:
+   (a) コンテナが 0 以外で終了、(b) コンテナが**起動できず終了コードが付かない**（イメージや秘密の取得失敗。`stopCode = TaskFailedToStart`）、(c) **スケジューラが RunTask を呼べなかった**（IAM エラー等。ECS のイベントは出ないので `AWS/Scheduler` の `InvocationsFailedToBeSentCount` で見る）、(d) **終了コード 0 のまま失敗を積み残す**（`storage_deletion` は個別の削除失敗を warning、`notification_sweep` は配布失敗を exception で記録して次回に回す作り → ログの件数をメトリクスにして見る）。
+2. **EventBridge Scheduler の Universal Target の入力は、AWS SDK のリクエスト形そのまま**。`TaskDefinitionArn` ではなく **`TaskDefinition`**、`NetworkConfiguration` の中は **`AwsvpcConfiguration`**。タスク定義は**ファミリー名だけ**にしてリビジョンを固定しない（デプロイで上がった最新が使われる）。IAM の `ecs:RunTask` も `:*` で許可し、`ecs:cluster` の条件は**クラスタ ARN**にする。
+3. **`aws events test-event-pattern` に渡すイベントは、EventBridge の完全な形が要る**（`version`・`id`・`account`・`time`・`region`・`resources` を省くと `Parameter Event is not valid` で弾かれる）。パターンだけでなく「一致してはいけないイベント」も渡して確かめる。
+4. **`terraform plan` では確定しない値がある**。スケジュールの `input` はクラスタ ARN やサブネット ID を含むため、plan の JSON では中身を読めない（`after_unknown`）。この場合は **plan で件数と確定部分を確認し、コマンド名などはソースと実体（`backend/app/jobs/`）を突き合わせて**確かめる。
+5. **スケジューラ側で多重起動を防がない判断は、根拠を台帳に書く**。各ジョブが `SKIP LOCKED` や advisory lock で安全なこと、1 回の実行時間が間隔より十分短いことを、ジョブごとの表（許容遅延・想定実行時間・重なっても安全か・失敗時の回収・外部副作用）にした。
+6. **学習用の環境では「止められる変数」を用意する**（`schedules_enabled`）。インフラは見せたいが定期実行は止めたい、という場面がある。
+7. **EventBridge Scheduler が渡す `aws:SourceArn` は「個々のスケジュールの ARN」**（コードレビューの P1 指摘）。`arn:aws:scheduler:<region>:<account>:schedule/<グループ名>/<スケジュール名>` の形で渡ってくるので、信頼ポリシーの条件に**スケジュールグループの ARN を書くと、どのジョブもロールを引き受けられずに起動できない**。`ArnLike` で `.../schedule/<グループ名>/*` にすると、グループ単位に絞りつつ個々のスケジュールから引き受けられる。`terraform validate` では気づけない種類の誤り。
+8. **EventBridge のイベントパターンの配列は「どれかが一致すれば真（OR）」で、AND は書けない**（コードレビューで 2 回踏んだ）。「`Project` タグはあるが `recipi:job` は無い」を `key = ["Project", {"anything-but": ["recipi:job"]}]` と書いても、ジョブのタスク（`Project` も付く）に一致してしまう。**判別用のタグを 1 つ用意して、その有無だけで判定する**のが確実（API 側に `recipi:component`、ジョブ側に `recipi:job`）。また、**ECS のイベントの `tags` は、タグの伝播を設定していないと項目そのものが存在しない**ので、`anything-but` では拾えない（サービスは `propagate_tags = "TASK_DEFINITION"`、スケジューラは RunTask の `Tags` で付ける）。
+9. **EventBridge Scheduler の失敗を見るメトリクスは `TargetErrorCount`**（`AWS/Scheduler`）。`InvocationsFailedToBeSentCount` は存在せず、指定してもアラームはデータ無しのままになる。メトリクス名は `terraform validate` では検証できないので、apply 後に `aws cloudwatch list-metrics` で確かめる項目を受け入れ基準に入れる。
+10. **同じクラスタ・同じタスク定義を共用するなら、失敗の通知は「どちらのタスクか」で分ける**（コードレビューの P1 指摘）。「ECS タスクが 0 以外で終了したら通知」とだけ書くと、**通常のデプロイで古い API のタスクが止まるたびに「ジョブが失敗しました」と通知**されてしまう。スケジューラが起動時に付けるタグ（`recipi:job`）をイベントパターンの条件（`detail.tags.key`）にして見分け、API 側は「起動すらできなかった」ときだけ別の文面で通知する。判定は `aws events test-event-pattern` で、**タグあり・なし × 終了コード・起動失敗の組み合わせ（15 通り）**を確かめた。
 
 ## 2026-09-16 CloudWatch の監視を足す（Issue #172）
 

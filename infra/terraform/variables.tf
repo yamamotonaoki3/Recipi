@@ -102,6 +102,12 @@ variable "api_throttle_burst_limit" {
   default     = 100
 }
 
+variable "schedules_enabled" {
+  type        = bool
+  description = "定期ジョブ（EventBridge Scheduler）を動かすか（Issue #173）。インフラは立てたいが定期実行は止めたいときに false にする"
+  default     = true
+}
+
 variable "alert_email" {
   type        = string
   description = "アラームの通知先メールアドレス（Issue #172）。実値は terraform.tfvars（git 管理外）にだけ書く。apply 後に届く確認メールのリンクを押すまで通知は来ない"

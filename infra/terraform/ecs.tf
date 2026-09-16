@@ -101,6 +101,13 @@ resource "aws_ecs_task_definition" "api" {
     aws_secretsmanager_secret_version.jwt_secret_key,
     aws_secretsmanager_secret_version.log_hash_secret,
   ]
+
+  # このタグはサービスがタスクへ伝える（下の propagate_tags）。ECS のイベントに
+  # tags が載り、失敗の通知で「API のタスク」と「定期ジョブのタスク」を見分けられる
+  # （ジョブ側はスケジューラが recipi:job を付ける。infra/terraform/scheduler.tf。Issue #173）。
+  tags = {
+    (local.api_tag_key) = "api"
+  }
 }
 
 # 初回の apply の前に、backend_image_tag のイメージを ECR に push しておくこと（README）。
@@ -125,6 +132,11 @@ resource "aws_ecs_service" "api" {
     enable   = true
     rollback = true
   }
+
+  # タスク定義のタグ（default_tags の Project など）をタスクにも伝える。
+  # ECS のイベントに tags が載るようになり、「定期ジョブのタスク」と
+  # 「API のタスク」を失敗通知で見分けられる（scheduler.tf。Issue #173）。
+  propagate_tags = "TASK_DEFINITION"
 
   # Cloud Map に SRV（IP ＋ ポート）で登録する。API Gateway はここから転送先を知る。
   service_registries {
