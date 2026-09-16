@@ -77,6 +77,29 @@ class Settings(BaseSettings):
     # SQLAlchemy 形式の接続文字列（postgresql+psycopg://...）。
     DATABASE_URL: str
 
+    # 接続プールの設定（Issue #191。app/db.py の create_engine に渡す）。
+    #
+    # これまで指定しておらず、SQLAlchemy の既定（5 ＋ 予備 10 ＝ 15 接続・
+    # 待ち上限 30 秒）のまま動いていた。API のエンドポイントはすべて同期関数
+    # （`def`）なので Starlette のスレッドプール（既定 40）で実行され、
+    # 40 スレッドが 15 本の接続を奪い合って 30 秒待ち、QueuePool のタイムアウトで
+    # 500 になっていた（性能テストのスパイクで実測。Issue #189）。
+    #
+    # 数を増やすこと自体が目的ではない。20 本にしても 100 VU 分の同時要求は
+    # 捌けないので、**溢れた分を待たせずに 503 で返す**（app/main.py のハンドラ）
+    # ほうが本質的な対策になる。
+    #
+    # 常時保持する接続の本数。
+    DB_POOL_SIZE: int = Field(default=10, ge=1)
+    # 急増したときに一時的に追加してよい本数（合計 = POOL_SIZE + MAX_OVERFLOW）。
+    # 本番は RDS db.t4g.micro（max_connections 約 110）に対して 1 タスク 20 本。
+    # 定期ジョブ・マイグレーション・手動接続の分を残せる範囲にしている。
+    DB_MAX_OVERFLOW: int = Field(default=10, ge=0)
+    # 接続が空くのを待つ上限（秒）。既定の 30 秒から短くしている。
+    # 5 秒待って空かないなら、その先も詰まっている可能性が高い。長く待たせるほど
+    # スレッドが占有され、クライアントから見ると「応答が返ってこない」に等しくなる。
+    DB_POOL_TIMEOUT_SECONDS: float = Field(default=5.0, gt=0)
+
     # --- 認証（JWT）— 実際に使うのは Phase 1（#35）から ----------------
     JWT_SECRET_KEY: str = "dev-only-not-a-real-secret"
     ACCESS_TOKEN_TTL_MINUTES: int = 15

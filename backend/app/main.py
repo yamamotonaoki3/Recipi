@@ -25,6 +25,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
 from app import storage
 from app.api.auth import router as auth_router
@@ -124,6 +125,37 @@ def handle_validation_error(request: Request, exc: RequestValidationError) -> JS
                 "details": {"errors": jsonable_encoder(exc.errors())},
             }
         },
+    )
+
+
+@app.exception_handler(PoolTimeoutError)
+def handle_db_pool_timeout(request: Request, exc: PoolTimeoutError) -> JSONResponse:
+    """DB の接続プールが空くのを待ちきれなかったら 503 を返す（Issue #191）。
+
+    サーバーのバグではなく「今は同時に捌ける量を超えている」という状態なので、
+    500（サーバー内部エラー）ではなく 503（一時的に利用できない）を返し、
+    `Retry-After` で再試行の目安を伝える。待たせ続けるとスレッドが占有され、
+    クライアントからは「応答が返ってこない」のと同じになる（Issue #189 の実測では、
+    サーバーが 500 を 129 件返した一方、クライアントが受け取れたのは 26 件だった）。
+
+    このハンドラは `Exception` のハンドラと違い、リクエスト ID のミドルウェアの
+    **内側**で動く。そのため middleware.py の `unhandled exception`（スタック
+    トレース付き）は出ず、想定内の輻輳として WARNING が 1 行残るだけになる。
+    CloudWatch のメトリクスフィルタ（infra/terraform/monitoring.tf）で
+    `unhandled exception` を数えているので、この違いがそのまま
+    「バグによる 500」と「意図した縮退」の区別になる。
+    """
+    logger.warning("db pool timeout", extra={"path": request.url.path})
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": "SERVICE_UNAVAILABLE",
+                "message": "混み合っています。しばらくしてからもう一度お試しください",
+                "details": None,
+            }
+        },
+        headers={"Retry-After": "1"},
     )
 
 

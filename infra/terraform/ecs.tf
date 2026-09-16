@@ -51,6 +51,13 @@ resource "aws_ecs_task_definition" "api" {
         { name = "LOG_LEVEL", value = "INFO" },
         { name = "LOG_FORMAT", value = "json" },
         { name = "AUTH_COOKIE_SECURE", value = "true" },
+        # DB 接続プール（Issue #191）。同時 20 本（10 ＋ 予備 10）まで、空き待ちは 5 秒。
+        # 待ちきれない分は 500 ではなく 503 ＋ Retry-After を返して早く手放す。
+        # RDS db.t4g.micro の max_connections（約 110）に対し、定期ジョブ・
+        # マイグレーション・手動接続の分を残せる範囲にしている。
+        { name = "DB_POOL_SIZE", value = "10" },
+        { name = "DB_MAX_OVERFLOW", value = "10" },
+        { name = "DB_POOL_TIMEOUT_SECONDS", value = "5" },
         { name = "CORS_ALLOW_ORIGINS", value = var.cors_allow_origins },
         # 画像は AWS の S3。エンドポイントとアクセスキーは空にし、タスクロールの
         # 一時的な認証情報を使う（空を「AWS の標準・タスクロール」として扱う処理は Issue #166）。

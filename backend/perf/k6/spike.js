@@ -45,6 +45,12 @@ export const options = {
     "http_req_duration{name:search,phase:recovery}": ["p(95)<300"],
     // 急増中の値は判定せず記録だけする。
     "http_req_duration{phase:spike}": [],
+    // 5xx と、503（混雑時の意図した縮退。Issue #191）の内訳。どちらも判定はせず
+    // 記録だけするが、急増中に何が起きたかを summary から読めるようにしておく。
+    // 対策が効いていれば server_errors は 0 で、shed_requests だけが増える。
+    // なお 503 は http_req_failed にも数えられるので、上の 5% の判定には効いてくる。
+    server_errors: [],
+    shed_requests: [],
   },
   summaryTrendStats: ["avg", "min", "med", "p(90)", "p(95)", "p(99)", "max"],
 };
