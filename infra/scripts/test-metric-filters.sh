@@ -54,6 +54,12 @@ RESET_NOT_FOUND='{"time":"2026-09-16T00:00:00.000Z","level":"WARNING","logger":"
 
 UNHANDLED='{"time":"2026-09-16T00:00:00.000Z","level":"ERROR","logger":"app","request_id":"r11","user_id":"-","service":"recipi-api","env":"production","message":"unhandled exception","exc_info":"Traceback (most recent call last): ..."}'
 
+# 定期ジョブ（Issue #173）。終了コード 0 のまま失敗を積み残す経路を、ログの件数で見る。
+JOB_STORAGE_WARN='{"time":"2026-09-16T00:00:00.000Z","level":"WARNING","logger":"app.jobs.storage_deletion","request_id":"-","user_id":"-","service":"recipi-api","env":"production","message":"オブジェクトの削除に失敗しました key=uploads/abc.png"}'
+JOB_STORAGE_INFO='{"time":"2026-09-16T00:00:00.000Z","level":"INFO","logger":"app.jobs.storage_deletion","request_id":"-","user_id":"-","service":"recipi-api","env":"production","message":"ストレージ削除ジョブ完了: 成功 3 件 / 失敗 0 件"}'
+JOB_SWEEP_ERROR='{"time":"2026-09-16T00:00:00.000Z","level":"ERROR","logger":"app.jobs.notification_sweep","request_id":"-","user_id":"-","service":"recipi-api","env":"production","message":"通知 outbox 1 の配布に失敗しました","exc_info":"Traceback ..."}'
+JOB_SWEEP_INFO='{"time":"2026-09-16T00:00:00.000Z","level":"INFO","logger":"app.jobs.notification_sweep","request_id":"-","user_id":"-","service":"recipi-api","env":"production","message":"通知 outbox スイープ完了: 2 件を処理しました"}'
+
 echo "=== メトリクスフィルタのパターンを検証します（aws logs test-metric-filter / 読み取りのみ・無料）"
 
 # 5xx: 500 だけが一致（200・404 は一致しない）
@@ -75,6 +81,13 @@ check "reset-rate-limited" '{ $.log_type = "audit" && ($.reason = "rate_limited_
 # 想定外の例外: 完全一致の 1 件だけ（監査ログの message は一致しない）
 check "unhandled-exception" '{ $.message = "unhandled exception" }' 1 \
   "${UNHANDLED}" "${LOGIN_SUCCESS}"
+
+# ジョブの失敗（Issue #173）: 警告・エラーの 1 件だけ（完了のログは一致しない）
+check "job-storage-deletion" '{ $.logger = "app.jobs.storage_deletion" && $.level = "WARNING" }' 1 \
+  "${JOB_STORAGE_WARN}" "${JOB_STORAGE_INFO}" "${JOB_SWEEP_ERROR}"
+
+check "job-notification-sweep" '{ $.logger = "app.jobs.notification_sweep" && $.level = "ERROR" }' 1 \
+  "${JOB_SWEEP_ERROR}" "${JOB_SWEEP_INFO}" "${JOB_STORAGE_WARN}"
 
 echo
 if [ "${failures}" -eq 0 ]; then

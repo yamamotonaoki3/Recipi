@@ -153,6 +153,81 @@ aws cloudwatch get-metric-statistics --namespace AWS/Logs --metric-name Incoming
 bash infra/scripts/test-metric-filters.sh
 ```
 
+## 定期ジョブ（Issue #173）
+
+EventBridge Scheduler が、決まった時刻に ECS のタスクとして管理コマンドを 1 回だけ動かす（API と同じイメージ・同じタスク定義で、`command` だけを差し替える）。常駐のワーカーは置かない。
+
+| スケジュール | コマンド | 頻度（日本時間） |
+| --- | --- | --- |
+| `recipi-notification-sweep` | `python -m app.jobs.notification_sweep` | 10 分ごと |
+| `recipi-storage-deletion` | `python -m app.jobs.storage_deletion` | 15 分ごと |
+| `recipi-gc-uploads` | `python -m app.jobs.gc_uploads` | 1 時間ごと |
+| `recipi-cleanup-refresh-tokens` | `python -m app.jobs.cleanup_refresh_tokens` | 毎日 2:10 |
+| `recipi-cleanup-notifications` | `python -m app.jobs.cleanup_notifications` | 毎日 2:20 |
+| `recipi-cleanup-password-reset-attempts` | `python -m app.jobs.cleanup_password_reset_attempts` | 毎日 2:30 |
+| `recipi-trim-recipe-views` | `python -m app.jobs.trim_recipe_views` | 毎日 2:40 |
+| `recipi-recount-counts` | `python -m app.jobs.recount_counts` | 毎日 2:50 |
+
+- **多重起動について**: 各ジョブは `FOR UPDATE SKIP LOCKED` やユーザー単位の advisory lock で、同時に 2 本走っても壊れない（Issue #72・#85）。そのためスケジューラ側で排他はしない。1 回の実行はいずれも数十秒以内の想定で、間隔より十分短い。**データが増えて実行時間が間隔に近づいてきたら、頻度を下げる**。
+- **止めたいとき**: `terraform.tfvars` に `schedules_enabled = false` を書いて apply すると、8 本とも `DISABLED` になる（インフラは残したまま定期実行だけ止める）。
+- 状態の確認:
+
+  ```bash
+  aws scheduler list-schedules --group-name "$(terraform output -raw scheduler_group_name)" \
+    --query 'Schedules[].[Name,State]' --output table
+  ```
+
+### ジョブを手動で 1 回だけ動かす
+
+デモ中に日次ジョブを見せたいときなどに使う。
+
+```bash
+cd infra/terraform
+aws ecs run-task \
+  --cluster "$(terraform output -raw ecs_cluster_name)" \
+  --task-definition "$(terraform output -raw ecs_task_definition_family)" \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[$(terraform output -json private_subnet_ids | jq -r 'join(",")')],securityGroups=[$(terraform output -raw ecs_security_group_id)],assignPublicIp=DISABLED}" \
+  --overrides "$(jq -nc --arg name "$(terraform output -raw ecs_container_name)" \
+    '{containerOverrides:[{name:$name,command:["python","-m","app.jobs.recount_counts"]}]}')"
+```
+
+### ジョブのログの探し方
+
+ジョブのログは API と同じロググループ（`/ecs/recipi-api`）に入る。ログストリーム名では区別できないので、ロガー名で絞る。
+
+```text
+fields @timestamp, level, logger, message
+| filter logger like /app\.jobs/
+| sort @timestamp desc
+```
+
+### ジョブの失敗はどう気づくか
+
+4 通りの経路で拾い、すべて同じ SNS（メール）に通知する。
+
+| 経路 | 何を見ているか |
+| --- | --- |
+| (a) ジョブの異常終了 | ECS のイベントで、**定期ジョブのタスク**の終了コードが 0 以外 |
+| (b) ジョブの起動失敗 | ECS のイベントで、**定期ジョブのタスク**が `stopCode = TaskFailedToStart`（イメージや秘密を取得できなかった等） |
+| (c) スケジューラが起動できなかった | Scheduler（`AWS/Scheduler`）の **`TargetErrorCount`**（ディメンション `ScheduleGroup = recipi-jobs`）。IAM エラー・スロットリング等で `RunTask` を呼べなかった場合。ECS のイベントは出ない |
+| (d) 終了コード 0 のまま失敗を積み残した | ログの件数（`storage_deletion` の警告が 1 時間で 10 件以上、`notification_sweep` のエラーが 5 件以上） |
+
+- (d) があるのは、これらのジョブが「個別の失敗を記録して次回に回す」作りで、プロセス自体は正常終了するため。
+- **ジョブと API のタスクは、専用のタグで見分けている**。スケジューラは起動するタスクに `recipi:job = <ジョブ名>`、API のサービスはタスク定義のタグ `recipi:component = api` をタスクへ伝える（`propagate_tags`）。こうしないと、**通常のデプロイで古い API のタスクが止まるたびに「ジョブが失敗しました」と通知**されてしまう。
+  - なお、イベントパターンの配列は「どれかが一致すれば真」なので、「`Project` はあるが `recipi:job` は無い」という AND の条件は書けない。**判別用のタグを 1 つずつ用意する**のが確実。
+- **API のタスク**については、「起動すらできなかった」ときだけ別のルールで通知する（デプロイの失敗を意味するため）。終了コードが 0 以外での停止は、デプロイや再起動でも起きるので通知しない。API の異常は #172 の 5xx・ECS のメトリクス・ヘルスチェックで気づく仕組みになっている。
+
+### 費用について
+
+- **Scheduler・EventBridge のルール・アラームは、現時点の無料枠の範囲**（Scheduler は月 1,400 万回、アラーム 10 個、SNS のメール 1,000 通まで）。料金は改定されうるので目安として扱い、実際は AWS の請求画面（Billing）や Pricing Calculator で確認する。
+- **課金されるのは、起動される ECS タスクの分**。1 日およそ 269 回（10 分ごと 144 ＋ 15 分ごと 96 ＋ 1 時間ごと 24 ＋ 日次 5）。1 回あたり最低課金 1 分・0.25vCPU / 0.5GB で約 0.03 円なので、**1 日およそ 10〜20 円、1 か月動かし続けて 300〜600 円**の見込み。イメージの取得は S3 のゲートウェイ型エンドポイントを通るので、NAT の通信料はほとんどかからない。
+- 学習用では**インフラを立てている時間だけ**かかる。止めるときは `schedules_enabled = false` か `terraform destroy`。
+
+### タスク定義を API と共用していること
+
+ジョブは API と同じタスク定義（ファミリー名を指定＝常に最新のリビジョン）を使う。そのため **#167 でデプロイしてイメージが変わると、ジョブも新しいイメージで動く**。デプロイ後は、日次ジョブを 1 本手動で動かして終了コード 0 になることを確かめる。将来、ジョブと API で必要な依存が食い違ってきたら、ジョブ専用のタスク定義に分ける。
+
 ## デプロイの手動確認・復旧
 
 ワークフローをキャンセルしたり、ランナーが強制終了したりすると、ロールバックのステップが動かないことがある。次の点に注意する。

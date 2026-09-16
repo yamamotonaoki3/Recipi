@@ -65,6 +65,11 @@ output "api_gateway_log_group" {
   value       = aws_cloudwatch_log_group.api_gateway.name
 }
 
+output "scheduler_group_name" {
+  description = "定期ジョブのスケジュールグループ（aws scheduler list-schedules で使う。Issue #173）"
+  value       = aws_scheduler_schedule_group.jobs.name
+}
+
 output "github_deploy_role_arn" {
   description = "GitHub Actions がデプロイで引き受けるロール。GitHub の Secrets の AWS_DEPLOY_ROLE_ARN に登録する"
   value       = aws_iam_role.github_deploy.arn
