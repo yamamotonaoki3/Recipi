@@ -47,6 +47,62 @@ terraform plan -out=plan.tfplan
 terraform apply plan.tfplan
 ```
 
+## デプロイ（Issue #167）
+
+`terraform apply` でインフラを作った後、backend の更新は GitHub Actions の `deploy-backend` ワークフロー（手動実行）で行う。イメージの push → マイグレーション → サービス更新 → `/healthz` の確認までを 1 回で行い、失敗したら前のタスク定義に戻す。
+
+### 初回だけ必要な準備
+
+1. **イメージを 1 つ push する**（`terraform apply` の前に。ECR は apply で作られるので、リポジトリだけ先に作るか、apply 後にタスクが起動しない状態から始めてもよい）:
+
+   ```bash
+   aws ecr get-login-password --region ap-northeast-1 \
+     | docker login --username AWS --password-stdin "$(terraform output -raw ecr_repository_url | cut -d/ -f1)"
+   TAG=$(git rev-parse HEAD)
+   docker build -t "$(terraform output -raw ecr_repository_url):$TAG" backend
+   docker push "$(terraform output -raw ecr_repository_url):$TAG"
+   # この $TAG を terraform.tfvars の backend_image_tag に書いて apply する
+   ```
+
+2. **マイグレーションを 1 回流す**（初回は DB が空のため）:
+
+   ```bash
+   aws ecs run-task --cluster "$(terraform output -raw ecs_cluster_name)" \
+     --task-definition "$(terraform output -raw ecs_task_definition_family)" \
+     --launch-type FARGATE \
+     --network-configuration "awsvpcConfiguration={subnets=[$(terraform output -json private_subnet_ids | jq -r 'join(",")')],securityGroups=[$(terraform output -raw ecs_security_group_id)],assignPublicIp=DISABLED}" \
+     --overrides '{"containerOverrides":[{"name":"api","command":["alembic","upgrade","head"]}]}'
+   ```
+
+3. **GitHub の Secrets に 4 つ登録する**（リポジトリの Settings → Secrets and variables → Actions）:
+
+   | Secret | 入れる値（`terraform output`） | 形式 |
+   | --- | --- | --- |
+   | `AWS_DEPLOY_ROLE_ARN` | `terraform output -raw github_deploy_role_arn` | `arn:aws:iam::...:role/recipi-github-deploy` |
+   | `AWS_API_BASE_URL` | `terraform output -raw api_url` | `https://...`（末尾のスラッシュなし） |
+   | `AWS_ECS_SUBNET_IDS` | `terraform output -json private_subnet_ids` の 2 件 | カンマ区切り（`subnet-aaa,subnet-bbb`。空白を入れない） |
+   | `AWS_ECS_SECURITY_GROUP_ID` | `terraform output -raw ecs_security_group_id` | `sg-...` |
+
+### デプロイの手動確認・復旧
+
+ワークフローをキャンセルしたり、ランナーが強制終了したりすると、ロールバックのステップが動かないことがある。次の点に注意する。
+
+- ECS の**サーキットブレーカー**は、「新しいタスクが安定して起動できないデプロイ」を自動で前のタスク定義へ戻す。
+- ただし、**サービスが安定した後にヘルスチェックだけが失敗した場合**（アプリは起動するが `/healthz/db` が 500 など）は自動で戻らない。ワークフローが中断されていると、新しいリビジョンのまま残る。
+
+そのときは、状態を確認して手動で戻す。
+
+```bash
+# 現在のリビジョン・展開の状態を見る
+aws ecs describe-services --cluster recipi-cluster --services recipi-api \
+  --query 'services[0].deployments[?status==`PRIMARY`].[taskDefinition,runningCount,rolloutState,rolloutStateReason]'
+
+# 前のリビジョンに戻す（<n> は戻したいリビジョン番号）
+aws ecs update-service --cluster recipi-cluster --service recipi-api \
+  --task-definition recipi-api:<n>
+aws ecs wait services-stable --cluster recipi-cluster --services recipi-api
+```
+
 ## 学習用の運用とトレードオフ
 
 - **使うときだけ apply し、終わったら `terraform destroy` する**。NAT Gateway・RDS・ECS・API Gateway の VPC Link などは、動いているだけで時間課金される。

@@ -114,6 +114,14 @@ resource "aws_ecs_service" "api" {
     assign_public_ip = false
   }
 
+  # デプロイのサーキットブレーカー（Issue #167）。新しいタスクが安定して起動できない
+  # デプロイを ECS 自身が失敗と判断し、直前の安定したタスク定義へ自動で戻す。
+  # デプロイのワークフローが中断されても効く（ワークフロー側のロールバックと二重の備え）。
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   # Cloud Map に SRV（IP ＋ ポート）で登録する。API Gateway はここから転送先を知る。
   service_registries {
     registry_arn   = aws_service_discovery_service.api.arn
@@ -123,4 +131,10 @@ resource "aws_ecs_service" "api" {
 
   # NAT がある前にタスクが起動すると、イメージや秘密を取りに行けずに失敗する。
   depends_on = [aws_nat_gateway.main, aws_route_table_association.private]
+
+  lifecycle {
+    # デプロイのワークフロー（Issue #167）が、新しいイメージのタスク定義に更新する。
+    # terraform apply でそれを古いリビジョンへ戻さないよう、この項目は無視する。
+    ignore_changes = [task_definition]
+  }
 }
