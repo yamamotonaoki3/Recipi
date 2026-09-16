@@ -113,7 +113,7 @@
 
 | `log_type` | 出す場所 | 主な項目 | レベル |
 | --- | --- | --- | --- |
-| `access` | `app/middleware.py`（1 リクエスト 1 行。uvicorn 標準のアクセスログは止める） | `method` / `path`（ルートのテンプレート。クエリ文字列は出さない）/ `status` / `duration_ms` / `client_ip` / `user_agent` | 2xx・3xx は INFO、4xx は WARNING、5xx は ERROR。`/healthz` 系は DEBUG |
+| `access` | `app/middleware.py`（1 リクエスト 1 行。uvicorn 標準のアクセスログは止める） | `method` / `path`（ルートのテンプレート。クエリ文字列は出さない）/ `status` / `duration_ms` / `db_query_count` / `db_duration_ms` / `client_ip` / `user_agent` | 2xx・3xx は INFO、4xx は WARNING、5xx は ERROR。`/healthz` 系は DEBUG。DBのSQL本文・パラメータは記録しない |
 | `audit` | `app/audit.py` の `audit_event()` | `action` / `outcome`（`success` / `failure`）/ `reason` / `user_id` / `email_hash` / `client_ip` / 対象の ID | 成功は INFO、失敗・不審な操作は WARNING |
 | （なし） | 各モジュールの `logging.getLogger(__name__)` | 自由 | 用途に応じて |
 
