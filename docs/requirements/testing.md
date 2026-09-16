@@ -97,10 +97,13 @@
 
 ## 6. CD（継続的デリバリー）
 
-- **本番デプロイ先が未定**（[todo.md](todo.md) #2、Phase 10 で確定）。それまで CD は **ビルド / パッケージ検証のみ**:
+- **本番は AWS**（[architecture.md](architecture.md) §本番デプロイ）。backend のデプロイは **手動実行のワークフロー** `.github/workflows/deploy-backend.yml`（Issue #167）で行う。ECR への push → タスク定義の更新 → マイグレーション → ECS サービスの更新 → `/healthz`・`/healthz/db` の確認までを 1 回で行い、失敗したら前のタスク定義に戻す。
+- **main への push で自動デプロイはしない**（学習用で、確認するときだけ環境を立てて後で destroy する運用のため）。**マージの必須チェックは従来の 5 件のまま**で、デプロイのワークフローは含めない。
+- 通常の CI 側は引き続きビルド / パッケージ検証を行う:
   - backend: Docker イメージの `build` が通ること。
   - frontend: `expo export`（Web ビルド）＋ `tauri build`（未署名デスクトップパッケージ）のスモーク。
-- **実デプロイは行わない。** Phase 10 でデプロイ先を確定したら `deploy` ジョブを追加する。
+- `infra/**` を変更する PR では Terraform の `fmt -check` / `validate`（`.github/workflows/terraform.yml`）。AWS には接続せず、`apply` もしない。
+- frontend は配布物（`.msi` 等）を手動ワークフローの artifact として取り出す運用で、ストア配布は対象外。
 - デモ用のデスクトップパッケージ（未署名 `.msi` / `.dmg`）は MVP 時点でも上記スモークの成果物として取り出せる（[roadmap.md](roadmap.md) 「MVP ライン」）。
 
 ## 7. ツール一覧（確定）

@@ -176,7 +176,7 @@ erDiagram
 - **AI 校正**（[features/ai-proofread.md](features/ai-proofread.md)・Phase 11）は新規テーブル必須ではない。レート制限は当面アプリ内カウンタでも可。使用回数 / コスト追跡用の `ai_usage`（`user_id` / `date` / `count` 等）を持つかは → [todo.md](todo.md)。
 - パスワード・秘密の答えはハッシュ化して保存（`password_hash` / `security_answer_hash`）。
 - リフレッシュトークンの検証用データは `token_hash` で保持する。
-- 画像は `avatar_key` / `thumbnail_key` / `image_key` を正として永続化し、表示用 URL はレスポンス構築時にキーから生成する。署名付き URL は失効するため DB に永続化しない。公開バケットを採用する場合も、安定 URL はキーから生成する派生値として扱う（[features/image.md](features/image.md)）。
+- 画像は `avatar_key` / `thumbnail_key` / `image_key` を正として永続化し、表示用 URL はレスポンス構築時にキーから生成する。本番は非公開 S3 バケットと CloudFront の OAC を組み合わせ、CloudFront のドメインを基底にした安定 URL を返す。ローカル開発・テストは MinIO の公開バケットで安定 URL を返す。いずれも URL はキーから組み立てる派生値として扱い、DB には永続化しない（[features/image.md](features/image.md)）。
 
 ## カウント列キャッシュ（非正規化カウント）
 

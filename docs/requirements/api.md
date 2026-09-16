@@ -12,7 +12,7 @@
 - ソートは `(時刻, id)` の全順序とし、`cursor` は両方を保持する
 - 1 ページ 20 件目安
 - 日時は ISO 8601（UTC）
-- レスポンスの `thumbnailUrl` / `avatarUrl` / `imageUrl` は、サーバーが永続化されたオブジェクトキーから生成する表示用 URL（派生値）。署名付き URL はレスポンスごとに生成し、DB には永続化しない
+- レスポンスの `thumbnailUrl` / `avatarUrl` / `imageUrl` は、サーバーが永続化されたオブジェクトキーから生成する表示用 URL（派生値）。本番は CloudFront のドメインを基底にした安定 URL、ローカル開発・テストは MinIO の安定 URL とし、URL は DB に永続化しない
 - 各操作のトランザクション境界・副作用の同期 / 非同期の別は [processing-model.md](processing-model.md) を正とする。例: `POST /recipes`（公開）は 201 を返した**後**にフォロワー通知を非同期で生成する。画像の実削除は削除キュー経由の定期バッチで行う
 
 ### 統一エラーレスポンス
