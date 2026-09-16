@@ -13,8 +13,12 @@ resource "aws_ecs_cluster" "main" {
 }
 
 resource "aws_cloudwatch_log_group" "api" {
-  name              = "/ecs/${var.project_name}-api"
-  retention_in_days = 30
+  name = "/ecs/${var.project_name}-api"
+  # アプリのログと監査ログ（Issue #170）を同じロググループに入れ、
+  # **監査ログを 1 年残す**要件に合わせて 365 日にする（Issue #172）。
+  # 量が増えて月 5GB を超えるようなら、監査ログを別のロググループに分ける
+  # （判断基準は infra/terraform/README.md）。
+  retention_in_days = 365
 }
 
 resource "aws_ecs_task_definition" "api" {
