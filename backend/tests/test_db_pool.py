@@ -12,6 +12,8 @@ DB には接続しないので `integration` マーカーは付けない（Docke
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -79,7 +81,10 @@ def test_engine_uses_configured_pool():
     from app.config import settings
     from app.db import engine
 
-    pool = engine.pool
+    # SQLAlchemy の Pool 型は、実装上存在する設定参照用属性を公開していない。
+    # ここでは接続を取得するのではなく、create_engine に渡した設定値を検証する
+    # 目的なので、実行時の Pool オブジェクトだけを Any として扱う。
+    pool = cast(Any, engine.pool)
     assert pool.size() == settings.DB_POOL_SIZE
     # 予備の本数と待ち時間は公開 API が無いので内部属性で確かめる。
     # ここが既定（10 / 30 秒）のままだと Issue #189 の状態に戻る。
