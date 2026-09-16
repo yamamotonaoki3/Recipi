@@ -102,6 +102,16 @@ variable "api_throttle_burst_limit" {
   default     = 100
 }
 
+variable "alert_email" {
+  type        = string
+  description = "アラームの通知先メールアドレス（Issue #172）。実値は terraform.tfvars（git 管理外）にだけ書く。apply 後に届く確認メールのリンクを押すまで通知は来ない"
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.alert_email))
+    error_message = "alert_email にはメールアドレスの形式で指定してください。"
+  }
+}
+
 variable "tags" {
   type        = map(string)
   description = "全リソースに追加するタグ"

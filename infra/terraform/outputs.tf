@@ -55,6 +55,16 @@ output "api_log_group" {
   value       = aws_cloudwatch_log_group.api.name
 }
 
+output "alerts_topic_arn" {
+  description = "アラームの通知先 SNS トピック（Issue #172。#173 のジョブ失敗通知でも使う）"
+  value       = aws_sns_topic.alerts.arn
+}
+
+output "api_gateway_log_group" {
+  description = "API Gateway のアクセスログのロググループ"
+  value       = aws_cloudwatch_log_group.api_gateway.name
+}
+
 output "github_deploy_role_arn" {
   description = "GitHub Actions がデプロイで引き受けるロール。GitHub の Secrets の AWS_DEPLOY_ROLE_ARN に登録する"
   value       = aws_iam_role.github_deploy.arn

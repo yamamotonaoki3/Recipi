@@ -20,6 +20,9 @@ locals {
   # コンテナ名（タスク定義・Cloud Map の登録・ログで共通に使う）。
   container_name = "api"
 
+  # このアカウントの ID（IAM・SNS・ログのポリシーの条件で使う）。
+  account_id = data.aws_caller_identity.current.account_id
+
   common_tags = merge(
     {
       Project   = var.project_name

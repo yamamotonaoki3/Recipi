@@ -56,4 +56,28 @@ resource "aws_apigatewayv2_stage" "default" {
     throttling_rate_limit  = var.api_throttle_rate_limit
     throttling_burst_limit = var.api_throttle_burst_limit
   }
+
+  # アクセスログ（Issue #172）。1 行 1 JSON で、アプリのログと同じように読める形にする。
+  # **Authorization ヘッダーや Cookie は出さない**（秘密が混ざらないように）。
+  # アプリのログの request_id とは別の値（API Gateway が振る requestId）なので、
+  # 突き合わせ方は infra/terraform/README.md に書いてある。
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway.arn
+    format = jsonencode({
+      requestId         = "$context.requestId"
+      ip                = "$context.identity.sourceIp"
+      requestTime       = "$context.requestTime"
+      httpMethod        = "$context.httpMethod"
+      routeKey          = "$context.routeKey"
+      status            = "$context.status"
+      protocol          = "$context.protocol"
+      responseLength    = "$context.responseLength"
+      responseLatency   = "$context.responseLatency"
+      integrationStatus = "$context.integrationStatus"
+    })
+  }
+
+  # ロググループと、API Gateway に書き込みを許すポリシーができてから作る
+  # （順番が逆だと、アクセスログが出ないまま作られてしまう）。
+  depends_on = [aws_cloudwatch_log_resource_policy.api_gateway]
 }

@@ -32,7 +32,7 @@ resource "aws_iam_role" "github_deploy" {
 }
 
 locals {
-  account_id               = data.aws_caller_identity.current.account_id
+  # account_id は locals.tf で定義している（ここでは参照するだけ）。
   task_definition_arn_base = "arn:aws:ecs:${var.aws_region}:${local.account_id}:task-definition/${aws_ecs_task_definition.api.family}"
 }
 

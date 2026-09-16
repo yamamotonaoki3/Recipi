@@ -83,7 +83,77 @@ terraform apply plan.tfplan
    | `AWS_ECS_SUBNET_IDS` | `terraform output -json private_subnet_ids` の 2 件 | カンマ区切り（`subnet-aaa,subnet-bbb`。空白を入れない） |
    | `AWS_ECS_SECURITY_GROUP_ID` | `terraform output -raw ecs_security_group_id` | `sg-...` |
 
-### デプロイの手動確認・復旧
+### 監視（Issue #172）
+
+CloudWatch でログを集め、異常があれば SNS からメールで知らせる。
+
+### 準備（apply のとき 1 回だけ）
+
+1. `terraform.tfvars` の `alert_email` に通知先のメールアドレスを書く（このファイルは git 管理外）。
+2. `terraform apply` の後、AWS から **確認メール（Subject: AWS Notification - Subscription Confirmation）** が届く。**そのリンクを押すまで通知は来ない**。
+3. 押したかどうかは次で確認できる（`SubscriptionArn` が `PendingConfirmation` でなければ確認済み）。
+
+   ```bash
+   aws sns list-subscriptions-by-topic --topic-arn "$(terraform output -raw alerts_topic_arn)"
+   ```
+
+### 何を監視しているか
+
+| アラーム | 何を見ているか | データが来ないとき |
+| --- | --- | --- |
+| 5xx の急増 | アクセスログの `status >= 500` が 5 分で 5 件以上 | 正常扱い（アクセスが無い時間帯に鳴らせない） |
+| ログイン失敗の急増 | 監査ログの `auth.login` の失敗が 5 分で 20 件以上 | 正常扱い |
+| トークン再利用 | 監査ログの `token_reuse_detected` が 1 件以上 | 正常扱い |
+| パスワード再設定のレート制限 | 監査ログの `rate_limited_*` が 15 分で 10 件以上 | 正常扱い |
+| 想定外の例外 | ログの `message` が `unhandled exception` | 正常扱い |
+| ECS サービスが動いていない | ECS の `CPUUtilization` が**届かないこと**（タスクが動いていれば必ず出る値） | **異常扱い**（destroy 中も鳴る） |
+| API Gateway の 5xx | HTTP API の `5xx` が 5 分で 5 件以上 | 正常扱い |
+| RDS の CPU | 80% 以上が 15 分続く | 無視 |
+| RDS の空き容量 | 2GB（2147483648 バイト）未満、または**届かないこと** | **異常扱い** |
+
+- **Container Insights は有効にしていない**（観測データごとの課金が増えるため）。そのため「タスク数そのもの」は監視せず、上のように標準メトリクスで代用している。
+- `destroy` している間は、`breaching`（データなし＝異常）のアラームが鳴る。アラーム自体も Terraform の管理下なので、destroy すれば消える。
+
+### 調査のしかた
+
+`aws logs start-query` でも使えるが、CloudWatch のコンソール（Logs Insights）に保存済みのクエリが 3 本入っている。
+
+- 「ログイン失敗をアドレスごとに数える」
+- 「request_id で 1 リクエストを追う」（`REPLACE_WITH_X_REQUEST_ID` を実際の値に置き換える）
+- 「遅いエンドポイントを探す」
+
+**API Gateway のログとアプリのログの突き合わせ方**: API Gateway のアクセスログ（`/aws/apigateway/recipi-api`）の `requestId` は API Gateway が振る値で、アプリのログの `request_id`（`X-Request-ID`）とは**別物**。両方を見たいときは、時刻（`requestTime` と `time`）・パス（`routeKey` と `path`）・クライアント IP（`ip` と `client_ip`）で突き合わせる。アプリの中だけを追うなら `request_id` だけで足りる。
+
+### ログの量と料金の目安
+
+| 種類 | 1 件あたり | 想定件数（1 日） | 月あたり |
+| --- | --- | --- | --- |
+| アプリのアクセスログ | 約 0.35KB | 1 万 | 約 105MB |
+| 監査ログ | 約 0.3KB | 500 | 約 4.5MB |
+| アプリのその他のログ | 約 0.4KB | 100 | 約 1.2MB |
+| API Gateway のアクセスログ | 約 0.4KB | 1 万 | 約 120MB |
+| ヘルスチェック | — | — | 0（本番は `LOG_LEVEL=INFO` で、`/healthz` のアクセスログは DEBUG なので出ない） |
+
+合計で月約 230MB。東京の料金は取り込み 1GB あたり約 0.76 ドル、保存 1GB あたり月約 0.033 ドルなので、365 日ためても数 GB で**月あたり数十円**の見込み。アラーム（10 個以下）と SNS のメールは無料枠の範囲。
+
+**月 5GB を超えるようになったら**、監査ログを別のロググループに分けて、アプリログの保存期間を短くする。実際の取り込み量は次で確認できる。
+
+```bash
+aws cloudwatch get-metric-statistics --namespace AWS/Logs --metric-name IncomingBytes \
+  --dimensions Name=LogGroupName,Value="$(terraform output -raw api_log_group)" \
+  --start-time "$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)" \
+  --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --period 86400 --statistics Sum
+```
+
+### メトリクスフィルタの検証
+
+アラームの元になるメトリクスフィルタは、パターンが実際のログと合っていないと**永久に鳴らない**。`terraform validate` では気づけないので、サンプルのログ行で確かめるスクリプトを用意している（`aws logs test-metric-filter` を使う。読み取りのみ・無料）。
+
+```bash
+bash infra/scripts/test-metric-filters.sh
+```
+
+## デプロイの手動確認・復旧
 
 ワークフローをキャンセルしたり、ランナーが強制終了したりすると、ロールバックのステップが動かないことがある。次の点に注意する。
 

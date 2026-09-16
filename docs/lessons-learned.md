@@ -64,8 +64,20 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - [2026-09-16 Terraform で AWS 本番環境を書く（Issue #165）](#2026-09-16-terraform-で-aws-本番環境を書くissue-165)
 - [2026-09-16 本番の S3 とクライアント IP を AWS に合わせる（Issue #166）](#2026-09-16-本番の-s3-とクライアント-ip-を-aws-に合わせるissue-166)
 - [2026-09-16 デプロイの手動ワークフローを書く（Issue #167）](#2026-09-16-デプロイの手動ワークフローを書くissue-167)
+- [2026-09-16 CloudWatch の監視を足す（Issue #172）](#2026-09-16-cloudwatch-の監視を足すissue-172)
 
 ---
+
+## 2026-09-16 CloudWatch の監視を足す（Issue #172）
+
+**きっかけ**: Issue #172（infra）。ロググループの保存期間・メトリクスフィルタ 5 本・アラーム 9 本・SNS のメール通知・Logs Insights の保存クエリを Terraform で書いた。**計画の Codex レビューは上限の 5 回**（重大 2 → 1 → 2 → 1 → 1 件。毎回反映したが、反映するたびに次の観点の指摘が出た）。AWS では apply していない。
+
+1. **メトリクスフィルタのパターンは `terraform validate` では検証できない**。書き方が間違っていても plan は成功し、**アラームが永久に鳴らない**。`aws logs test-metric-filter`（**読み取りのみ・無料・リソースを作らない**）にサンプルのログ行を渡して、「一致するべき行」と「一致してはいけない行」の両方で確かめるスクリプトを用意した（`infra/scripts/test-metric-filters.sh`）。
+2. **「データなし」の扱いはアラームごとに決める**。ログから数えるアラームは `notBreaching`（アクセスが無い時間帯に鳴らせない）。「動いていれば必ず値が出る」ものは `breaching` にして、**メトリクスが途切れること自体を異常として検知**する。`metric_transformation` の `default_value = 0` は「ログを処理したが一致しなかった」ときだけ効き、ログが 1 件も来ない期間はデータ点が作られない。
+3. **`RunningTaskCount` は Container Insights のメトリクス**。有効にしないと出ないので、`breaching` のアラームに使うと鳴り続ける。追加課金を避けるなら、標準で出る `AWS/ECS` の `CPUUtilization`（`ClusterName` ＋ `ServiceName`）の欠落で代用できる。
+4. **API Gateway のメトリクス名は HTTP API（v2）と REST API（v1）で違う**。v2 は `5xx` / `4xx`、v1 は `5XXError` / `4XXError`。ディメンションも `ApiId` だけでなく `Stage` が要る。合っていないとアラームは `INSUFFICIENT_DATA` のままになる。
+5. **API Gateway のアクセスログには、書き込みを許す `aws_cloudwatch_log_resource_policy` が要る**。無いとロググループはできてもログが 1 行も出ない（気づきにくい）。
+6. **必須の変数（既定値なし）を足すと、その後の `plan` は変数を渡すまで失敗する**。手元の `terraform.tfvars`（git 管理外）に確認用の架空の値を入れて進める。本番で設定漏れがあれば止まる、という意図どおりの挙動。
 
 ## 2026-09-16 デプロイの手動ワークフローを書く（Issue #167）
 
