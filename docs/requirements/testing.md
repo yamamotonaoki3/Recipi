@@ -68,6 +68,7 @@
 - パスワードは `TestPass123!` のようなテスト専用固定値。
 - 識別子ベースで一括削除する `cleanup`（SQL / スクリプト）を用意し、テスト後に残数 0 を確認する。
   - E2E: `backend/scripts/cleanup_e2e.py`（Issue #135）。`e2euser_…@example.com` のユーザーとその持ち物を物理削除し、残数 0 を確かめる。`backend` で `APP_ENV=development python -m scripts.cleanup_e2e --run-id <id> --yes`（1 回の実行分）／`E2E_CLEANUP_ALLOW_ALL=1 … --all --yes`（全部）。`--dry-run` で件数だけ見られる。接続先がローカル以外・E2E 以外の行に 1 件でも触れる場合は何も消さない。CI（`e2e.yml` / `e2e-android.yml`）はテスト後に毎回 `--all` で実行する
+  - 性能テスト: `backend/scripts/cleanup_perf.py`（Issue #145）。`perfuser_…@example.com`（本文は `[PERF_TEST]`）を対象に、E2E と同じ `cleanup()`（安全装置・残数 0 の確認）で消す。投入は `seed_perf.py`（§9）
 - **テストは本番・ステージング DB に接続しない**。接続先はローカル（Docker）または CI の使い捨て DB に限定し、接続文字列をテストコードから確認できるようにする。
 
 ## 5. CI（GitHub Actions）
@@ -121,6 +122,7 @@
 | E2E（Web）                     | **Playwright**（`@playwright/test`。Apache 2.0 の無料 OSS）                              | 実ブラウザを CDP で直接操作。React Native Web の `data-testid` を `getByTestId` でそのまま拾える                                                                                                         |
 | E2E（Android）                 | **Appium**（UiAutomator2 ドライバ）＋ **WebdriverIO** （いずれも Apache 2.0 の無料 OSS） | ビルド済み `.apk` を OS レベルから操作する「ブラックボックス」型のため Expo / React Native のバージョンに依存しない。ホスティング型クラウド（有料）は使わない                                            |
 | 契約                           | `openapi-typescript`（フロント）／ FastAPI 標準出力（backend）                           | [tech-stack.md](tech-stack.md) 「型共有」                                                                                                                                                                |
+| 性能テスト                     | **k6** v2.1.0（Grafana k6。AGPL-3.0 の無料 OSS）                                         | シナリオは JavaScript。閾値（p95 など）で合否を判定できる。単体のバイナリなのでプロジェクトの依存には入れない（§9・Issue #145）                                                                         |
 
 ## 8. 確定済み・未確定（`resolve-tech-stack` で確定）
 
@@ -133,3 +135,37 @@
 **未確定**:
 
 - iOS シミュレータの自動検証（macOS ランナーが必要）は未導入。Web は通常 PR の自動 CI、Android は手動 Workflow で検証する。
+
+## 9. 性能テスト（k6）
+
+非機能要件「レシピ一覧 / フィード API は通常時 300ms 以内（ローカル環境目安）」（[non-functional.md](non-functional.md) §パフォーマンス）を確かめる。
+
+- **対象**: 閲覧の流れ（ホーム「全体」フィードを 3 ページ → 材料名で検索 → レシピ詳細）。ログインは最初にまとめて行い、測定の対象にしない（Argon2id がわざと重いため）。書き込み・通知の fan-out は対象外（[todo.md](todo.md) #18）。
+- **環境**: ローカルの Docker Compose（api + postgres + minio）、`APP_ENV=development`。**CI には入れない**（共有ランナーは性能が安定せず、300ms の判定がぶれるため）。手元で手動実行する。
+- **テストデータ**: `seed_perf.py` がユーザー 200 人・公開レシピ 3,000 件・フォロー・お気に入りを入れる（`perfuser_…@example.com` / `[PERF_TEST]`）。料理名・材料名は `backend/perf/data/vocabulary.json` を k6 と共有し、検索が必ずヒットするようにしている。終わったら `cleanup_perf.py` で残数 0 を確かめる（§4）。
+- **スクリプト**: `backend/perf/k6/`。共通部品は `lib/`（設定・ログイン・閲覧シナリオ）。リクエストには `name` タグ（`feed` / `search` / `detail` / `login`）を付け、閾値を API ごとに判定する。
+- **トークン**: アクセストークンは 15 分で切れるので、発行から 10 分たったら VU がログインし直す（15 分を超えるテストでも 401 にならない）。
+
+| テスト     | スクリプト        | 負荷                  | 合否の基準                                        | Issue |
+| ---------- | ----------------- | --------------------- | ------------------------------------------------- | ----- |
+| スモーク   | `smoke.js`        | 1 VU・1 分            | HTTP の失敗 0 件・check がすべて成功             | #145  |
+
+平均負荷・ストレス・スパイクなど、ほかの種類は Issue #146〜#148 で追加する。
+
+### 実行手順
+
+```bash
+# 1. バックエンド一式を起動し、マイグレーションを適用しておく（README の手順）
+# 2. テストデータを入れる（backend で実行）
+cd backend
+APP_ENV=development python -m scripts.seed_perf --yes
+# 3. k6 を実行する（リポジトリルートで。値は -e で上書きできる: BASE_URL / PERF_PASSWORD / PERF_USERS / THINK_TIME）
+k6 run backend/perf/k6/smoke.js
+# `seed_perf.py --users` を変えたら、k6 に `-e PERF_USERS=<同じ数>` を渡す。
+# 4. 後始末（残数 0 を確認）
+cd backend
+APP_ENV=development python -m scripts.cleanup_perf --yes
+```
+
+- k6 は単体のバイナリ（Windows は `winget install k6`）。バージョンは `k6 version` で確認する。
+- スモークが通るまでは、ほかのテストを実行しない（スクリプトやデータの誤りを負荷の問題と取り違えないため）。
