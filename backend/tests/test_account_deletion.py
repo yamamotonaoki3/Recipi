@@ -213,7 +213,9 @@ class _World:
         # アバター・未使用のアップロード（stored / pending）
         self.avatar = self._avatar(client, keys)
         self.stored = _image(client, me, keys)
-        self.pending = f"uploads/{uuid.uuid4()}.png"
+        # アバターは uploads/、POST /images 経由の画像は private/（Issue #185）。
+        # この 2 つで、退会時に**両方の接頭辞**が削除キューに入ることを確かめる。
+        self.pending = f"private/{uuid.uuid4()}.png"
         keys.append(self.pending)
         with Session(engine) as s:
             s.add(

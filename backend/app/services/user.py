@@ -167,7 +167,11 @@ def set_avatar(session: Session, user: User, stream: BinaryIO) -> str:
     raw = image_service.read_upload_within_limit(stream)
     processed = image_service.process_image(raw)
 
-    key = image_service.stage_upload(session, user.id, processed)  # ①② （①で commit）
+    # アバターは**公開側**に置く（Issue #185）。他人のプロフィールや一覧・感想欄でも
+    # 表示され、公開・非公開が切り替わることも無いので、CDN が効く安定 URL にする。
+    key = image_service.stage_upload(
+        session, user.id, processed, prefix=image_service.PUBLIC_PREFIX
+    )  # ①② （①で commit）
 
     # --- ③ Tx2 -------------------------------------------------------------
     # ロックは「users 行 → uploads 行」の順（フォローと同じく users を先に）。

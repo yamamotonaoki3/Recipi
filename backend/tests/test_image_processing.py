@@ -163,13 +163,32 @@ def test_画素数が上限内なら通る(monkeypatch):
 # --- キーと URL -------------------------------------------------------
 
 
-def test_オブジェクトキーは推測できないランダム値になる():
-    a = build_object_key("jpg")
-    b = build_object_key("jpg")
+def test_オブジェクトキーは指定した接頭辞と推測できないランダム値になる():
+    a = build_object_key("jpg", prefix="private/")
+    b = build_object_key("jpg", prefix="private/")
     assert a != b, "キーが重複している（総当たりで他人の画像に到達できてしまう）"
-    assert a.startswith("uploads/") and a.endswith(".jpg")
+    assert a.startswith("private/") and a.endswith(".jpg")
+    assert build_object_key("png", prefix="uploads/").startswith("uploads/")
 
 
-def test_URLはキーから組み立てられる():
+def test_uploadsのURLは安定URLになる():
+    # アバターだけがここに置かれる。CloudFront / MinIO が直接配信する（Issue #185）。
     url = build_image_url("uploads/abc.jpg")
     assert url == f"{settings.S3_PUBLIC_URL_BASE.rstrip('/')}/uploads/abc.jpg"
+
+
+def test_privateのURLは署名付きになる():
+    # レシピ・手順・感想の画像。公開読み取りを許していないので署名が要る。
+    url = build_image_url("private/abc.jpg")
+    assert "X-Amz-Signature=" in url, "署名が付いていない（公開経路に落ちている）"
+    assert "private/abc.jpg" in url
+    # 安定 URL と署名付き URL を分けるのは**クエリの署名**であって、URL の基底ではない。
+    # ローカルの MinIO は path 形式なので、どちらも同じ基底
+    # （http://localhost:9000/<バケット>/）から始まる。
+    assert "?" in url, "クエリが無い（安定 URL と区別が付かない）"
+
+
+def test_未知の接頭辞は安全側に倒して署名付きになる():
+    # 将来新しい置き場所を足したとき、うっかり公開経路へ落とさないための保険。
+    url = build_image_url("something-else/abc.jpg")
+    assert "X-Amz-Signature=" in url

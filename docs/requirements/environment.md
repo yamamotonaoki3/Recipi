@@ -44,6 +44,7 @@
 | `S3_SECRET_ACCESS_KEY` | ストレージのシークレットキー | secret | `changeme` | |
 | `S3_PUBLIC_URL_BASE` | 表示用 URL の基底（`<基底>/<キー>` が画像の URL になる） | per-env | `http://localhost:9000/recipi-images` | dev/test は MinIO の公開バケット。本番は CloudFront のドメイン（`https://` 必須。バケットは非公開。[features/image.md](features/image.md)） |
 | （本番の S3） | `S3_ENDPOINT_URL`・`S3_ACCESS_KEY_ID`・`S3_SECRET_ACCESS_KEY` は**空**にする | per-env | — | 空なら AWS の標準エンドポイントと ECS のタスクロールの認証情報を使う。キーは「両方空」か「両方あり」。本番は `S3_REGION`・`S3_BUCKET`・`S3_PUBLIC_URL_BASE` が空だと起動しない。Issue #166 |
+| `IMAGE_URL_TTL_SECONDS` | `private/`（レシピのサムネ・手順画像・感想画像）の署名付き URL の有効期限（秒） | fixed | `3600`（1 時間） | **暫定値**。フロントのキャッシュ（TanStack Query の `staleTime` は最大 10 分）より十分長く、かつ署名に使う一時認証情報の寿命に収まる必要がある。本番での認証情報の寿命は Issue #184 で確認して調整する。期限切れ時にフロントが取り直す仕組みは Issue #186。Issue #185 |
 | `TRUSTED_PROXY_CIDRS` | API Gateway（VPC Link）の接続元として信頼する CIDR（カンマ区切り）。この範囲から来たときだけ、専用ヘッダー `X-Recipi-Client-Ip` をクライアントの IP として使う | per-env | （空） | dev/test は空。本番は VPC Link の ENI が置かれる private サブネットの CIDR（Terraform が渡す。VPC 全体にしない）。本番で空だと起動しない。Issue #166 |
 | `MINIO_ROOT_USER` | compose の MinIO のルートユーザー | secret / local-only | `changeme` | `S3_ACCESS_KEY_ID` と一致させる。`.env.production` には**書かない** |
 | `MINIO_ROOT_PASSWORD` | compose の MinIO のルートパスワード | secret / local-only | `changeme` | `S3_SECRET_ACCESS_KEY` と一致させる |

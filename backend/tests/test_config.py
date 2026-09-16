@@ -199,3 +199,26 @@ def test_cleanup_settings_defaults_and_override(monkeypatch: pytest.MonkeyPatch,
 
     monkeypatch.setenv("RECIPE_VIEWS_MAX_PER_USER", "50")
     assert Settings(_env_file=tmp_path / ".env.missing").RECIPE_VIEWS_MAX_PER_USER == 50
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "604801"])
+def test_image_url_ttl_rejects_invalid_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, value: str
+):
+    """画像 URL の有効期限は 1 秒以上 7 日以下で、範囲外なら起動できない。"""
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("IMAGE_URL_TTL_SECONDS", value)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=tmp_path / ".env.missing")
+
+
+@pytest.mark.parametrize("value", ["1", "3600", "604800"])
+def test_image_url_ttl_accepts_valid_values(monkeypatch: pytest.MonkeyPatch, tmp_path, value: str):
+    """画像 URL の有効期限は 1 秒以上 7 日以下なら起動できる。"""
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("IMAGE_URL_TTL_SECONDS", value)
+
+    settings = Settings(_env_file=tmp_path / ".env.missing")
+
+    assert settings.IMAGE_URL_TTL_SECONDS == int(value)
