@@ -9,6 +9,9 @@
 //
 // 5xx の件数は lib/flow.js の `server_errors` カウンターで数える。
 // http_req_failed は 4xx も含むので、サーバー側の失敗だけを別に判定するため。
+// 503（混雑時の意図した縮退。Issue #191）は `shed_requests` に分けて数える。
+// ストレスの範囲（45 VU）で 503 が出たら、それは想定より早く詰まっている合図なので
+// 判定はしないが必ず目に入るよう、記録用の閾値を置いて要約に出す。
 import { authHeaders, loginAll } from "./lib/auth.js";
 import { browse } from "./lib/flow.js";
 
@@ -30,8 +33,10 @@ export const options = {
     // 詳細は判定せず記録だけする。
     "http_req_duration{name:detail}": [],
     http_req_failed: ["rate<0.01"],
-    // 5xx（サーバー側の失敗）は 1 件も許さない。
+    // 5xx（サーバー側の失敗）は 1 件も許さない。503 は含まない（下の shed_requests）。
     server_errors: ["count==0"],
+    // 503（混雑時の縮退）は判定せず記録だけする。
+    shed_requests: [],
     checks: ["rate>0.99"],
   },
   summaryTrendStats: ["avg", "min", "med", "p(90)", "p(95)", "p(99)", "max"],

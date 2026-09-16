@@ -31,6 +31,13 @@ engine = create_engine(
     settings.DATABASE_URL,
     echo=_sql_echo,
     pool_pre_ping=True,  # プール内の死んだ接続を使う前に検知して張り直す
+    # 接続プールの大きさと「空くまで待つ上限」を明示する（Issue #191）。
+    # 既定のまま（5 ＋ 予備 10・待ち 30 秒）にしていたため、急激な負荷で
+    # 接続を取り合って 30 秒待たされ、QueuePool のタイムアウトで 500 に
+    # なっていた（Issue #189 の調査）。値の根拠は app/config.py のコメント。
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT_SECONDS,
     # DB が居ないときに長時間ブロックしないよう接続タイムアウトを短くする
     # （psycopg のパラメータ。テストやヘルスチェックがすぐ失敗判定できる）。
     connect_args={"connect_timeout": 3},

@@ -16,16 +16,23 @@ const PAGE_SIZE = 20;
 // 5xx（サーバー側の失敗）の件数（Issue #147）。`http_req_failed` は 4xx も含むので、
 // 「サーバーが壊れたか」だけを見たいストレステストでは別に数えて判定する。
 // どのテストでも数えるが、閾値を付けているのは stress.js だけ。
+//
+// **503 はここに数えない**（Issue #191）。503 は「今は捌けないので待って」という
+// 意図した縮退で、バグによる失敗とは意味が違う。混ぜると、対策が効いて 500 が
+// 503 に変わったとたんに `server_errors: ["count==0"]` が落ち、改善が失敗に
+// 見えてしまう。503 は shed_requests（切り捨てた要求）として別に数える。
 export const serverErrors = new Counter("server_errors");
+export const shedRequests = new Counter("shed_requests");
 
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-/** GET して、5xx なら server_errors に数える。 */
+/** GET して、5xx なら server_errors に数える（503 だけは shed_requests に分ける）。 */
 function get(url, headers, tags) {
   const res = http.get(url, { headers, tags });
-  if (res.status >= 500) serverErrors.add(1, tags);
+  if (res.status === 503) shedRequests.add(1, tags);
+  else if (res.status >= 500) serverErrors.add(1, tags);
   return res;
 }
 
