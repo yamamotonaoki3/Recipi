@@ -1,0 +1,365 @@
+# backend を AWS（ECR → ECS）へデプロイする（Issue #167）。手動実行のみ。
+#
+# 流れ:
+#   イメージを作って ECR に push → タスク定義を新しいイメージで登録
+#   → マイグレーション（alembic upgrade head）を 1 回だけ実行
+#   → 成功したらサービスを更新 → /healthz と /healthz/db を確認
+#   → 途中で失敗・中断したら、更新前のタスク定義に戻す
+#
+# 方針:
+# - AWS の認証は OIDC だけ（アクセスキーは持たない）。引き受けられるのは main からの実行だけ。
+# - ログ本文・タスク定義の JSON・URL は出力しない（秘密が混ざる可能性があるため）。
+#   失敗したときは、CloudWatch Logs のロググループ名とストリーム名だけを出す。
+# - マイグレーションが失敗したら、サービスは更新しない。
+
+name: deploy-backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "デプロイするコミットのフル SHA（40 桁）。空ならこのワークフローを実行したコミット"
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false # デプロイの途中で止めない
+
+permissions:
+  id-token: write # OIDC のトークンを取得する
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REPOSITORY: recipi-backend
+  ECS_CLUSTER: recipi-cluster
+  ECS_SERVICE: recipi-api
+  ECS_TASK_FAMILY: recipi-api
+  CONTAINER_NAME: api
+  LOG_GROUP: /ecs/recipi-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: main ブランチからの実行か確認する
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "main ブランチからのみ実行できます（OIDC のロールも main 限定）" >&2
+            exit 1
+          fi
+          echo "DEPLOY_STATE=not started" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # 入力されたコミットが存在するか確かめるため、履歴ごと取得する
+
+      - name: 入力と Secrets を検査する
+        id: inputs
+        env:
+          INPUT_TAG: ${{ inputs.image_tag }}
+          SUBNET_IDS: ${{ secrets.AWS_ECS_SUBNET_IDS }}
+          SECURITY_GROUP_ID: ${{ secrets.AWS_ECS_SECURITY_GROUP_ID }}
+          API_BASE_URL: ${{ secrets.AWS_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+
+          # --- イメージのタグ: コミットのフル SHA だけを許可する ---
+          # 短縮 SHA は別のコミットと衝突しうるので使わない。
+          if [ -z "${INPUT_TAG}" ]; then
+            IMAGE_TAG="${GITHUB_SHA}"
+          else
+            if ! printf '%s' "${INPUT_TAG}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "image_tag はコミットのフル SHA（40 桁の英数字）で指定してください" >&2
+              exit 1
+            fi
+            if [ "$(git rev-parse "${INPUT_TAG}^{commit}" 2>/dev/null || true)" != "${INPUT_TAG}" ]; then
+              echo "image_tag がこのリポジトリのコミットとして見つかりません" >&2
+              exit 1
+            fi
+            IMAGE_TAG="${INPUT_TAG}"
+          fi
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+          # --- サブネット: 空白を除き、2 件あることを確かめる ---
+          SUBNETS=$(printf '%s' "${SUBNET_IDS}" | tr -d '[:space:]')
+          COUNT=$(printf '%s' "${SUBNETS}" | awk -F, '{print NF}')
+          if [ "${COUNT}" != "2" ]; then
+            echo "AWS_ECS_SUBNET_IDS はカンマ区切りで 2 件（private サブネット）にしてください" >&2
+            exit 1
+          fi
+          echo "subnets=${SUBNETS}" >> "$GITHUB_OUTPUT"
+
+          if [ -z "${SECURITY_GROUP_ID}" ]; then
+            echo "AWS_ECS_SECURITY_GROUP_ID が設定されていません" >&2
+            exit 1
+          fi
+
+          # --- API の URL: https のみ（値そのものは出さない） ---
+          case "${API_BASE_URL}" in
+            https://*) : ;;
+            *) echo "AWS_API_BASE_URL は https:// で始まる URL にしてください" >&2; exit 1 ;;
+          esac
+
+      - name: AWS にログインする（OIDC）
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ECR にログインする
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: イメージをビルドして push する（同じタグがあれば省く）
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.inputs.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          # 既に同じタグのイメージがあれば push しない（ECR は IMMUTABLE なので上書きもできない）。
+          set +e
+          DESCRIBE=$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids "imageTag=${IMAGE_TAG}" 2>&1)
+          STATUS=$?
+          set -e
+
+          if [ "${STATUS}" -eq 0 ]; then
+            echo "同じタグのイメージが既にあるので push を省きます"
+          elif printf '%s' "${DESCRIBE}" | grep -q 'ImageNotFoundException'; then
+            # タグはコミットの SHA なので、**そのコミットの中身**をビルドする。
+            # checkout は main の先頭を取り出しているため、別のコミットを指定された場合に
+            # ここで切り替えないと「タグと中身が食い違うイメージ」ができてしまう。
+            git checkout --detach --quiet "${IMAGE_TAG}"
+            docker build -t "${IMAGE}" backend
+            docker push "${IMAGE}"
+          else
+            echo "ECR の確認に失敗しました" >&2
+            exit "${STATUS}"
+          fi
+          echo "DEPLOY_STATE=image pushed" >> "$GITHUB_ENV"
+
+      - name: タスク定義を新しいイメージで登録する
+        id: taskdef
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.inputs.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          CURRENT=$(aws ecs describe-task-definition --task-definition "${ECS_TASK_FAMILY}")
+
+          # コンテナ "api" がちょうど 1 つあることを確かめる（0 個・2 個以上なら止める）。
+          API_COUNT=$(printf '%s' "${CURRENT}" \
+            | jq --arg name "${CONTAINER_NAME}" \
+                 '[.taskDefinition.containerDefinitions[] | select(.name == $name)] | length')
+          if [ "${API_COUNT}" != "1" ]; then
+            echo "タスク定義のコンテナ '${CONTAINER_NAME}' が 1 つではありません（${API_COUNT} 個）" >&2
+            exit 1
+          fi
+
+          # image だけを差し替える。logConfiguration・secrets・environment・healthCheck は
+          # そのまま引き継ぐ。登録時に渡せない項目は削る。
+          NEW_TD=$(printf '%s' "${CURRENT}" | jq \
+            --arg name "${CONTAINER_NAME}" --arg image "${IMAGE}" \
+            '.taskDefinition
+             | .containerDefinitions = [
+                 .containerDefinitions[] | if .name == $name then .image = $image else . end
+               ]
+             | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                   .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)')
+
+          NEW_ARN=$(printf '%s' "${NEW_TD}" \
+            | aws ecs register-task-definition --cli-input-json file:///dev/stdin \
+                --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          # 登録された ARN が想定どおりか確かめる（RunTask の権限はファミリーを限定しているため、
+          # 想定外の ARN だと権限エラーになる）。ARN そのものは出さない。
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          EXPECTED_PREFIX="arn:aws:ecs:${AWS_REGION}:${ACCOUNT_ID}:task-definition/${ECS_TASK_FAMILY}:"
+          case "${NEW_ARN}" in
+            "${EXPECTED_PREFIX}"[0-9]*) : ;;
+            *) echo "登録されたタスク定義の ARN が想定と違います" >&2; exit 1 ;;
+          esac
+
+          REVISION="${NEW_ARN##*:}"
+          echo "new_task_definition_arn=${NEW_ARN}" >> "$GITHUB_OUTPUT"
+          echo "new_revision=${REVISION}" >> "$GITHUB_OUTPUT"
+          echo "NEW_REVISION=${REVISION}" >> "$GITHUB_ENV"
+          echo "DEPLOY_STATE=task definition registered" >> "$GITHUB_ENV"
+          echo "タスク定義 ${ECS_TASK_FAMILY}:${REVISION} を登録しました"
+
+      - name: マイグレーションを実行する（失敗したらサービスは更新しない）
+        env:
+          NEW_TD_ARN: ${{ steps.taskdef.outputs.new_task_definition_arn }}
+          SUBNETS: ${{ steps.inputs.outputs.subnets }}
+          SECURITY_GROUP_ID: ${{ secrets.AWS_ECS_SECURITY_GROUP_ID }}
+        run: |
+          set -euo pipefail
+          OVERRIDES=$(jq -nc --arg name "${CONTAINER_NAME}" \
+            '{containerOverrides: [{name: $name, command: ["alembic", "upgrade", "head"]}]}')
+
+          RUN=$(aws ecs run-task \
+            --cluster "${ECS_CLUSTER}" \
+            --task-definition "${NEW_TD_ARN}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SECURITY_GROUP_ID}],assignPublicIp=DISABLED}" \
+            --overrides "${OVERRIDES}")
+
+          FAILURES=$(printf '%s' "${RUN}" | jq -r '.failures | length')
+          if [ "${FAILURES}" != "0" ]; then
+            echo "マイグレーション用タスクを起動できませんでした（理由は下記）" >&2
+            printf '%s' "${RUN}" | jq -r '.failures[] | "reason=\(.reason)"' >&2
+            exit 1
+          fi
+
+          TASK_ARN=$(printf '%s' "${RUN}" | jq -r '.tasks[0].taskArn')
+          echo "マイグレーションのタスクを起動しました。終了を待ちます"
+          aws ecs wait tasks-stopped --cluster "${ECS_CLUSTER}" --tasks "${TASK_ARN}"
+
+          TASK=$(aws ecs describe-tasks --cluster "${ECS_CLUSTER}" --tasks "${TASK_ARN}")
+          # コンテナは「順番」ではなく「名前」で特定する。
+          EXIT_CODE=$(printf '%s' "${TASK}" | jq -r \
+            --arg name "${CONTAINER_NAME}" \
+            '.tasks[0].containers[] | select(.name == $name) | .exitCode // "null"')
+          STOP_CODE=$(printf '%s' "${TASK}" | jq -r '.tasks[0].stopCode // "-"')
+          STOPPED_REASON=$(printf '%s' "${TASK}" | jq -r '.tasks[0].stoppedReason // "-"')
+
+          if [ "${EXIT_CODE}" != "0" ]; then
+            # ログ本文は出さない（秘密が混ざる可能性があるため）。場所だけ案内する。
+            TASK_ID="${TASK_ARN##*/}"
+            echo "マイグレーションが失敗しました（exitCode=${EXIT_CODE}, stopCode=${STOP_CODE}）" >&2
+            echo "stoppedReason=${STOPPED_REASON}" >&2
+            echo "詳細は CloudWatch Logs を確認してください:" >&2
+            echo "  ロググループ: ${LOG_GROUP}" >&2
+            echo "  ログストリーム: api/${CONTAINER_NAME}/${TASK_ID}" >&2
+            exit 1
+          fi
+          echo "DEPLOY_STATE=migration ok" >> "$GITHUB_ENV"
+
+      - name: 現在のサービスの設定を保存する
+        id: current
+        run: |
+          set -euo pipefail
+          SERVICE=$(aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${ECS_SERVICE}")
+
+          FOUND=$(printf '%s' "${SERVICE}" | jq -r '.services | length')
+          if [ "${FOUND}" != "1" ]; then
+            echo "ECS サービス ${ECS_SERVICE} が見つかりません" >&2
+            exit 1
+          fi
+
+          # クラスタも想定どおりか確かめる。
+          CLUSTER_ARN=$(printf '%s' "${SERVICE}" | jq -r '.services[0].clusterArn')
+          case "${CLUSTER_ARN}" in
+            *":cluster/${ECS_CLUSTER}") : ;;
+            *) echo "サービスが想定と違うクラスタに属しています" >&2; exit 1 ;;
+          esac
+
+          PREV_ARN=$(printf '%s' "${SERVICE}" | jq -r '.services[0].taskDefinition')
+          PREV_DESIRED=$(printf '%s' "${SERVICE}" | jq -r '.services[0].desiredCount')
+          echo "previous_task_definition_arn=${PREV_ARN}" >> "$GITHUB_OUTPUT"
+          echo "previous_desired_count=${PREV_DESIRED}" >> "$GITHUB_OUTPUT"
+          echo "PREVIOUS_REVISION=${PREV_ARN##*:}" >> "$GITHUB_ENV"
+
+      - name: サービスを新しいタスク定義に更新する
+        env:
+          NEW_TD_ARN: ${{ steps.taskdef.outputs.new_task_definition_arn }}
+        run: |
+          set -euo pipefail
+          # task-definition だけを変える（desiredCount・deploymentConfiguration は元のまま）。
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE}" \
+            --task-definition "${NEW_TD_ARN}" > /dev/null
+          echo "DEPLOY_STATE=service updated" >> "$GITHUB_ENV"
+
+          echo "サービスが安定するまで待ちます"
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${ECS_SERVICE}"
+
+      - name: 動作確認（/healthz・/healthz/db）
+        env:
+          API_BASE_URL: ${{ secrets.AWS_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          # URL も応答本文も出さない。標準エラーは一時ファイルへ隔離し、ステータスだけを見る。
+          check() {
+            local path="$1" status
+            status=$(curl --silent --show-error --max-time 20 \
+              --output /dev/null --write-out '%{http_code}' \
+              "${API_BASE_URL}${path}" 2>"${RUNNER_TEMP}/curl.err" || echo "000")
+            if [ "${status}" != "200" ]; then
+              echo "${path} の確認に失敗しました（status=${status}）" >&2
+              return 1
+            fi
+            echo "${path} は 200 でした"
+          }
+          check "/healthz"
+          check "/healthz/db"
+          echo "DEPLOY_STATE=verified" >> "$GITHUB_ENV"
+
+      - name: 失敗・中断したら前のタスク定義に戻す
+        if: ${{ failure() || cancelled() }}
+        env:
+          PREV_TD_ARN: ${{ steps.current.outputs.previous_task_definition_arn }}
+          PREV_DESIRED: ${{ steps.current.outputs.previous_desired_count }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PREV_TD_ARN}" ]; then
+            # サービスを更新する前に失敗している（＝戻す必要がない）。
+            echo "サービスは更新されていないので、ロールバックは不要です"
+            exit 0
+          fi
+
+          echo "前のタスク定義（リビジョン ${PREV_TD_ARN##*:}）に戻します"
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE}" \
+            --task-definition "${PREV_TD_ARN}" > /dev/null
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${ECS_SERVICE}"
+
+          # describe-services だけで確かめる（ListTasks は使わない = 権限を増やさない）。
+          PRIMARY=$(aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${ECS_SERVICE}" \
+            | jq -r '.services[0].deployments[] | select(.status == "PRIMARY")
+                     | "\(.taskDefinition) \(.runningCount) \(.rolloutState // "-")"')
+          ROLLED_ARN=$(printf '%s' "${PRIMARY}" | awk '{print $1}')
+          RUNNING=$(printf '%s' "${PRIMARY}" | awk '{print $2}')
+
+          if [ "${ROLLED_ARN}" = "${PREV_TD_ARN}" ] && [ "${RUNNING}" = "${PREV_DESIRED}" ]; then
+            echo "DEPLOY_STATE=rolled back" >> "$GITHUB_ENV"
+            echo "ロールバックが完了しました"
+          else
+            echo "DEPLOY_STATE=rollback failed" >> "$GITHUB_ENV"
+            echo "ロールバックを確認できませんでした。手動での確認が必要です" >&2
+            echo "  aws ecs describe-services --cluster ${ECS_CLUSTER} --services ${ECS_SERVICE}" >&2
+            exit 1
+          fi
+
+      - name: 結果をまとめる
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### deploy-backend の結果"
+            echo ""
+            echo "| 項目 | 値 |"
+            echo "| --- | --- |"
+            echo "| 状態 | ${DEPLOY_STATE:-not started} |"
+            echo "| イメージのタグ | ${IMAGE_TAG_SUMMARY:--} |"
+            echo "| 新しいリビジョン | ${NEW_REVISION:--} |"
+            echo "| 更新前のリビジョン | ${PREVIOUS_REVISION:--} |"
+            echo ""
+            echo "※ ワークフローをキャンセル・強制終了した場合、ロールバックは保証されません。"
+            echo "ECS のサーキットブレーカーは「新しいタスクが安定して起動できないデプロイ」を自動で戻しますが、"
+            echo "サービスが安定した後にヘルスチェックだけが失敗した場合は戻しません。"
+            echo "その場合は infra/terraform/README.md の「デプロイの手動確認・復旧」を参照してください。"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          IMAGE_TAG_SUMMARY: ${{ steps.inputs.outputs.image_tag }}

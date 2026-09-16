@@ -53,7 +53,7 @@
 | アプリバー | 各画面の上部の薄いバー（タイトル + 戻る + 文脈アクション）。旧「トップアプリバー」（グローバルな検索バー常駐 + アカウントメニュー）は廃止。検索窓は[ホーム](screens/home.md)専用でロゴ直下に固定 |
 | FastAPI | バックエンドの Web フレームワーク（Python）。型ヒントから OpenAPI 3.1 を自動生成し、Pydantic v2 でリクエスト / レスポンスを検証する。[tech-stack.md](tech-stack.md) 参照 |
 | ASGI | Python の非同期 Web サーバー / アプリ間インターフェース。FastAPI は ASGI アプリで、Uvicorn（ASGI サーバー）で動かす |
-| Uvicorn | FastAPI を動かす ASGI サーバー。開発では `--reload` でホットリロード。本番の実行構成は未定（[todo.md](todo.md)） |
+| Uvicorn | FastAPI を動かす ASGI サーバー。開発では `--reload` でホットリロード。本番は **単一プロセス**で ECS Fargate（0.25 vCPU / 0.5GB・1 タスク）上で動かす（[architecture.md](architecture.md) §本番デプロイ） |
 | Pydantic | FastAPI が使うデータ検証 / シリアライズライブラリ（v2）。API のリクエスト / レスポンスモデルを型で定義する |
 | SQLModel | バックエンドの ORM。SQLAlchemy 2.0 と Pydantic を組み合わせたもので、FastAPI 作者製。DB モデルと API モデルを親和的に書ける。複雑な制約は生 SQLAlchemy に降りる。[tech-stack.md](tech-stack.md) 参照 |
 | Alembic | SQLAlchemy 用の DB マイグレーションツール（読み: アレンビック）。スキーマ変更とシードデータ投入を管理する。SQLModel で表現できない制約は手書きマイグレーションで補う。[data-model.md](data-model.md) 参照 |
@@ -79,5 +79,5 @@
 | 分岐カバレッジ | テストで通った「条件分岐の真・偽」の割合。行カバレッジ（実行された行の割合）より厳しい。Recipi は両方でゲートする。[testing.md](testing.md) §3 |
 | 契約テスト | backend の API 契約（`openapi.json`）とフロントの生成コードがズレていないかを CI で検知するテスト。[testing.md](testing.md) §1 |
 | MSW（Mock Service Worker） | フロントのテストで、生成した API クライアントの下のネットワーク層をモックするライブラリ。実サーバーなしで「画面 → API → 状態更新」を検証できる |
-| CI / CD | CI = 変更ごとに自動でビルド・テストを回すこと（GitHub Actions）。CD = そのままリリース可能な状態に保つこと。Recipi はデプロイ先未定のため当面 CD はビルド / パッケージ検証まで。[testing.md](testing.md) §5・§6 |
+| CI / CD | CI = 変更ごとに自動でビルド・テストを回すこと（GitHub Actions）。CD = そのままリリース可能な状態に保つこと。Recipi の CD は **手動実行のワークフロー**で AWS へデプロイする（自動デプロイはしない）。[testing.md](testing.md) §5・§6 |
 | MVP | 初回リリースに含める機能範囲。**Phase 4 まで**に確定（候補 B。認証・レシピ CRUD・画像・ナビ・ホーム「全体」フィード・検索・閲覧履歴）。ソーシャル（フォロー / お気に入り / 感想 / 通知）は MVP 後、AI 誤字脱字チェックは MVP 対象外。[roadmap.md](roadmap.md) 参照 |

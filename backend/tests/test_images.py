@@ -61,8 +61,11 @@ def test_画像をアップロードするとkeyとurlが返りオブジェク�
     assert res.status_code == 201, res.text
 
     body = res.json()
-    assert body["key"].startswith("uploads/")
-    assert body["url"].endswith(body["key"])
+    # レシピ・手順・感想の画像は非公開側に置く（Issue #185）。
+    assert body["key"].startswith("private/")
+    # 返す URL は署名付き。安定 URL（S3_PUBLIC_URL_BASE + キー）ではない。
+    assert "X-Amz-Signature=" in body["url"], "署名が付いていない（公開経路に落ちている）"
+    assert body["key"] in body["url"]
 
     # 管理行は stored（本参照待ち）になっている
     row = upload_row(db_session, body["key"])
@@ -110,9 +113,15 @@ def test_レシピ作成でサムネと手順画像が保存され詳細に反�
 
     body = res.json()
     assert body["thumbnailKey"] == thumb
-    assert body["thumbnailUrl"].endswith(thumb)
     assert body["steps"][0]["imageKey"] == step_img
-    assert body["steps"][0]["imageUrl"].endswith(step_img)
+    # レシピの画像は非公開側（private/）なので、URL は末尾に署名クエリが付く
+    # （Issue #185）。キーを含むことと、署名が付いていることの 2 点で見る。
+    for url, key in (
+        (body["thumbnailUrl"], thumb),
+        (body["steps"][0]["imageUrl"], step_img),
+    ):
+        assert key in url
+        assert "X-Amz-Signature=" in url, "署名が付いていない（公開経路に落ちている）"
 
     # 両方とも consumed になっている（GC の対象外になる）
     for key in (thumb, step_img):

@@ -72,7 +72,11 @@ def upload_image(
     # --- ① Tx1 ＋ ② Tx 外の保存 -----------------------------------------
     # アバター（PUT /users/me/avatar）と共通なので `stage_upload` にまとめてある。
     # ①で commit してキーを確定させてから②で保存する（順序の理由は関数のコメント）。
-    key = image_service.stage_upload(session, current_user.id, processed)
+    # ここを通るのはレシピのサムネ・手順画像・感想画像なので、**非公開側**に置く
+    # （Issue #185）。公開読み取りを許さないため、表示は署名付き URL で行う。
+    key = image_service.stage_upload(
+        session, current_user.id, processed, prefix=image_service.PRIVATE_PREFIX
+    )
 
     # --- ③ Tx2: 行をロックして pending なら stored にする ---------------
     # `with_for_update()` = SELECT ... FOR UPDATE。GC や他のリクエストが
