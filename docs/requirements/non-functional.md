@@ -47,7 +47,7 @@
 - **品質チェック（静的解析）＋ 単体 ＋ 結合 ＋ E2E ＋ 契約テスト**を CI（GitHub Actions）で回し、`main` へのマージ必須チェックにする。
 - テストは **ブラックボックス（仕様ベース・同値分割 / 境界値）** と **ホワイトボックス（実装ベース・分岐網羅）** を併用する。
 - カバレッジは行・分岐の両方でゲート（[testing.md](testing.md) §3）。
-- CD は本番デプロイ先が未定（[todo.md](todo.md) #2）のため当面ビルド / パッケージ検証のみ。
+- CD は **手動実行のデプロイのワークフロー**（AWS へ。Issue #167。[testing.md](testing.md) §6・[architecture.md](architecture.md) §本番デプロイ）。main への push での自動デプロイはしない。**マージの必須チェックは従来の 5 件のまま**で、デプロイのワークフローは含めない。
 
 ## テストデータ規約（グローバル CLAUDE.md「テストデータの標準要件」準拠）
 
@@ -133,7 +133,21 @@
 
 - **ログに出さないもの**: パスワード・トークン・Cookie・秘密の質問の回答・JWT 等は出さない（`extra` のキー名に `password` / `token` / `authorization` / `cookie` / `secret` / `security_answer` を含む値は `[REDACTED]` に置き換える安全網もある）。**メールアドレスは平文で出さず** `email_hash`（`LOG_HASH_SECRET` を鍵にした HMAC-SHA256 の先頭 16 文字）で出す。クエリ文字列（検索語）も出さない。
 - **本番のログレベルは `INFO`**。開発も同じ `INFO` を既定にし、調査時だけ `DEBUG` に下げる。
-- **保存期間（推奨・インフラ構築時に設定）**: アプリ・アクセスログは 30 日、監査ログは 1 年（メトリクスフィルタ等で別ロググループへ分けるか、同じロググループなら 1 年に合わせる）。
+- **保存期間（Issue #172 で設定済み）**: アプリ・アクセスログ・監査ログは同じロググループ（`/ecs/recipi-api`）で **365 日**、API Gateway のアクセスログ（`/aws/apigateway/recipi-api`）は **30 日**。量が月 5GB を超えたら監査ログを別のロググループに分ける（`infra/terraform/README.md`）。
+- **アラーム（Issue #172 で設定済み。通知は SNS のメール）**:
+
+| アラーム | 条件 | データが来ないとき |
+| --- | --- | --- |
+| 5xx の急増 | アクセスログの `status >= 500` が 5 分で 5 件以上 | 正常扱い |
+| ログイン失敗の急増 | 監査ログの `auth.login` の失敗が 5 分で 20 件以上 | 正常扱い |
+| トークン再利用 | 監査ログの `token_reuse_detected` が 1 件以上 | 正常扱い |
+| パスワード再設定のレート制限 | 監査ログの `rate_limited_*` が 15 分で 10 件以上 | 正常扱い |
+| 想定外の例外 | `message` が `unhandled exception` | 正常扱い |
+| ECS サービスが動いていない | ECS の `CPUUtilization` が届かない | **異常扱い** |
+| API Gateway の 5xx | HTTP API の `5xx` が 5 分で 5 件以上 | 正常扱い |
+| RDS の CPU / 空き容量 | 80% 以上が 15 分続く／2GB 未満または届かない | 無視／**異常扱い** |
+
+- メトリクスフィルタのパターンは、`infra/scripts/test-metric-filters.sh`（`aws logs test-metric-filter`）でサンプルのログ行に対して検証する（パターンが合っていないとアラームが永久に鳴らないため）。
 - **CloudWatch Logs Insights のクエリ例**:
   - 同じアドレスへのログイン失敗を数える: `filter log_type = "audit" and action = "auth.login" and outcome = "failure" | stats count() by email_hash`
   - 1 リクエストのログを全部見る: `filter request_id = "<X-Request-ID の値>" | sort @timestamp asc`
