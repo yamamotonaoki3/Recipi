@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { setupNativeAppFocus } from "@/features/network/appFocus";
 import { setupNativeConnectivity } from "@/features/network/connectivity";
 import { useSession } from "@/store/session";
+import { ApiError } from "@/features/auth/api";
 
 // スマホの通信状態を TanStack Query に伝える（Issue #133）。アプリの起動時に 1 回だけ
 // つなげばよいので、描画のたびではなくこのファイルを読み込んだときに呼ぶ。
@@ -18,6 +19,22 @@ setupNativeConnectivity();
 // `refetchOnWindowFocus` が働かず、期限切れの画像 URL が復帰しても直らない。
 setupNativeAppFocus();
 
+const MAX_SERVICE_UNAVAILABLE_RETRIES = 2;
+const SERVICE_UNAVAILABLE_RETRY_DELAY_MS = 1_000;
+
+/** 過負荷(503)だけを有限回リトライし、再試行嵐を防ぐ。 */
+export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 503 &&
+    failureCount < MAX_SERVICE_UNAVAILABLE_RETRIES
+  );
+}
+
+export function retryDelayQuery(attemptIndex: number): number {
+  return SERVICE_UNAVAILABLE_RETRY_DELAY_MS * 2 ** attemptIndex;
+}
+
 export function QueryProvider({ children }: { children: ReactNode }) {
   // QueryClient は「キャッシュの本体」。再レンダーで作り直さないよう useState で 1 度だけ生成。
   const [client] = useState(
@@ -25,7 +42,8 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            retry: 1, // 失敗時に 1 回だけ再試行
+            retry: shouldRetryQuery,
+            retryDelay: retryDelayQuery,
             staleTime: 30_000, // 30 秒間は再取得しない
           },
         },

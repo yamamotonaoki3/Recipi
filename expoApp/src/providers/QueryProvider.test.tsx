@@ -3,11 +3,24 @@ import { useQueryClient } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
 
-import { QueryProvider } from "./QueryProvider";
+import { ApiError } from "@/features/auth/api";
+import { QueryProvider, retryDelayQuery, shouldRetryQuery } from "./QueryProvider";
 import { useSession } from "@/store/session";
 
 beforeEach(() => {
   useSession.getState().clear();
+});
+
+it("503だけを最大2回まで指数バックオフで再試行する", () => {
+  const serviceUnavailable = new ApiError("混み合っています", "SERVICE_UNAVAILABLE", 503);
+  const serverError = new ApiError("失敗", "INTERNAL", 500);
+
+  expect(shouldRetryQuery(0, serviceUnavailable)).toBe(true);
+  expect(shouldRetryQuery(1, serviceUnavailable)).toBe(true);
+  expect(shouldRetryQuery(2, serviceUnavailable)).toBe(false);
+  expect(shouldRetryQuery(0, serverError)).toBe(false);
+  expect(retryDelayQuery(0)).toBe(1_000);
+  expect(retryDelayQuery(1)).toBe(2_000);
 });
 
 it("子要素を描画する", async () => {
