@@ -103,13 +103,9 @@ resource "aws_iam_role_policy" "github_deploy" {
           StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
         }
       },
-      {
-        # マイグレーションが失敗したとき、ワークフローからログを読んで理由を表示するため。
-        Sid      = "ReadApiLogs"
-        Effect   = "Allow"
-        Action   = ["logs:GetLogEvents", "logs:FilterLogEvents"]
-        Resource = "${aws_cloudwatch_log_group.api.arn}:*"
-      },
+      # CloudWatch Logs を読む権限は付けない（Issue #167）。デプロイのワークフローは
+      # ログ本文を出さず（秘密が混ざる可能性があるため）、失敗時はロググループ名と
+      # ログストリーム名だけを案内する。中身は人が AWS のコンソールで見る。
     ]
   })
 }
