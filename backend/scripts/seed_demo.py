@@ -42,9 +42,11 @@ DEMO_EMAILS = (
     "demo.beginner@example.com",
 )
 _ASSET_DIR = Path(__file__).resolve().parents[1] / "demo_assets"
+# デモのレシピ画像も「レシピの画像」なので非公開側に置く（Issue #185）。
+# 表示は署名付き URL になる。
 _IMAGE_KEYS = {
-    "curry": "uploads/demo/recipe-chicken-curry.png",
-    "salmon": "uploads/demo/recipe-salmon-bowl.png",
+    "curry": "private/demo/recipe-chicken-curry.png",
+    "salmon": "private/demo/recipe-salmon-bowl.png",
 }
 
 
@@ -58,7 +60,11 @@ def assert_demo_target(app_env: str, database_url: str) -> None:
 
 
 def _put_demo_images() -> dict[str, int]:
-    """同梱した生成画像を、固定キーで MinIO/S3 に冪等に配置する。"""
+    """同梱した生成画像を、固定キーで MinIO/S3 に冪等に配置する。
+
+    キーが固定なので、途中で失敗して再実行しても**同じキーに上書きされるだけ**で、
+    孤児のオブジェクトは増えない。
+    """
     storage.ensure_bucket()
     image_files = {"curry": "curry.png", "salmon": "salmon-bowl.png"}
     sizes: dict[str, int] = {}

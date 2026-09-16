@@ -58,7 +58,7 @@
 | --- | --- | --- |
 | 言語 | Python 3.14.7（固定） | このマシンに導入済み。必要な C 拡張ライブラリの Windows ビルド済み wheel を 3.14.7 で確認済み（`uvloop` のみ Windows 非対応だが Uvicorn が自動スキップするため影響なし）。`.python-version` で 3.14.7 を固定、`requires-python = ">=3.14,<3.15"`、Docker は `python:3.14.7-slim` |
 | フレームワーク | FastAPI | ASGI。型ヒントから OpenAPI 3.1 を自動生成、Pydantic v2 でバリデーション |
-| ASGI サーバー | Uvicorn | 開発は `--reload`。本番の実行構成（Uvicorn workers / Gunicorn / Granian）は未定（→ [todo.md](todo.md)） |
+| ASGI サーバー | Uvicorn | 開発は `--reload`。本番は **単一プロセス**（ECS Fargate 0.25 vCPU / 0.5GB・1 タスク。Issue #165）。Gunicorn / Granian でワーカーを増やすかは負荷を測ってから判断 |
 | ORM | SQLModel | SQLAlchemy 2.0 + Pydantic のラッパー。FastAPI 公式チュートリアル推奨。複雑な制約は生 SQLAlchemy に降りる |
 | DB ドライバ | psycopg 3（`psycopg[binary]`） | SQLAlchemy エンジンは `postgresql+psycopg://` |
 | マイグレーション | Alembic（読み: アレンビック） | SQLAlchemy 作者製。直接利用。シードデータも Alembic マイグレーションで投入。SQLModel のモデルで表現できない制約（複合 FK・部分インデックス・`CHECK`・トリガー）は手書きマイグレーションで補う（[data-model.md](data-model.md)） |
@@ -107,7 +107,24 @@
 ## インフラ / 実行環境
 
 - ローカル開発は **Docker Compose 中心**（`api` + `postgres` + `minio`）。詳細は [architecture.md](architecture.md)。
-- 本番デプロイ先は未定（別途検討 → [todo.md](todo.md)）。
+- 本番は **AWS**（学習用。確認するときだけ apply し、終わったら destroy する）。構成の全体像とトレードオフは [architecture.md](architecture.md) §本番デプロイ、手順は [`infra/terraform/README.md`](../../infra/terraform/README.md)。
+- **Terraform**: `required_version = "~> 1.15"`（手元・CI は 1.15.5）。**AWS provider `~> 6.64`**、**random provider `~> 3.9`**（Issue #165 で確定。2026-09-16 時点の最新安定版）。ephemeral リソース（1.10+）と書き込み専用の引数（1.11+）を使い、DB のパスワードや鍵を tfstate に残さない。
+- **本番で使う AWS のサービス**（リージョン: ap-northeast-1。構成は `infra/terraform/`、手順は [`infra/terraform/README.md`](../../infra/terraform/README.md)、全体像は [architecture.md](architecture.md) §本番デプロイ）:
+
+  | サービス | 役割 |
+  | --- | --- |
+  | API Gateway HTTP API | 公開の入口（HTTPS・スロットリング・アクセスログ） |
+  | VPC Link ＋ Cloud Map（SRV） | 入口から private サブネットの ECS へ到達する経路（IP ＋ ポートの登録） |
+  | ECS Fargate | API コンテナと定期ジョブの実行（公開 IP なし） |
+  | ECR | backend の Docker イメージの置き場（タグは変更不可・直近 10 世代） |
+  | RDS PostgreSQL 18 | 本番の DB（db.t4g.micro・シングル AZ・private） |
+  | S3 ＋ CloudFront（OAC） | 画像の保存（非公開バケット）と配信（`uploads/*` のみ） |
+  | Secrets Manager | `DATABASE_URL`・`JWT_SECRET_KEY`・`LOG_HASH_SECRET`（AI 機能（Phase 11）を本番で使うときに `ANTHROPIC_API_KEY` を追加） |
+  | EventBridge Scheduler | 定期ジョブの起動（ECS RunTask。Issue #173） |
+  | CloudWatch Logs ＋ アラーム／SNS | ログの集約・異常の検知・メール通知（Issue #172） |
+  | IAM（GitHub OIDC） | GitHub Actions からのデプロイ（アクセスキーを置かない。Issue #167） |
+
+- **RDS for PostgreSQL 18**（ローカルの `postgres:18` と同じメジャー。東京リージョンの db.t4g.micro で提供を確認）。
 
 ## ライセンス・費用
 

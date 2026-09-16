@@ -30,5 +30,16 @@ coverage.json
 # pytest / ツールの一時ディレクトリ
 .tmp/
 
+# Terraform（infra/）: state・変数・plan・backend 設定には実値が入るのでコミットしない（Issue #165）。
+# ロックファイル（.terraform.lock.hcl）はプロバイダのバージョンを固定するのでコミットする。
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+*.tfplan
+backend.hcl
+!backend.hcl.example
+
 # Claude Code の内部設定（コミットしない）
 .claude/

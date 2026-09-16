@@ -161,6 +161,12 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8000 npx tauri build --bundles msi
 - テストは **ブラックボックス（仕様ベース）＋ ホワイトボックス（実装・分岐ベース）** を併用する。
 - 詳細: [`docs/requirements/testing.md`](docs/requirements/testing.md)
 
+## 本番環境（AWS）
+
+本番は **AWS**（ap-northeast-1）で、構成は Terraform（[`infra/terraform/`](infra/terraform/)）で管理しています。公開の入口は API Gateway HTTP API で、VPC Link ＋ Cloud Map 経由で private サブネットの ECS Fargate に届きます。DB は RDS PostgreSQL 18、画像は非公開の S3 ＋ CloudFront（OAC）配信、ログとアラームは CloudWatch ＋ SNS（メール）、定期ジョブは EventBridge Scheduler が ECS タスクとして動かします。backend のデプロイは GitHub Actions の手動ワークフロー（OIDC）で行い、main への push で自動デプロイはしません。
+
+学習用のため常時稼働させず、**確認するときだけ `terraform apply` して、終わったら `terraform destroy`** する運用です。はじめて立てるときの通し手順（state 用バケット → ECR → イメージの push → apply → マイグレーション → GitHub Secrets → destroy）と費用の目安は [`infra/terraform/README.md`](infra/terraform/README.md)、設計の全体像とトレードオフは [`docs/requirements/architecture.md`](docs/requirements/architecture.md) の「本番デプロイ」にあります。
+
 ## 開発ワークフロー
 
 作業は必ず GitHub Issue から。`main` へは直接 push せず PR 経由（[`CLAUDE.md`](CLAUDE.md)）。

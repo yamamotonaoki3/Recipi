@@ -233,7 +233,10 @@ def test_put_thumbnail_omitted_keeps_current(client: TestClient) -> None:
     res = client.put(f"{RECIPES_URL}/{recipe_id}", json=body, headers=headers)
     assert res.status_code == 200
     assert res.json()["thumbnailUrl"] is not None
-    assert res.json()["thumbnailUrl"].endswith(original)
+    # レシピ画像は非公開側なので URL の末尾に署名クエリが付く（Issue #185）。
+    thumbnail_url = res.json()["thumbnailUrl"]
+    assert original in thumbnail_url
+    assert "X-Amz-Signature=" in thumbnail_url
 
 
 def test_put_thumbnail_null_deletes(client: TestClient) -> None:
@@ -254,7 +257,10 @@ def test_put_thumbnail_new_key_replaces(client: TestClient) -> None:
     body = recipe_payload(thumbnailKey=replacement)
     res = client.put(f"{RECIPES_URL}/{recipe_id}", json=body, headers=headers)
     assert res.status_code == 200
-    assert res.json()["thumbnailUrl"].endswith(replacement)
+    # 差し替え後も非公開側のまま（署名付き URL。Issue #185）。
+    thumbnail_url = res.json()["thumbnailUrl"]
+    assert replacement in thumbnail_url
+    assert "X-Amz-Signature=" in thumbnail_url
 
 
 @pytest.mark.parametrize("blank_key", ["", "   ", "　　"])

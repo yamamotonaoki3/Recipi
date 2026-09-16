@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -93,6 +94,17 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY_ID: str = "changeme"
     S3_SECRET_ACCESS_KEY: str = "changeme"
     S3_PUBLIC_URL_BASE: str = "http://localhost:9000/recipi-images"
+    # 本番（AWS）では S3_ENDPOINT_URL・S3_ACCESS_KEY_ID・S3_SECRET_ACCESS_KEY を空にする。
+    # 空なら AWS の標準エンドポイントと、ECS のタスクロールの認証情報を使う
+    # （app/storage.py の _client_kwargs。Issue #166）。
+
+    # --- クライアント IP の取得（Issue #166） ------------------------------
+    # API Gateway（VPC Link）の接続元として信頼する範囲（カンマ区切りの CIDR）。
+    # この範囲から来たリクエストだけ、API Gateway が付けた専用ヘッダー
+    # （X-Recipi-Client-Ip。app/request_utils.py）をクライアントの IP として使う。
+    # 本番は VPC Link の ENI が置かれる private サブネットの CIDR（Terraform が渡す）。
+    # 開発・テストは空（常に接続元の IP を使う）。
+    TRUSTED_PROXY_CIDRS: str = ""
 
     # --- 画像アップロード（#39） ----------------------------------------
     # 一時アップロードの寿命。画像は「レシピ保存より前」にアップロードされる
@@ -127,6 +139,26 @@ class Settings(BaseSettings):
     # 圧縮率の高い画像はバイト数が 5MiB 未満でも、展開すると大量のピクセルを
     # 占有してメモリを圧迫するため、バイト数とは別に画素数にも上限を設ける。
     IMAGE_MAX_PIXELS: int = 40_000_000
+
+    # `private/` の画像を表示するための署名付き URL の有効期限（Issue #185）。
+    #
+    # **暫定値**。次の 2 つに挟まれた範囲で決めている:
+    # - 下限: フロントがレスポンスをキャッシュする時間より十分長いこと
+    #   （TanStack Query の staleTime は既定 30 秒・レシピ系は 10 分）。
+    #   短すぎると、画面に出したままの画像だけが切れる。
+    # - 上限: 署名に使う認証情報の寿命。本番は ECS のタスクロール（一時認証情報）
+    #   で署名するため、セッションが失効すると残り時間に関わらず URL も無効になる。
+    #
+    # 実環境での認証情報の寿命は未検証（本番をまだ apply していないため）。
+    # Issue #184 で確認し、必要ならこの値を調整する（環境変数で変えられる）。
+    #
+    # なお、画面を有効期限より長く開いたままにすると、描画済みの URL が失効して
+    # 画像だけが表示できなくなる。**期限切れを検知して取り直すのはフロント側の
+    # 責務**で、Issue #186 で対応する。
+    # AWS SigV4 の署名付き URL の有効期限は最大 7 日（604800 秒）。
+    # ただし本番では ECS のタスクロールの一時認証情報の寿命がこれより短いため、
+    # 実効上の有効期限はさらに短くなる。
+    IMAGE_URL_TTL_SECONDS: int = Field(default=3600, ge=1, le=604800)  # 1 時間
 
     # --- 定期ジョブの保持期間・上限（Issue #72。processing-model.md §8） -------
     # 「消してよい古さ」を決める値。どれも 1 以上（0 や負の値だと、まだ必要な
@@ -175,9 +207,29 @@ class Settings(BaseSettings):
         """CORS_ALLOW_ORIGINS（カンマ区切り文字列）をリストにして返す。"""
         return [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
 
+    @property
+    def trusted_proxy_networks(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        """TRUSTED_PROXY_CIDRS（カンマ区切り）を IP のネットワークのリストにして返す。"""
+        return [
+            ipaddress.ip_network(cidr.strip(), strict=False)
+            for cidr in self.TRUSTED_PROXY_CIDRS.split(",")
+            if cidr.strip()
+        ]
+
+    @model_validator(mode="after")
+    def _validate_trusted_proxy_cidrs(self) -> Settings:
+        """TRUSTED_PROXY_CIDRS の書き間違いは、起動時にエラーにする（どの環境でも）。"""
+        try:
+            self.trusted_proxy_networks  # noqa: B018 — 解釈できるかだけを確かめる
+        except ValueError as exc:
+            raise ValueError(
+                f"TRUSTED_PROXY_CIDRS に CIDR として解釈できない値があります: {exc}"
+            ) from exc
+        return self
+
     @model_validator(mode="after")
     def _reject_insecure_production_config(self) -> Settings:
-        """production では「ダミーのまま」の秘密で起動させない。"""
+        """production では「ダミーのまま」の秘密や、足りない設定で起動させない。"""
         if self.APP_ENV != "production":
             return self
         if self.JWT_SECRET_KEY in _INSECURE_JWT_SECRETS or len(self.JWT_SECRET_KEY) < 32:
@@ -192,6 +244,21 @@ class Settings(BaseSettings):
             )
         if not self.AUTH_COOKIE_SECURE:
             raise ValueError("production では AUTH_COOKIE_SECURE=true を設定してください")
+        # 画像の保存・配信とクライアント IP に必要な値（Issue #166）。空のリージョンを
+        # boto3 に渡すと保存に失敗し、TRUSTED_PROXY_CIDRS が空だと全リクエストが
+        # VPC Link の IP 扱いになる（レート制限・監査ログが正しく動かない）。
+        for name in ("S3_REGION", "S3_BUCKET", "S3_PUBLIC_URL_BASE", "TRUSTED_PROXY_CIDRS"):
+            if not str(getattr(self, name)).strip():
+                raise ValueError(f"production では {name} を設定してください")
+        if not self.S3_PUBLIC_URL_BASE.startswith("https://"):
+            raise ValueError(
+                "production では S3_PUBLIC_URL_BASE を https:// で始まる URL にしてください"
+            )
+        if bool(self.S3_ACCESS_KEY_ID.strip()) != bool(self.S3_SECRET_ACCESS_KEY.strip()):
+            raise ValueError(
+                "S3_ACCESS_KEY_ID と S3_SECRET_ACCESS_KEY は、"
+                "両方を設定するか両方を空にしてください（本番は両方空にしてタスクロールを使う）"
+            )
         return self
 
 
