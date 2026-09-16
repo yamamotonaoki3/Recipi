@@ -76,6 +76,11 @@ def test_build_seed_counts_and_tags() -> None:
     assert len(data.steps) == 40 * seed_perf.STEPS_PER_RECIPE
     assert all(u.email.startswith("perfuser_") for u in data.users)
     assert all(r.title.startswith(PERF_TAG) and r.is_public for r in data.recipes)
+    # サムネイルは非公開側に置く。これが無いと一覧 API が署名付き URL の生成を
+    # 通らず、本番より軽い状態を測ってしまう（Issue #185）。
+    keys = [r.thumbnail_key for r in data.recipes]
+    assert all(k is not None and k.startswith("private/") for k in keys)
+    assert len(set(keys)) == len(keys), "サムネイルのキーが重複している"
     # 作成日時は新しい順に並ぶ（フィードの並びを検証できるように）。
     created = [r.created_at for r in data.recipes]
     assert created == sorted(created, reverse=True)
