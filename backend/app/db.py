@@ -15,11 +15,12 @@ import logging
 import os
 from collections.abc import Callable, Generator
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, create_engine
 
 from app.config import settings
+from app.db_metrics import after_query, before_query
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,16 @@ engine = create_engine(
     # （psycopg のパラメータ。テストやヘルスチェックがすぐ失敗判定できる）。
     connect_args={"connect_timeout": 3},
 )
+
+
+@event.listens_for(engine, "before_cursor_execute")
+def _before_cursor_execute(*_: object) -> None:
+    before_query()
+
+
+@event.listens_for(engine, "after_cursor_execute")
+def _after_cursor_execute(*_: object) -> None:
+    after_query()
 
 
 def get_session() -> Generator[Session]:

@@ -176,6 +176,8 @@ def test_access_log_one_line_per_request_with_route_template(json_logs):
     assert access["path"] == "/items/{item_id}"  # 実際の 42 ではなくテンプレート
     assert access["status"] == 200
     assert isinstance(access["duration_ms"], int | float)
+    assert access["db_query_count"] == 0
+    assert access["db_duration_ms"] == 0.0
     assert access["client_ip"] == "testclient"
     # 依存関数（スレッドプール）でセットした user_id がアクセスログにも載る。
     assert access["user_id"] == "testuser-001"

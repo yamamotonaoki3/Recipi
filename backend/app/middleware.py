@@ -24,6 +24,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.db_metrics import db_metrics, reset_db_metrics, start_db_metrics
 from app.logging_config import request_id_ctx, reset_request_info, start_request_info
 from app.request_utils import client_ip
 
@@ -84,6 +85,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         # set() は「元の状態に戻すためのトークン」を返すので、finally で戻す。
         request_id_token = request_id_ctx.set(request_id)
         info_token = start_request_info(client_ip(request))
+        db_metrics_token = start_db_metrics()
         started = time.perf_counter()
         status_code = 500  # 例外で抜けた場合は 500 として記録する
         try:
@@ -107,11 +109,14 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                     "path": path,
                     "status": status_code,
                     "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                    "db_query_count": db_metrics()["query_count"],
+                    "db_duration_ms": db_metrics()["duration_ms"],
                     "client_ip": client_ip(request),
                     "user_agent": request.headers.get("user-agent", "")[:_USER_AGENT_MAX_LENGTH],
                 },
             )
             reset_request_info(info_token)
+            reset_db_metrics(db_metrics_token)
             request_id_ctx.reset(request_id_token)
 
         response.headers["X-Request-ID"] = request_id
