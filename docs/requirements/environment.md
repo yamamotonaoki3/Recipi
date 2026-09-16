@@ -19,7 +19,7 @@
 | `development` | ローカル開発（Docker Compose） | compose の `postgres` / `minio` | `local`（ローカル推論・Phase 11） |
 | `demo` | README 用の動作デモ | 開発DBとは別の `recipi_demo` / ローカル MinIO | `local` |
 | `test` | 自動テスト（ローカル・CI） | 使い捨ての Postgres / MinIO | `stub`（決定的ダミー） |
-| `production` | 本番（デプロイ先未定・[todo.md](todo.md) #2） | マネージド DB / S3 互換 | `anthropic`（クラウド LLM・Phase 11） |
+| `production` | 本番（**AWS**・[architecture.md](architecture.md) §本番デプロイ） | RDS PostgreSQL 18 / S3 ＋ CloudFront | `anthropic`（クラウド LLM・Phase 11） |
 
 ## 2. 変数一覧
 

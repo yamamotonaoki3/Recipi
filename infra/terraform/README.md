@@ -1,6 +1,10 @@
 # infra/terraform
 
-Recipi の本番環境（AWS）を Terraform で作る。詳しい運用手順（初回のイメージの push、デプロイ、費用の目安、監視）は Issue #168 で追記する。
+Recipi の本番環境（AWS・ap-northeast-1）を Terraform で作る。全体像は [`docs/requirements/architecture.md`](../../docs/requirements/architecture.md) §本番デプロイ。
+
+**はじめて立てるときは、下の「はじめての apply（通し手順）」を上から順にたどる。** 途中の節は、その手順から参照される詳細。
+
+> **学習用の運用**: 常時は動かさない。確認するときだけ apply し、終わったら `terraform destroy` する（NAT Gateway・RDS・ECS・VPC Link は動いているだけで時間課金される）。
 
 ## 構成
 
@@ -27,67 +31,136 @@ VPC 2AZ: public x2（IGW・NAT 1 つ） / private x2（ECS・RDS、0.0.0.0/0 →
 - `terraform.tfvars`・`backend.hcl`・`*.tfstate*`・`*.tfplan`・`.terraform/` はコミットしない（`.gitignore` 済み）。plan の出力もログや CI に貼らない。
 - AWS の認証情報はコードや tfvars に書かず、AWS CLI のプロファイルから使う。plan / apply に使う IAM ユーザーには、ここで作るリソース（VPC・ECS・RDS・S3・CloudFront・API Gateway・Cloud Map・Secrets Manager・IAM・ECR・CloudWatch Logs）を操作する権限と、state 用バケットの読み書き権限が要る。
 
-## 手順（最小限）
+## はじめての apply（通し手順）
+
+> **先にリージョンをそろえる**。この手順の `aws` コマンドはすべて **ap-northeast-1**（東京）を前提にしている。AWS CLI のプロファイルの既定リージョンが違う（または設定されていない）と、別のリージョンを見に行って「クラスタが無い」等で失敗する。ターミナルで一度だけ次を実行しておく。
+>
+> ```bash
+> export AWS_DEFAULT_REGION=ap-northeast-1   # PowerShell: $env:AWS_DEFAULT_REGION = "ap-northeast-1"
+> ```
+
+**順番が重要**。ECS のタスク定義は `backend_image_tag` の ECR イメージを参照するため、**イメージが無い状態で本体を apply すると、サービスがタスクを起動できない**（`CannotPullContainerError` が続き、マイグレーションもできない）。そこで **ECR とイメージを先に用意する**。
+
+### 1. state 用バケットを作る（最初の 1 回だけ。destroy しない）
+
+料金は月 1 円未満。ここだけ state はローカルに持つ（秘密は入らない）。
 
 ```bash
-# 1. state 用バケット（最初の 1 回だけ。料金は月 1 円未満。destroy しない）
 cd infra/bootstrap
 terraform init
 terraform apply
-terraform output -raw tfstate_bucket   # → backend.hcl の bucket に書く
+terraform output -raw tfstate_bucket   # → 次の backend.hcl に書く
+```
 
-# 2. 本体
+### 2. 本体の backend を設定して init
+
+```bash
 cd ../terraform
-cp backend.hcl.example backend.hcl          # bucket を書き換える
-cp terraform.tfvars.example terraform.tfvars
+cp backend.hcl.example backend.hcl     # bucket に 1 の出力を書く
 terraform init -backend-config=backend.hcl
+```
+
+### 3. `terraform.tfvars` を書く（git 管理外）
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+- `alert_email` … アラームの通知先メールアドレス
+- `backend_image_tag` … この時点では仮の値（プレースホルダ）を書く。実際に使うタグは、次の手順でイメージを push した後に書き換える。
+
+### 4. ECR リポジトリだけを先に作る
+
+```bash
+terraform apply -target=aws_ecr_repository.backend
+```
+
+- `-target` は本来は非推奨（依存関係の一部だけを適用するため）。ここでは「イメージが無い状態で本体を apply すると、ECS のタスクが `CannotPullContainerError` で起動できないが、イメージの置き場は Terraform が作る」という鶏と卵を解くためだけに使う。
+- **2 回目以降の apply では不要**。以降は `terraform apply` だけでよい。
+
+### 5. イメージをビルドして push する
+
+```bash
+ECR_URL=$(terraform output -raw ecr_repository_url)
+aws ecr get-login-password --region ap-northeast-1 \
+  | docker login --username AWS --password-stdin "${ECR_URL%%/*}"
+TAG=$(git rev-parse HEAD)               # コミットのフル SHA
+docker build -t "$ECR_URL:$TAG" ../../backend
+docker push "$ECR_URL:$TAG"
+echo "$TAG"                             # → terraform.tfvars の backend_image_tag に書く
+```
+
+`git rev-parse HEAD` で表示されたタグを、`terraform.tfvars` の `backend_image_tag` に書き換える。
+
+### 6. 本体を apply する
+
+```bash
 terraform fmt -check
 terraform validate
 terraform plan -out=plan.tfplan
 terraform apply plan.tfplan
 ```
 
+### 7. マイグレーションを 1 回流す（初回だけ手動）
+
+DB が空の状態なので、テーブルを作る。以降は `deploy-backend` ワークフローが毎回行う。
+
+```bash
+aws ecs run-task --cluster "$(terraform output -raw ecs_cluster_name)" \
+  --task-definition "$(terraform output -raw ecs_task_definition_family)" \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[$(terraform output -json private_subnet_ids | jq -r 'join(",")')],securityGroups=[$(terraform output -raw ecs_security_group_id)],assignPublicIp=DISABLED}" \
+  --overrides "$(jq -nc --arg name "$(terraform output -raw ecs_container_name)" \
+    '{containerOverrides:[{name:$name,command:["alembic","upgrade","head"]}]}')"
+```
+
+終了コードが 0 になったことを確認してから次へ進む（[ジョブのログの探し方](#ジョブのログの探し方)と同じ方法で確認できる）。
+
+### 8. SNS の確認メールのリンクを押す
+
+apply の後、AWS から確認メール（Subject: `AWS Notification - Subscription Confirmation`）が届く。**押すまでアラームの通知は来ない**（→ [監視](#監視issue-172)）。
+
+### 9. GitHub の Secrets を 4 つ登録する
+
+以降の backend の更新は `deploy-backend` ワークフロー（手動実行）で行う（→ [デプロイ](#デプロイissue-167)）。
+
+### 10. 動作を確認する
+
+`/healthz`・`/healthz/db` が 200 になること、画像が CloudFront 経由で見えることなどを確認する。
+
+```bash
+curl -i "$(terraform output -raw api_url)/healthz"
+```
+
+### 11. 終わったら destroy する
+
+```bash
+aws s3 rm "s3://$(terraform output -raw images_bucket)" --recursive   # バケットを空にする
+terraform destroy
+```
+
+state 用バケット（1 で作ったもの）は残す。次に立てるときは 2 から始められる（4・5 の ECR 作成とイメージ push は、ECR も destroy されているので再度必要）。
+
 ## デプロイ（Issue #167）
 
-`terraform apply` でインフラを作った後、backend の更新は GitHub Actions の `deploy-backend` ワークフロー（手動実行）で行う。イメージの push → マイグレーション → サービス更新 → `/healthz` の確認までを 1 回で行い、失敗したら前のタスク定義に戻す。
+`terraform apply` でインフラを作った後、backend の更新は GitHub Actions の `deploy-backend` ワークフロー（手動実行）で行う。イメージの push → タスク定義の更新 → マイグレーション → サービス更新 → `/healthz`・`/healthz/db` の確認までを 1 回で行い、失敗したら前のタスク定義に戻す。main への push での自動デプロイはしない。
 
-### 初回だけ必要な準備
+### GitHub の Secrets（通し手順の 9）
 
-1. **イメージを 1 つ push する**（`terraform apply` の前に。ECR は apply で作られるので、リポジトリだけ先に作るか、apply 後にタスクが起動しない状態から始めてもよい）:
+リポジトリの Settings → Secrets and variables → Actions で、次の 4 つを登録する。
 
-   ```bash
-   aws ecr get-login-password --region ap-northeast-1 \
-     | docker login --username AWS --password-stdin "$(terraform output -raw ecr_repository_url | cut -d/ -f1)"
-   TAG=$(git rev-parse HEAD)
-   docker build -t "$(terraform output -raw ecr_repository_url):$TAG" backend
-   docker push "$(terraform output -raw ecr_repository_url):$TAG"
-   # この $TAG を terraform.tfvars の backend_image_tag に書いて apply する
-   ```
+| Secret | 入れる値（`terraform output`） | 形式 |
+| --- | --- | --- |
+| `AWS_DEPLOY_ROLE_ARN` | `terraform output -raw github_deploy_role_arn` | `arn:aws:iam::...:role/recipi-github-deploy` |
+| `AWS_API_BASE_URL` | `terraform output -raw api_url` | `https://...`（末尾のスラッシュなし） |
+| `AWS_ECS_SUBNET_IDS` | `terraform output -json private_subnet_ids` の 2 件 | カンマ区切り（`subnet-aaa,subnet-bbb`。空白を入れない） |
+| `AWS_ECS_SECURITY_GROUP_ID` | `terraform output -raw ecs_security_group_id` | `sg-...` |
 
-2. **マイグレーションを 1 回流す**（初回は DB が空のため）:
-
-   ```bash
-   aws ecs run-task --cluster "$(terraform output -raw ecs_cluster_name)" \
-     --task-definition "$(terraform output -raw ecs_task_definition_family)" \
-     --launch-type FARGATE \
-     --network-configuration "awsvpcConfiguration={subnets=[$(terraform output -json private_subnet_ids | jq -r 'join(",")')],securityGroups=[$(terraform output -raw ecs_security_group_id)],assignPublicIp=DISABLED}" \
-     --overrides '{"containerOverrides":[{"name":"api","command":["alembic","upgrade","head"]}]}'
-   ```
-
-3. **GitHub の Secrets に 4 つ登録する**（リポジトリの Settings → Secrets and variables → Actions）:
-
-   | Secret | 入れる値（`terraform output`） | 形式 |
-   | --- | --- | --- |
-   | `AWS_DEPLOY_ROLE_ARN` | `terraform output -raw github_deploy_role_arn` | `arn:aws:iam::...:role/recipi-github-deploy` |
-   | `AWS_API_BASE_URL` | `terraform output -raw api_url` | `https://...`（末尾のスラッシュなし） |
-   | `AWS_ECS_SUBNET_IDS` | `terraform output -json private_subnet_ids` の 2 件 | カンマ区切り（`subnet-aaa,subnet-bbb`。空白を入れない） |
-   | `AWS_ECS_SECURITY_GROUP_ID` | `terraform output -raw ecs_security_group_id` | `sg-...` |
-
-### 監視（Issue #172）
+## 監視（Issue #172）
 
 CloudWatch でログを集め、異常があれば SNS からメールで知らせる。
 
-### 準備（apply のとき 1 回だけ）
+### 準備（apply のとき 1 回だけ。通し手順の 3・8）
 
 1. `terraform.tfvars` の `alert_email` に通知先のメールアドレスを書く（このファイルは git 管理外）。
 2. `terraform apply` の後、AWS から **確認メール（Subject: AWS Notification - Subscription Confirmation）** が届く。**そのリンクを押すまで通知は来ない**。
@@ -250,7 +323,9 @@ aws ecs wait services-stable --cluster recipi-cluster --services recipi-api
 
 ## 学習用の運用とトレードオフ
 
-- **使うときだけ apply し、終わったら `terraform destroy` する**。NAT Gateway・RDS・ECS・API Gateway の VPC Link などは、動いているだけで時間課金される。
+- **使うときだけ apply し、終わったら `terraform destroy` する**（通し手順の 11）。NAT Gateway・RDS・ECS・API Gateway の VPC Link などは、動いているだけで時間課金される。
+- ALB は使わない（固定費がかかるため）。入口は API Gateway HTTP API ＋ VPC Link ＋ Cloud Map。
+- Container Insights は有効にしない（観測データごとの課金を避けるため）。
 - RDS は `skip_final_snapshot = true`・`deletion_protection = false`。destroy するとデータは消える（長く使う本番なら逆にする）。
 - 画像バケットは `force_destroy` を付けていない。destroy の前に中身を空にする（`aws s3 rm s3://<images_bucket> --recursive`）。
 - NAT は 1 つ（1 つ目の AZ）。その AZ が止まると、ECS は外に出られない。
