@@ -162,6 +162,11 @@ export function ImagePickerField({
           // 一覧カードや詳細画面は見た目をそろえるため cover で切り抜くが、
           // ここは編集画面で「どの写真を選んだか」を確認する場所なので、
           // 縦向き写真も含めて画像全体を見せる contain にする。
+          //
+          // **ここは RemoteImage にしない**（Issue #186）。この `imageUrl` は
+          // フォームの状態（features/recipe/recipeForm.ts）が持っている値で、
+          // クエリのキャッシュ由来ではない。期限切れで失敗してもクエリを取り直せば
+          // 直るわけではなく（フォームの値は書き換わらない）、無駄な通信が増えるだけ。
           <Image
             testID={`${testID}-preview`}
             source={{ uri: imageUrl as string }}

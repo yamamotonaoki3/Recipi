@@ -4,12 +4,12 @@
  * Issue #38 の「自分のレシピ一覧」で使う版。サムネイルが無いレシピは
  * プレースホルダ。投稿者はアバターと表示名を表示する。
  */
-import { Image } from "expo-image";
 import { Heart } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 
 import { Avatar } from "@/components/Avatar";
 import { Icon, ICON_COLORS } from "@/components/Icon";
+import { RemoteImage } from "@/components/RemoteImage";
 import type { RecipeSummary } from "@/features/recipe/api";
 
 type RecipeCardProps = {
@@ -34,9 +34,10 @@ export function RecipeCard({ recipe, onPress, testID }: RecipeCardProps) {
     >
       <View className="h-16 w-16 items-center justify-center rounded-lg bg-neutral-100">
         {recipe.thumbnailUrl ? (
-          <Image
+          // 署名付き URL の期限切れに備えて RemoteImage を使う（Issue #186）。
+          <RemoteImage
             testID={testID ? `${testID}-thumbnail` : undefined}
-            source={{ uri: recipe.thumbnailUrl }}
+            uri={recipe.thumbnailUrl}
             style={{ width: 64, height: 64, borderRadius: 8 }}
             contentFit="cover"
           />
