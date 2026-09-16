@@ -330,9 +330,14 @@ def test_post_with_image_shows_image_url(client: TestClient, keys: list[str]) ->
 
     created = _new_comment(client, me, rid, image_key=key)
 
-    assert created["imageUrl"] and created["imageUrl"].endswith(key)
+    # 感想画像も非公開側なので署名付き URL になる（Issue #185）。
+    assert created["imageUrl"] and key in created["imageUrl"]
+    assert "X-Amz-Signature=" in created["imageUrl"]
     listed = _list(client, None, rid)[0]
-    assert listed["imageUrl"] == created["imageUrl"]
+    # URL そのものは比較しない。署名には発行時刻（X-Amz-Date）が入るので、
+    # 作成時と一覧取得時で秒をまたぐと文字列が変わる（同じ画像を指していても）。
+    assert key in listed["imageUrl"]
+    assert "X-Amz-Signature=" in listed["imageUrl"]
     assert listed["author"]["id"] == me.id
     assert "avatarUrl" in listed["author"]
 

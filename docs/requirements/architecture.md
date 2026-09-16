@@ -117,7 +117,8 @@ Recipi/
 ```text
 クライアント ─HTTPS─> API Gateway HTTP API ─ VPC Link（private サブネット・専用 SG）
                         └─> Cloud Map(SRV: IP＋ポート) ─> ECS Fargate(private):8000
-画像        ─HTTPS─> CloudFront ─OAC─> S3(uploads/* のみ。バケットは非公開)
+画像(アバター) ─HTTPS─> CloudFront ─OAC─> S3(uploads/* のみ。バケットは非公開)
+画像(レシピ)   ─HTTPS─> S3 の期限付き署名付き URL（private/ は CloudFront でも 403）
 定期ジョブ   EventBridge Scheduler ─> ECS RunTask（API と同じタスク定義の command を上書き）
 デプロイ     GitHub Actions（手動実行・OIDC）─> ECR push → タスク定義更新 → マイグレーション → サービス更新
 監視        CloudWatch Logs ＋ メトリクスフィルタ・アラーム ─> SNS（メール）
@@ -128,7 +129,7 @@ VPC 2AZ: public x2（IGW・NAT 1 つ）/ private x2（ECS・RDS・VPC Link の E
 ```
 
 - **通信の許可は 2 つだけ**に絞る（`security-groups.tf`）: 「VPC Link の SG → ECS の 8000 番」「ECS の SG → RDS の 5432 番」。ECS のタスクに公開 IP は付けず、RDS も外部に公開しない。外向きの通信は NAT 経由。
-- **DB** は RDS PostgreSQL 18（db.t4g.micro・シングル AZ・private サブネット）。**画像**は非公開の S3 バケットで、配信は CloudFront の OAC 経由のみ（`uploads/*` の `GetObject` だけ許可）。アプリは ECS のタスクロールで S3 を読み書きし、アクセスキーを持たない（Issue #166）。
+- **DB** は RDS PostgreSQL 18（db.t4g.micro・シングル AZ・private サブネット）。**画像**は非公開の S3 バケット。**アバター**は CloudFront の OAC 経由で配信し（`uploads/*` の `GetObject` だけ許可）、**レシピのサムネ・手順画像・感想画像**は `private/` に置いて**期限付きの署名付き URL**で配信する（CloudFront 経由でも 403。Issue #185）。アプリは ECS のタスクロールで S3 を読み書きし、アクセスキーを持たない（Issue #166）。
 - **クライアント IP** は API Gateway が専用ヘッダー `X-Recipi-Client-Ip` に入れて渡し、アプリは接続元が VPC Link の private サブネットのときだけその値を信頼する（`backend/app/request_utils.py`。Issue #166）。
 
 ### デプロイの流れ

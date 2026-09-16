@@ -93,17 +93,28 @@ def get_s3_client() -> Any:
     return boto3.client("s3", **_client_kwargs(settings))
 
 
-# 画像を置くキーの接頭辞。公開読み取りを許すのはこの配下だけに限定する。
+# 画像を置くキーの接頭辞。**どちらに置くかで配信の経路が決まる**（Issue #185）。
+#
+# - PUBLIC_PREFIX（uploads/）… アバターだけ。公開読み取りを許すのはこの配下に限る。
+#   本番は CloudFront（OAC）が uploads/* だけを配信する（infra/terraform/s3-images.tf）。
+#   アバターは公開・非公開が切り替わらず、一覧で何度も表示されるので CDN が効く。
+# - PRIVATE_PREFIX（private/）… レシピのサムネ・手順画像・感想画像。**公開読み取りを
+#   一切許さない**ので、CloudFront 経由でも 403 になる。表示は期限付きの署名付き URL
+#   （presigned_url）で行う。レシピの公開・非公開が切り替わってもキーは動かさない。
 PUBLIC_PREFIX = "uploads/"
+PRIVATE_PREFIX = "private/"
 
 
 def _public_read_policy() -> str:
     """`uploads/` 配下だけを匿名で GET 可能にするバケットポリシー。
 
     **なぜ公開にするのか**: 画像はユーザーの端末が直接取りに行くもので、
-    アプリから見えなければ意味がない。今は「公開バケット ＋ 推測不能な
-    ランダムキー」方式を採っている（features/image.md §8 / Issue #39）。
+    アプリから見えなければ意味がない。`uploads/` に置くのは**アバターだけ**で、
+    「公開バケット ＋ 推測不能なランダムキー」方式を採っている（Issue #39）。
     キーは `uploads/<uuid4>.<ext>` なので URL を総当たりで当てることはできない。
+
+    **`private/` は絶対にここに含めない**（Issue #185）。レシピのサムネ・手順画像・
+    感想画像は `private/` に置き、公開読み取りを許さずに署名付き URL で配信する。
 
     **これはローカル（MinIO）と結合テスト用**。本番（AWS）のバケットは非公開で、
     画像は CloudFront（OAC）経由で `uploads/*` だけを配信する（infra/terraform の
@@ -181,6 +192,35 @@ def put_object(key: str, data: bytes, content_type: str) -> None:
         Body=data,
         ContentType=content_type,
     )
+
+
+def presigned_url(key: str, expires_in: int) -> str:
+    """オブジェクトを取得できる、**期限付きの署名付き URL** を作る（Issue #185）。
+
+    `private/` 配下の画像は公開読み取りを許していないため、安定 URL では取得
+    できない。代わりに、この URL を API のレスポンスに入れて返す。
+
+    ## 通信は発生しない
+
+    署名は手元で計算するだけなので、S3 / MinIO への往復は無い（レスポンスを
+    組み立てるたびに呼んでも、外部 I/O は増えない）。
+
+    ## 有効期限の上限は「署名に使った認証情報の寿命」
+
+    `expires_in` を長くしても、**署名に使った一時認証情報が失効すると URL も
+    無効になる**。本番は ECS のタスクロール（一時認証情報）で署名するため、
+    `IMAGE_URL_TTL_SECONDS` は保守的な値にしてある（app/config.py）。
+
+    クライアントは `get_s3_client()` と同じものを使う。MinIO ではバケット名を
+    パスに含める形（path 形式）で署名する必要があり、別のクライアントを作ると
+    設定がずれて署名が合わなくなるため。
+    """
+    url = get_s3_client().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.S3_BUCKET, "Key": key},
+        ExpiresIn=expires_in,
+    )
+    return str(url)
 
 
 def delete_object(key: str) -> None:

@@ -42,7 +42,8 @@ def make_upload(
 ) -> Upload:
     """任意の状態・時刻の管理行を直接作る（時間を待たずに GC を検証するため）。"""
     now = datetime.now(UTC)
-    key = f"uploads/{uuid.uuid4()}.png"
+    # 一時アップロードは非公開側に置かれる（Issue #185。POST /images と同じ）。
+    key = f"private/{uuid.uuid4()}.png"
     if put_object:
         storage.put_object(key, png_bytes(), "image/png")
 
@@ -155,7 +156,7 @@ def test_存在しないオブジェクトの削除も成功扱いになる(db_s
 
     これをエラーにすると削除ジョブが同じ行を永久に再試行してしまう。
     """
-    key = f"uploads/{uuid.uuid4()}.png"
+    key = f"private/{uuid.uuid4()}.png"
     db_session.add(PendingStorageDeletion(key=key, reason="test_missing"))
     db_session.commit()
 
@@ -166,6 +167,8 @@ def test_存在しないオブジェクトの削除も成功扱いになる(db_s
 
 def test_同じキーが重複してキューにあっても両方成功扱いで消化される(db_session):
     """同じオブジェクトを指す削除キューが複数あっても、両方を成功として処理する。"""
+    # ここはあえて公開側（uploads/ ＝ アバター）のキーにして、削除ジョブが
+    # **両方の接頭辞**で動くことを担保する（Issue #185）。
     key = f"uploads/{uuid.uuid4()}.png"
     storage.put_object(key, png_bytes(), "image/png")
     db_session.add_all(
@@ -184,7 +187,7 @@ def test_同じキーが重複してキューにあっても両方成功扱い�
 
 
 def test_試行回数の上限を超えた行は再試行されない(db_session):
-    key = f"uploads/{uuid.uuid4()}.png"
+    key = f"private/{uuid.uuid4()}.png"
     db_session.add(PendingStorageDeletion(key=key, reason="test_exhausted", attempts=MAX_ATTEMPTS))
     db_session.commit()
 
