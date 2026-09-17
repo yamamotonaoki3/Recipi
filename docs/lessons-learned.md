@@ -998,3 +998,13 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 - **Codex の既定モデルが変わると CLI が動かなくなる**。既定が `gpt-6-astra` になり、CLI 0.147.0 では `400 The 'gpt-6-astra' model requires a newer version of Codex` で失敗した。**空振り（数十バイトで終了）とは違って明確なエラーが出る**ので、監視スクリプトで気づける。`-c model="<動くモデル>"` で明示指定すれば回避できる。
 - **レビューの対象範囲を確認してから指摘を読む**。`codex review --base main` は**作業ツリーの未コミット分も読む**ため、そのブランチの差分に無い指摘が混ざる。今回 ALB の PR に対する 3 件の指摘は、すべて AI 校正の未コミット分に対するものだった。指摘をそのまま PR に持ち込まず、どの Issue のものか振り分ける。
 - **環境変数を明示しないと、既定値で本番が静かに壊れる**。本番のタスク定義に `AI_PROVIDER` が無く、既定の `local`（Ollama）にフォールバックしていた。ECS に Ollama は居ないので、**15 秒のタイムアウトを待ってから 503** になる（その間スレッドを占有する）。「本番では使わない機能」でも、**使わないことを明示的に設定する**。
+- **【重要】ローカルの検査は、CI と同じコマンド・同じスコープで走らせる**。#191 で `mypy app` だけを実行してテストの型エラーで CI を落としたので `mypy app tests` にしたが、今度は `ruff check app tests` と**パスを限定**していて、**新しく追加した migration（`alembic/`）の 2 件を見逃して同じように CI を落とした**。対象を自分で絞ると、絞った外側が必ず抜ける。`backend.yml` の実際の段は次の 6 つで、**これをそのまま実行する**（`pytest` はローカルでも Docker の postgres / MinIO が要る）。
+
+  ```bash
+  ruff check .            # app tests だけに絞らない（alembic/・scripts/ も対象）
+  ruff format --check .
+  mypy .
+  alembic upgrade head    # 実 DB に適用する。--sql のオフライン確認では通っても本番で落ちる
+  pytest --cov-report=json          # -m "not integration" を付けない（結合も走る）
+  python -m scripts.check_coverage coverage.json --lines 85 --branches 75
+  ```

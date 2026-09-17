@@ -5,6 +5,7 @@ Revises: b4c5d6e7f8a9
 """
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # ID は他の migration と重複させない（`a1b2c3d4e5f6` は add_auth_tables が使用中）。
@@ -27,7 +28,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("user_id", "window_kind", "window_start", name="uq_ai_usage_user_window"),
+        sa.UniqueConstraint(
+            "user_id", "window_kind", "window_start", name="uq_ai_usage_user_window"
+        ),
     )
     op.create_index("ix_ai_usage_user_id", "ai_usage", ["user_id"])
     op.create_index("ix_ai_usage_window_start", "ai_usage", ["window_start"])
