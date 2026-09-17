@@ -53,6 +53,15 @@ services:
       timeout: 5s
       retries: 20
 
+  ollama:
+    # AI校正のローカル実験時だけ `--profile ai` で起動する。
+    image: ollama/ollama:0.12.6
+    profiles: ["ai"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
   api:
     # フルスタック実行・E2E 用。標準の開発では起動しない。
     build:
@@ -65,6 +74,7 @@ services:
       # .env.development の値をここで上書きする（environment.md §4）。
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       S3_ENDPOINT_URL: http://minio:9000
+      OLLAMA_BASE_URL: http://ollama:11434
     ports:
       - "8000:8000"
     depends_on:
@@ -76,3 +86,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  ollama_data:

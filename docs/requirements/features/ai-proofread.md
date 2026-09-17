@@ -12,8 +12,8 @@
 
 バックエンドに校正サービスの抽象を置き、`AI_PROVIDER` 環境変数で実装を切り替える（[tech-stack.md](../tech-stack.md) の「AI 連携」）。
 
-- **development** (`AI_PROVIDER=local`): ローカル推論。
-- **production** (`AI_PROVIDER=anthropic`): クラウド LLM API（Claude Haiku 第一候補）。
+- **development** (`AI_PROVIDER=local`): Ollama（既定 `qwen2.5:3b-instruct`）。
+- **production** (`AI_PROVIDER=anthropic`): Anthropic API（`claude-haiku-4-5-20251001`）。
 - **test** (`AI_PROVIDER=stub`): 決定的なダミー。
 
 **API のリクエスト / レスポンス形はプロバイダに依存しない。** ローカルの小型モデルはクラウドより精度が落ちるため、同じ入力でも development と production で結果が変わりうる（「提案」なので許容）。
@@ -49,7 +49,7 @@
 }
 ```
 
-- `kind`: `title` / `description` / `step` / `ingredient`。
+- `kind`: `title` / `description` / `step` / `ingredient` / `ingredient_group`。
 - `id`: クライアントが項目を突き合わせるための識別子（サーバーはそのまま返す）。最大 64 文字。
 - **入力の制限**（超過はいずれも 400 `VALIDATION_ERROR`）:
   - `items` の件数: 最大 200（レシピ 1 件 = タイトル 1 + 説明 1 + 手順 ~30 + 材料 ~60 を十分カバー）
@@ -110,10 +110,10 @@
 
 すべて Phase 11 着手前 or 実装時（→ [todo.md](../todo.md) #45）:
 
-- dev のローカルモデル選定（Ollama モデル / HuggingFace の日本語 GEC モデル / llama-cpp）と実行方式（compose サービス vs in-process）、必要リソース
+- ~~dev のローカルモデル選定（Ollama モデル / HuggingFace の日本語 GEC モデル / llama-cpp）と実行方式（compose サービス vs in-process）、必要リソース~~ **確定**: Ollamaの別コンテナ、既定モデル `qwen2.5:3b-instruct`
 - 校正プロンプトの設計、`note` を返すか
-- レート制限の閾値、`ai_usage` テーブルの要否、コスト予算
-- 対象フィールドの追加検討（タイトル・説明・手順本文・材料名は §1・§3 のとおり確定。材料グループ名を対象に加えるかは未確定）
+- ~~レート制限の閾値、`ai_usage` テーブルの要否、コスト予算~~ **確定**: `ai_usage` によるユーザー単位20回/時・100回/日
+- ~~対象フィールドの追加検討（タイトル・説明・手順本文・材料名は §1・§3 のとおり確定。材料グループ名を対象に加えるかは未確定）~~ **確定**: 材料グループ名も対象に含める
 - ストリーミング応答の要否、結果のキャッシュ
-- production のモデル・モデルバージョンの確定
+- ~~production のモデル・モデルバージョンの確定~~ **確定**: `claude-haiku-4-5-20251001`
 - dev / prod で校正結果が変わることの許容範囲

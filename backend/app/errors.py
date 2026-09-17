@@ -89,3 +89,7 @@ def account_deactivated() -> AppError:
 
 def too_many_requests(message: str = "試行回数が多すぎます") -> AppError:
     return AppError(429, "TOO_MANY_REQUESTS", message)
+
+
+def unavailable(message: str = "サービスを一時的に利用できません") -> AppError:
+    return AppError(503, "AI_UNAVAILABLE", message)

@@ -67,6 +67,10 @@
 | `RECIPE_VIEWS_MAX_PER_USER` | 閲覧履歴の 1 ユーザーあたりの保持件数 | fixed（目安） | `200` | 1 以上。超過分は定期ジョブが古い順に削除。Issue #72 |
 | `PASSWORD_RESET_ATTEMPT_RETENTION_DAYS` | パスワード再設定の試行記録（成功した request を含む。メール・IP を持つ）の保持日数 | fixed（目安） | `1` | 1 以上。レート制限が数えるのは直近 15 分だけなので 1 日で足りる。Issue #85 |
 | `ANTHROPIC_API_KEY` | Anthropic API キー（**Phase 11・production のみ**） | secret | （`.env.production.example` では空） | 本番のシークレット管理で注入。dev/test では未設定 |
+| `ANTHROPIC_MODEL` | 本番Anthropicモデル | per-env | `claude-haiku-4-5-20251001` | モデルIDを固定し、変更時は品質・コストを再検証 |
+| `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | developmentのOllama接続先・モデル | local | `http://localhost:11434` / `qwen2.5:3b-instruct` | `AI_PROVIDER=local` のときだけ使用 |
+| `AI_PROVIDER_TIMEOUT_SECONDS` | AIプロバイダのタイムアウト | per-env | `15` | 超過時は503 |
+| `AI_HOURLY_LIMIT` / `AI_DAILY_LIMIT` | ユーザー単位のAI校正回数上限 | per-env | `20` / `100` | `ai_usage`でECSタスク間共有 |
 
 ### frontend-ts（`expoApp/.env` — `EXPO_PUBLIC_` 接頭辞のみクライアントに露出）
 

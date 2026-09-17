@@ -8,6 +8,7 @@ Alembic の `env.py` は `SQLModel.metadata` を見て autogenerate するが、
 
 from __future__ import annotations
 
+from app.models.ai_usage import AIUsage
 from app.models.favorite import Favorite
 from app.models.follow import Follow
 from app.models.ingredient import Ingredient
@@ -28,6 +29,7 @@ from app.models.user import User
 __all__ = [
     "Favorite",
     "Follow",
+    "AIUsage",
     "Ingredient",
     "IngredientGroup",
     "Notification",

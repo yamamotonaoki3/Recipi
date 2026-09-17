@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/ai/proofread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** レシピ本文の誤字脱字を校正する */
+        post: operations["proofread_api_v1_ai_proofread_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -1069,6 +1086,44 @@ export interface components {
             /** X */
             x?: string | null;
         };
+        /** ProofreadItem */
+        ProofreadItem: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "title" | "description" | "step" | "ingredient" | "ingredient_group";
+            /** Text */
+            text: string;
+        };
+        /** ProofreadRequest */
+        ProofreadRequest: {
+            /** Items */
+            items: components["schemas"]["ProofreadItem"][];
+        };
+        /** ProofreadResponse */
+        ProofreadResponse: {
+            /** Suggestions */
+            suggestions: components["schemas"]["ProofreadSuggestion"][];
+        };
+        /** ProofreadSuggestion */
+        ProofreadSuggestion: {
+            /**
+             * Changed
+             * @default true
+             */
+            changed: boolean;
+            /** Corrected */
+            corrected: string;
+            /** Id */
+            id: string;
+            /** Note */
+            note?: string | null;
+            /** Original */
+            original: string;
+        };
         /**
          * ReactivateRequest
          * @description 退会済みアカウントの明示的な再開。ログインと同じ本人確認を要求する。
@@ -1527,6 +1582,66 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    proofread_api_v1_ai_proofread_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProofreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProofreadResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     login_api_v1_auth_login_post: {
         parameters: {
             query?: never;

@@ -19,3 +19,4 @@ boto3==1.43.89               # S3 互換ストレージのクライアント（#
                              # 本番は R2 / S3 等へ endpoint_url の差し替えだけで移行できる
 pillow==12.3.0               # 画像の検証 / EXIF 回転の正規化 / 縮小 / 再エンコード（#39）
 python-multipart==0.0.32     # FastAPI が multipart/form-data（UploadFile）を受けるのに必要
+httpx==0.28.1                # Ollama / Anthropic API へのタイムアウト付きHTTP呼び出し
