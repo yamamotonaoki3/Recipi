@@ -220,6 +220,12 @@ class Settings(BaseSettings):
     # --- AI 校正プロバイダ — 使うのは Phase 11 ------------------------
     AI_PROVIDER: Literal["local", "anthropic", "stub"] = "local"
     ANTHROPIC_API_KEY: str = Field(default="")
+    ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "qwen2.5:3b-instruct"
+    AI_PROVIDER_TIMEOUT_SECONDS: float = Field(default=15.0, gt=0, le=60)
+    AI_HOURLY_LIMIT: int = Field(default=20, ge=1)
+    AI_DAILY_LIMIT: int = Field(default=100, ge=1)
 
     @property
     def is_test(self) -> bool:

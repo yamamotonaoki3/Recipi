@@ -71,6 +71,16 @@ resource "aws_ecs_task_definition" "api" {
         # リクエストだけ、専用ヘッダー X-Recipi-Client-Ip をクライアントの IP として使う
         # （backend/app/request_utils.py。Issue #166）。VPC 全体にはしない。
         { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.private_subnet_cidrs) },
+        # AI 校正のプロバイダ（Issue #199）。**明示しないと既定の "local"（Ollama）に
+        # なり、ECS には Ollama が居ないので毎回 15 秒のタイムアウトを待ってから 503 に
+        # なる**（その間スレッドを占有する）。本番は "anthropic" を指定する。
+        #
+        # ただし ANTHROPIC_API_KEY は Secrets Manager に**まだ作っていない**
+        # （値の入っていない秘密を参照すると ECS がタスクを起動できないため。Issue #168）。
+        # そのため現状は「キー未設定」として即座に 503 を返す。AI 校正を本番で実際に
+        # 使うときは、secrets.tf で秘密を作り、下の secrets ブロックに追加する。
+        # Phase 11 は MVP 対象外なので、いまは有効化しない。
+        { name = "AI_PROVIDER", value = "anthropic" },
       ]
 
       # 値は Secrets Manager から取り出される（Terraform にもタスク定義にも値は残らない）。

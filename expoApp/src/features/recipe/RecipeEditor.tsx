@@ -11,7 +11,7 @@
  *   `POST /images` に上げてキーだけ受け取り、保存時にレシピへ紐付ける（#40）。
  */
 import { Stack, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
   Platform,
@@ -66,6 +66,8 @@ import { NAV_RAIL_MIN_WIDTH } from "@/components/AppNavBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Icon, ICON_COLORS } from "@/components/Icon";
 import { ImagePickerField } from "@/components/ImagePickerField";
+import { ProofreadPanel } from "./ProofreadPanel";
+import { proofreadRecipe, type ProofreadItem, type ProofreadSuggestion } from "./proofread";
 
 /**
  * `basePath` は「このエディタを開いた destination のスタックの根」
@@ -118,6 +120,143 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
     message: string | null;
   } | null>(null);
   const [uploadingImageIds, setUploadingImageIds] = useState<Set<string>>(new Set());
+  const [proofreadSuggestions, setProofreadSuggestions] = useState<ProofreadSuggestion[]>([]);
+  const [proofreadBusy, setProofreadBusy] = useState(false);
+  const [proofreadCompleted, setProofreadCompleted] = useState(false);
+  const [proofreadMessage, setProofreadMessage] = useState<string | null>(null);
+  const proofreadStructureKey = useMemo(
+    () =>
+      `${state.groups.map((g) => `${g.localId}:${g.ingredients.map((i) => i.localId).join(",")}`).join("|")}#${state.steps.map((s) => s.localId).join(",")}`,
+    [state.groups, state.steps],
+  );
+  const previousProofreadStructureKey = useRef(proofreadStructureKey);
+  const proofreadAbort = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (previousProofreadStructureKey.current === proofreadStructureKey) return;
+    previousProofreadStructureKey.current = proofreadStructureKey;
+    setProofreadSuggestions([]);
+    setProofreadMessage(
+      "項目の構成が変わったため、修正案を破棄しました。もう一度チェックしてください",
+    );
+  }, [proofreadStructureKey]);
+
+  useEffect(() => () => proofreadAbort.current?.abort(), []);
+
+  function proofreadItems(): ProofreadItem[] {
+    const items: ProofreadItem[] = [
+      { id: "title", kind: "title", text: state.title },
+      { id: "description", kind: "description", text: state.description },
+    ];
+    for (const group of state.groups) {
+      items.push({ id: group.localId, kind: "ingredient_group", text: group.name });
+      for (const ingredient of group.ingredients) {
+        items.push({ id: ingredient.localId, kind: "ingredient", text: ingredient.name });
+      }
+    }
+    for (const step of state.steps) items.push({ id: step.localId, kind: "step", text: step.body });
+    return items.filter((item) => item.text.trim().length > 0);
+  }
+
+  async function handleProofread() {
+    proofreadAbort.current?.abort();
+    const controller = new AbortController();
+    proofreadAbort.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    setProofreadBusy(true);
+    setProofreadCompleted(false);
+    setProofreadMessage(null);
+    setProofreadSuggestions([]);
+    // 応答が返ってきたときに状態を書き換えてよいかを、2 つの観点で判定する。
+    //
+    // 1. 後発のリクエストが始まっていないか（ボタンの押し直し）。
+    //    ボタンを押し直すと前のリクエストは abort されるが、古い側の処理も続きが
+    //    走る。古い側が busy を false に戻すと、後発の実行中にボタンが押せてしまい
+    //    （重複実行）、エラー表示も上書きされてしまう。
+    // 2. レシピの構造（グループ・材料・手順の並び）が変わっていないか。
+    //    変わった後に古い応答で候補を復活させると、ズレた対応のまま適用できて
+    //    しまう。仕様は「構造変更で未適用の修正案はすべて破棄」
+    //    （docs/requirements/features/ai-proofread.md）。
+    //
+    // 構造キーはクロージャが描画時の値を掴んでしまうため比較に使えない。上の
+    // useEffect が更新している ref と比べる（ref は常に最新の構造を指す）。
+    const startedStructureKey = proofreadStructureKey;
+    const isLatestRequest = () => proofreadAbort.current === controller;
+    const isStillApplicable = () =>
+      isLatestRequest() && previousProofreadStructureKey.current === startedStructureKey;
+    try {
+      const suggestions = await proofreadRecipe(proofreadItems(), controller.signal);
+      if (!isStillApplicable()) return;
+      setProofreadSuggestions(suggestions);
+      setProofreadCompleted(true);
+    } catch (error) {
+      if (!isStillApplicable()) return;
+      if (error instanceof ApiError && error.status === 429)
+        setProofreadMessage("しばらくしてからお試しください");
+      else setProofreadMessage("チェックできませんでした");
+    } finally {
+      clearTimeout(timeout);
+      // busy の解除は「構造が変わったとき」も必ず行う。ここを止めると、
+      // チェック中に項目を並べ替えただけでボタンが押せなくなる。
+      if (isLatestRequest()) setProofreadBusy(false);
+    }
+  }
+
+  function applyProofreadSuggestion(suggestion: ProofreadSuggestion): boolean {
+    let currentText: string | undefined;
+    if (suggestion.id === "title") currentText = state.title;
+    else if (suggestion.id === "description") currentText = state.description;
+    else {
+      const group = state.groups.find((item) => item.localId === suggestion.id);
+      const ingredient = state.groups
+        .flatMap((item) => item.ingredients)
+        .find((item) => item.localId === suggestion.id);
+      const step = state.steps.find((item) => item.localId === suggestion.id);
+      currentText = group?.name ?? ingredient?.name ?? step?.body;
+    }
+    if (currentText !== suggestion.original) {
+      setProofreadMessage("内容が変わりました。もう一度チェックしてください");
+      return false;
+    }
+    if (suggestion.id === "title" || suggestion.id === "description")
+      dispatch({ type: "setField", field: suggestion.id, value: suggestion.corrected });
+    else {
+      const group = state.groups.find((g) => g.localId === suggestion.id);
+      const ingredientGroup = state.groups.find((g) =>
+        g.ingredients.some((i) => i.localId === suggestion.id),
+      );
+      if (group)
+        dispatch({ type: "renameGroup", groupId: group.localId, name: suggestion.corrected });
+      else if (ingredientGroup)
+        dispatch({
+          type: "setIngredientField",
+          groupId: ingredientGroup.localId,
+          ingredientId: suggestion.id,
+          field: "name",
+          value: suggestion.corrected,
+        });
+      else if (state.steps.some((s) => s.localId === suggestion.id))
+        dispatch({ type: "setStepBody", stepId: suggestion.id, value: suggestion.corrected });
+      else return false;
+    }
+    return true;
+  }
+
+  function applyOne(suggestion: ProofreadSuggestion) {
+    if (applyProofreadSuggestion(suggestion))
+      setProofreadSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
+  }
+
+  function ignoreOne(suggestion: ProofreadSuggestion) {
+    setProofreadSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
+  }
+
+  function applyAll() {
+    const applied = new Set(
+      proofreadSuggestions.filter(applyProofreadSuggestion).map((item) => item.id),
+    );
+    setProofreadSuggestions((current) => current.filter((item) => !applied.has(item.id)));
+  }
 
   const handleImageUploadingChange = useCallback((imageId: string, uploading: boolean) => {
     setUploadingImageIds((current) => {
@@ -595,6 +734,51 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
             >
               <Text className="text-sm text-neutral-700">手順を追加</Text>
             </Pressable>
+          </View>
+
+          <View className="gap-2">
+            <Pressable
+              testID="editor-proofread"
+              onPress={handleProofread}
+              disabled={proofreadBusy}
+              accessibilityRole="button"
+              className="self-start rounded-lg border border-orange-400 px-3 py-2"
+            >
+              <Text className="text-sm font-semibold text-orange-700">
+                {proofreadBusy ? "チェック中…" : "AIで誤字脱字チェック"}
+              </Text>
+            </Pressable>
+            {proofreadMessage && (
+              <Text testID="proofread-message" className="text-sm text-orange-700">
+                {proofreadMessage}
+              </Text>
+            )}
+            {!proofreadBusy &&
+              proofreadCompleted &&
+              proofreadSuggestions.length === 0 &&
+              proofreadMessage === null && (
+                <ProofreadPanel
+                  suggestions={[]}
+                  onApply={applyOne}
+                  onIgnore={ignoreOne}
+                  onApplyAll={applyAll}
+                  onIgnoreAll={() => setProofreadSuggestions([])}
+                />
+              )}
+            {proofreadSuggestions.length > 0 && (
+              <ProofreadPanel
+                suggestions={proofreadSuggestions}
+                onApply={applyOne}
+                onIgnore={ignoreOne}
+                onApplyAll={applyAll}
+                onIgnoreAll={() => setProofreadSuggestions([])}
+              />
+            )}
+            {!proofreadBusy && !proofreadCompleted && proofreadMessage === null && (
+              <Text testID="proofread-empty-hint" className="text-xs text-neutral-500">
+                入力内容をAIで確認できます
+              </Text>
+            )}
           </View>
 
           {/* 公開フラグ */}

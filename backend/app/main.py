@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
 from app import storage
+from app.api.ai import router as ai_router
 from app.api.auth import router as auth_router
 from app.api.comments import router as comments_router
 from app.api.images import router as images_router
@@ -175,6 +176,7 @@ def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
 
 
 app.include_router(auth_router)
+app.include_router(ai_router)
 app.include_router(users_router)
 app.include_router(recipes_router)
 app.include_router(units_router)
