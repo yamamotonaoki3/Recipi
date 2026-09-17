@@ -1,8 +1,7 @@
 # ECS Fargate（API のコンテナを動かす）。
 #
 # - private サブネットに置き、公開 IP は付けない。外からは API Gateway（VPC Link）経由だけ。
-# - タスクが起動すると、service_registries で Cloud Map に「IP とポート」が登録され、
-#   API Gateway がそこへ転送する（service-discovery.tf）。
+# - タスクは内部ALBのターゲットグループへ登録され、ALBがヘルスチェックと振り分けを行う。
 # - ログは awslogs ドライバで CloudWatch Logs の /ecs/recipi-api に送る。アプリは
 #   1 行 1 JSON（Issue #170）。保存期間・アラームは Issue #172 で見直す。
 # - 秘密（DATABASE_URL 等）は Secrets Manager から、起動時に環境変数として渡される。
@@ -51,12 +50,12 @@ resource "aws_ecs_task_definition" "api" {
         { name = "LOG_LEVEL", value = "INFO" },
         { name = "LOG_FORMAT", value = "json" },
         { name = "AUTH_COOKIE_SECURE", value = "true" },
-        # DB 接続プール（Issue #191）。同時 20 本（10 ＋ 予備 10）まで、空き待ちは 5 秒。
+        # DB 接続プール。1タスクあたり同時20本（10 ＋ 予備10）まで、空き待ちは5秒。
         # 待ちきれない分は 500 ではなく 503 ＋ Retry-After を返して早く手放す。
         # RDS db.t4g.micro の max_connections（約 110）に対し、定期ジョブ・
         # マイグレーション・手動接続の分を残せる範囲にしている。
-        { name = "DB_POOL_SIZE", value = "10" },
-        { name = "DB_MAX_OVERFLOW", value = "10" },
+        { name = "DB_POOL_SIZE", value = tostring(var.db_pool_size) },
+        { name = "DB_MAX_OVERFLOW", value = tostring(var.db_max_overflow) },
         { name = "DB_POOL_TIMEOUT_SECONDS", value = "5" },
         { name = "CORS_ALLOW_ORIGINS", value = var.cors_allow_origins },
         # 画像は AWS の S3。エンドポイントとアクセスキーは空にし、タスクロールの
@@ -145,11 +144,10 @@ resource "aws_ecs_service" "api" {
   # 「API のタスク」を失敗通知で見分けられる（scheduler.tf。Issue #173）。
   propagate_tags = "TASK_DEFINITION"
 
-  # Cloud Map に SRV（IP ＋ ポート）で登録する。API Gateway はここから転送先を知る。
-  service_registries {
-    registry_arn   = aws_service_discovery_service.api.arn
-    container_name = local.container_name
-    container_port = var.app_port
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = local.container_name
+    container_port   = var.app_port
   }
 
   # NAT がある前にタスクが起動すると、イメージや秘密を取りに行けずに失敗する。
@@ -159,5 +157,15 @@ resource "aws_ecs_service" "api" {
     # デプロイのワークフロー（Issue #167）が、新しいイメージのタスク定義に更新する。
     # terraform apply でそれを古いリビジョンへ戻さないよう、この項目は無視する。
     ignore_changes = [task_definition]
+
+    precondition {
+      condition     = var.ecs_desired_count >= var.ecs_min_count && var.ecs_desired_count <= var.ecs_max_count
+      error_message = "ecs_desired_count は ecs_min_count と ecs_max_count の範囲内にしてください。"
+    }
+
+    precondition {
+      condition     = var.ecs_max_count * (var.db_pool_size + var.db_max_overflow) <= var.rds_max_connections - var.rds_reserved_connections
+      error_message = "ECS最大タスク数のDB接続上限が、RDSの予約接続を差し引いた接続予算を超えています。"
+    }
   }
 }

@@ -17,7 +17,7 @@ locals {
   database_name     = "recipi"
   database_username = "recipi_app"
 
-  # コンテナ名（タスク定義・Cloud Map の登録・ログで共通に使う）。
+  # コンテナ名（タスク定義・ALBターゲット登録・ログで共通に使う）。
   container_name = "api"
 
   # このアカウントの ID（IAM・SNS・ログのポリシーの条件で使う）。

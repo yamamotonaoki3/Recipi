@@ -2,7 +2,7 @@
 #
 # 構成:
 #   public  x2 … インターネットゲートウェイ（IGW）へ直接出られる。NAT Gateway を置く
-#   private x2 … ECS・RDS・VPC Link を置く。外へ出るときは NAT Gateway を通る
+#   private x2 … ALB・ECS・RDS・VPC Link を置く。外へ出るときは NAT Gateway を通る
 # ECS に公開 IP は付けない。外からの入口は API Gateway（VPC Link 経由）だけ。
 
 data "aws_availability_zones" "available" {
@@ -11,7 +11,7 @@ data "aws_availability_zones" "available" {
 
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr
-  # Cloud Map のプライベート DNS（recipi.internal）を VPC 内で引けるようにする。
+  # privateサブネットの内部ALB・ECS・RDS間で名前解決できるようにする。
   enable_dns_support   = true
   enable_dns_hostnames = true
 

@@ -1,16 +1,16 @@
-# API の入口: API Gateway HTTP API ＋ VPC Link ＋ Cloud Map。
+# API の入口: API Gateway HTTP API ＋ VPC Link ＋ 内部ALB。
 #
-#   クライアント ─HTTPS─> HTTP API ─ VPC Link ─> Cloud Map(SRV) ─> ECS(private):8000
+#   クライアント ─HTTPS─> HTTP API ─ VPC Link ─> ALB ─> ECS(private):8000
 #
-# ALB を使わない理由: ALB は動いているだけで固定費がかかる。HTTP API は
-# リクエスト数に応じた課金なので、学習用で使う時間が短い Recipi では安い。
+# 学習用の検証ではALBの固定費を許容し、ECSタスクが増減してもALBが
+# ヘルスチェックとターゲット振り分けを担う構成にする。
 # HTTPS は API Gateway の既定のドメイン（*.execute-api.<region>.amazonaws.com）の
 # 証明書で終端する（独自ドメインは使わない）。
 
 resource "aws_apigatewayv2_api" "main" {
   name          = "${var.project_name}-api"
   protocol_type = "HTTP"
-  description   = "Recipi API (HTTP API -> VPC Link -> ECS)"
+  description   = "Recipi API (HTTP API -> VPC Link -> internal ALB -> ECS)"
 }
 
 resource "aws_apigatewayv2_vpc_link" "main" {
@@ -19,14 +19,14 @@ resource "aws_apigatewayv2_vpc_link" "main" {
   security_group_ids = [aws_security_group.vpclink.id]
 }
 
-# すべてのリクエストを、そのまま（HTTP_PROXY）Cloud Map の api サービスへ転送する。
+# すべてのリクエストを、VPC Link経由で内部ALBへ転送する。
 resource "aws_apigatewayv2_integration" "api" {
   api_id             = aws_apigatewayv2_api.main.id
   integration_type   = "HTTP_PROXY"
   integration_method = "ANY"
   connection_type    = "VPC_LINK"
   connection_id      = aws_apigatewayv2_vpc_link.main.id
-  integration_uri    = aws_service_discovery_service.api.arn
+  integration_uri    = aws_lb_listener.api.arn
 
   # API Gateway が見たクライアントの IP を、専用ヘッダーに「上書き」で入れて ECS に渡す
   # （Issue #166）。上書きなので、クライアントが同じ名前のヘッダーを送っても偽装できない。

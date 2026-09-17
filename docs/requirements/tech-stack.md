@@ -114,17 +114,17 @@
   | サービス | 役割 |
   | --- | --- |
   | API Gateway HTTP API | 公開の入口（HTTPS・スロットリング・アクセスログ） |
-  | VPC Link ＋ Cloud Map（SRV） | 入口から private サブネットの ECS へ到達する経路（IP ＋ ポートの登録） |
+  | VPC Link ＋ 内部ALB | 入口から private サブネットのECSへ到達し、複数タスクへヘルスチェック付きで分散する経路 |
   | ECS Fargate | API コンテナと定期ジョブの実行（公開 IP なし） |
   | ECR | backend の Docker イメージの置き場（タグは変更不可・直近 10 世代） |
-  | RDS PostgreSQL 18 | 本番の DB（db.t4g.micro・シングル AZ・private） |
+  | RDS PostgreSQL 18 | 本番の DB（db.t4g.micro・Multi-AZ・private。障害時は同じエンドポイントで自動フェイルオーバー） |
   | S3 ＋ CloudFront（OAC） | 画像の保存（非公開バケット）と配信（`uploads/*` のみ） |
   | Secrets Manager | `DATABASE_URL`・`JWT_SECRET_KEY`・`LOG_HASH_SECRET`（AI 機能（Phase 11）を本番で使うときに `ANTHROPIC_API_KEY` を追加） |
   | EventBridge Scheduler | 定期ジョブの起動（ECS RunTask。Issue #173） |
   | CloudWatch Logs ＋ アラーム／SNS | ログの集約・異常の検知・メール通知（Issue #172） |
   | IAM（GitHub OIDC） | GitHub Actions からのデプロイ（アクセスキーを置かない。Issue #167） |
 
-- **RDS for PostgreSQL 18**（ローカルの `postgres:18` と同じメジャー。東京リージョンの db.t4g.micro で提供を確認）。
+- **RDS for PostgreSQL 18**（ローカルの `postgres:18` と同じメジャー。東京リージョンの db.t4g.micro で提供を確認。Multi-AZ の待機系を有効化）。
 
 ## ライセンス・費用
 

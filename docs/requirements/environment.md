@@ -32,7 +32,7 @@
 | `APP_ENV` | 実行環境の選択 | per-env | `development` | `development` / `demo` / `test` / `production` |
 | `DATABASE_URL` | DB 接続文字列 | per-env / secret | `postgresql+psycopg://<user>:<password>@<host>:<port>/<db>` | SQLAlchemy 形式。**組み立てた実際の URL（本物のパスワード・ホストを含む）は `.env.<APP_ENV>`（`.gitignore` 対象）にのみ置く。** `.env.*.example` にはこのテンプレートのまま書く。[tech-stack.md](tech-stack.md) |
 | `DB_POOL_SIZE` | DB 接続プールで常時保持する接続の本数 | fixed（目安） | `10` | 1 以上。Issue #191 |
-| `DB_MAX_OVERFLOW` | 急増時に一時的に追加してよい接続の本数（同時上限 = `DB_POOL_SIZE` ＋ これ） | fixed（目安） | `10` | 0 以上。本番は RDS `db.t4g.micro`（`max_connections` 約 110）に対し 1 タスク 20 本で、定期ジョブ・マイグレーションの分を残す。Issue #191 |
+| `DB_MAX_OVERFLOW` | 急増時に一時的に追加してよい接続の本数（同時上限 = `DB_POOL_SIZE` ＋ これ） | fixed（目安） | `10` | 0 以上。本番は最大4タスク・合計80本までとし、RDS `db.t4g.micro`（`max_connections` 約110）に30本を残す。Issue #191 |
 | `DB_POOL_TIMEOUT_SECONDS` | 接続が空くのを待つ上限（秒）。超えたら API は 503 ＋ `Retry-After` を返す | fixed（目安） | `5` | 0 より大きい値。SQLAlchemy の既定 30 秒では、急増時に 30 秒待たせた末に 500 になっていた（Issue #189）。Issue #191 |
 | `POSTGRES_DB` | compose の postgres の DB 名 | per-env | `recipi` | compose とアプリで一致させる |
 | `POSTGRES_USER` | compose の postgres のユーザー | per-env | `recipi` | `root` / `postgres` のような推測可能値は避ける |

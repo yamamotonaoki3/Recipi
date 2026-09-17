@@ -1,0 +1,18 @@
+# 複数APIコンテナのローカル性能テスト用override。
+# 実行例:
+# docker compose --env-file .env.development -f infra/docker-compose.yml -f infra/docker-compose.perf.yml up -d --build --scale api=4 api haproxy
+
+services:
+  api:
+    # 通常のcomposeにある固定ポートを外し、HAProxy経由だけで受ける。
+    ports: !reset []
+
+  haproxy:
+    image: haproxy:3.2-alpine
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./haproxy/perf.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      api:
+        condition: service_started
