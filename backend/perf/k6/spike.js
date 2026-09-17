@@ -38,8 +38,8 @@ export const options = {
     },
   },
   thresholds: {
-    // 急増中の失敗はある程度許す（全体で 5% 未満）。
-    http_req_failed: ["rate<0.05"],
+    // 100 VU相当のピークでも、失敗率は1%未満に抑える。
+    http_req_failed: ["rate<0.01"],
     // 回復区間では、平常と同じ基準（300ms）に戻っていること。
     "http_req_duration{name:feed,phase:recovery}": ["p(95)<300"],
     "http_req_duration{name:search,phase:recovery}": ["p(95)<300"],

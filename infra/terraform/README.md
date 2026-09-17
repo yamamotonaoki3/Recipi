@@ -9,27 +9,33 @@ Recipi の本番環境（AWS・ap-northeast-1）を Terraform で作る。全体
 ## 構成
 
 ```text
-クライアント ─HTTPS─> API Gateway HTTP API ─ VPC Link ─> Cloud Map(SRV) ─> ECS Fargate(private):8000
+クライアント ─HTTPS─> API Gateway HTTP API ─ VPC Link ─> 内部ALB ─> ECS Fargate(private):8000
 画像        ─HTTPS─> CloudFront ─OAC─> S3(uploads/*)
-VPC 2AZ: public x2（IGW・NAT 1 つ） / private x2（ECS・RDS、0.0.0.0/0 → NAT、S3 はゲートウェイ型エンドポイント）
+VPC 2AZ: public x2（IGW・NAT 1 つ） / private x2（ALB・ECS・RDS Multi-AZ、0.0.0.0/0 → NAT、S3 はゲートウェイ型エンドポイント）
 ```
 
 | ファイル | 中身 |
 | --- | --- |
 | `network.tf` | VPC・サブネット・NAT 1 つ・ルート・S3 のゲートウェイ型エンドポイント |
-| `security-groups.tf` | VPC Link → ECS（8000）、ECS → RDS（5432） |
-| `apigateway.tf` / `service-discovery.tf` | HTTP API・VPC Link・Cloud Map（SRV） |
-| `ecs.tf` / `iam.tf` / `ecr.tf` | Fargate のクラスタ・タスク定義・サービス、ロール、イメージの置き場 |
+| `security-groups.tf` | VPC Link → ALB（8000）、ALB → ECS（8000）、ECS → RDS（5432） |
+| `apigateway.tf` / `alb.tf` | HTTP API・VPC Link・内部ALB・ターゲットグループ |
+| `ecs.tf` / `ecs-autoscaling.tf` / `iam.tf` / `ecr.tf` | Fargate のクラスタ・タスク定義・サービス、自動スケール、ロール、イメージの置き場 |
 | `rds.tf` / `secrets.tf` | PostgreSQL 18、秘密（Secrets Manager） |
 | `s3-images.tf` / `cloudfront.tf` | 非公開の画像バケットと、その配信 |
 | `github-oidc.tf` | GitHub Actions のデプロイ用ロール（Issue #167） |
+
+### 1,000ユーザー規模の性能設計
+
+登録ユーザー1,000人、ピーク同時利用100人を基準にする。ECSは通常1タスク、CPUまたはメモリが高くなった場合に最大4タスクへ自動拡張する。各タスクのDB接続上限は20本で、最大4タスクでも80本に収め、RDSの約110接続のうち30本を定期ジョブ・マイグレーション・管理接続用に残す。RDS は Multi-AZ の待機系を持ち、障害時は同じエンドポイントのまま自動フェイルオーバーする。`terraform plan` 時にこの接続予算を超える設定を拒否する。
+
+ローカルで複数タスク相当を確認するときは、`infra/docker-compose.perf.yml` を重ねてAPIを4コンテナ起動し、HAProxyの8000番ポートへk6を向ける。これはECS Auto Scalingそのものではなく、複数タスク時の負荷分散とDB接続予算を確認するための検証用構成である。
 
 ## 秘密情報の扱い
 
 - パスワードと鍵は Terraform が `ephemeral "random_password"` で作り、書き込み専用の引数（`password_wo` / `secret_string_wo`）で RDS と Secrets Manager に渡す。**tfstate にも plan にも値は残らない**。
 - 値を作り直すときは、`secrets.tf` の `*_version` を 1 つ上げて apply する（DB は RDS と `DATABASE_URL` の版を同時に上げる）。
 - `terraform.tfvars`・`backend.hcl`・`*.tfstate*`・`*.tfplan`・`.terraform/` はコミットしない（`.gitignore` 済み）。plan の出力もログや CI に貼らない。
-- AWS の認証情報はコードや tfvars に書かず、AWS CLI のプロファイルから使う。plan / apply に使う IAM ユーザーには、ここで作るリソース（VPC・ECS・RDS・S3・CloudFront・API Gateway・Cloud Map・Secrets Manager・IAM・ECR・CloudWatch Logs）を操作する権限と、state 用バケットの読み書き権限が要る。
+- AWS の認証情報はコードや tfvars に書かず、AWS CLI のプロファイルから使う。plan / apply に使う IAM ユーザーには、ここで作るリソース（VPC・ECS・ALB・RDS・S3・CloudFront・API Gateway・Secrets Manager・IAM・ECR・CloudWatch Logs）を操作する権限と、state 用バケットの読み書き権限が要る。
 
 ## はじめての apply（通し手順）
 
@@ -323,8 +329,8 @@ aws ecs wait services-stable --cluster recipi-cluster --services recipi-api
 
 ## 学習用の運用とトレードオフ
 
-- **使うときだけ apply し、終わったら `terraform destroy` する**（通し手順の 11）。NAT Gateway・RDS・ECS・API Gateway の VPC Link などは、動いているだけで時間課金される。
-- ALB は使わない（固定費がかかるため）。入口は API Gateway HTTP API ＋ VPC Link ＋ Cloud Map。
+- **使うときだけ apply し、終わったら `terraform destroy` する**（通し手順の 11）。NAT Gateway・RDS（Multi-AZ の待機系を含む）・ECS・API Gateway の VPC Link などは、動いているだけで時間課金される。
+- 内部ALBは学習用の負荷分散・ヘルスチェックのために使用する。入口は API Gateway HTTP API ＋ VPC Link ＋ 内部ALB。検証しない期間は `terraform destroy` でALBの固定費も止める。
 - Container Insights は有効にしない（観測データごとの課金を避けるため）。
 - RDS は `skip_final_snapshot = true`・`deletion_protection = false`。destroy するとデータは消える（長く使う本番なら逆にする）。
 - 画像バケットは `force_destroy` を付けていない。destroy の前に中身を空にする（`aws s3 rm s3://<images_bucket> --recursive`）。

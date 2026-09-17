@@ -76,6 +76,10 @@ locals {
       pattern     = "{ $.log_type = \"access\" && $.status >= 500 }"
       metric_name = "Api5xxCount"
     }
+    "503" = {
+      pattern     = "{ $.log_type = \"access\" && $.status = 503 }"
+      metric_name = "Api503Count"
+    }
     # ログイン失敗（総当たりの気配を見る）
     "login-failure" = {
       pattern     = "{ $.log_type = \"audit\" && $.action = \"auth.login\" && $.outcome = \"failure\" }"
@@ -129,6 +133,13 @@ locals {
       period             = 300
       evaluation_periods = 1
       description        = "5 分間に 5xx が 5 件以上（サーバー内部エラーの急増）"
+    }
+    "503" = {
+      metric_name        = "Api503Count"
+      threshold          = 10
+      period             = 300
+      evaluation_periods = 1
+      description        = "5 分間に503が10件以上（過負荷または入口制御の見直しが必要）"
     }
     "login-failure" = {
       metric_name        = "LoginFailureCount"
@@ -231,6 +242,70 @@ resource "aws_cloudwatch_metric_alarm" "api_gateway_5xx" {
   ok_actions    = [aws_sns_topic.alerts.arn]
 }
 
+# --- アラーム（内部ALB） -------------------------------------------------------
+resource "aws_cloudwatch_metric_alarm" "alb_target_5xx" {
+  alarm_name          = "${var.project_name}-alb-target-5xx"
+  alarm_description   = "内部ALBのターゲットが5分間に5xxを5件以上返した"
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 5
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    LoadBalancer = aws_lb.api.arn_suffix
+    TargetGroup  = aws_lb_target_group.api.arn_suffix
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_hosts" {
+  alarm_name          = "${var.project_name}-alb-unhealthy-hosts"
+  alarm_description   = "内部ALBで異常なECSターゲットが2分間継続している"
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "UnHealthyHostCount"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 2
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    LoadBalancer = aws_lb.api.arn_suffix
+    TargetGroup  = aws_lb_target_group.api.arn_suffix
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "alb_target_response_time" {
+  alarm_name          = "${var.project_name}-alb-target-response-time"
+  alarm_description   = "内部ALBのターゲット平均応答時間が5分間300msを超えた"
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "TargetResponseTime"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0.3
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    LoadBalancer = aws_lb.api.arn_suffix
+    TargetGroup  = aws_lb_target_group.api.arn_suffix
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
 # --- アラーム（RDS） ----------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   alarm_name          = "${var.project_name}-rds-cpu-high"
@@ -265,6 +340,26 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage" {
   evaluation_periods  = 1
   comparison_operator = "LessThanThreshold"
   treat_missing_data  = "breaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.main.identifier
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "rds_connections" {
+  alarm_name          = "${var.project_name}-rds-connections-high"
+  alarm_description   = "RDS接続数がアプリ接続予算に達している"
+  namespace           = "AWS/RDS"
+  metric_name         = "DatabaseConnections"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 5
+  threshold           = var.rds_max_connections - var.rds_reserved_connections
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.identifier

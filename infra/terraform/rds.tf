@@ -1,7 +1,9 @@
-# RDS for PostgreSQL（private サブネット・シングル AZ）。
+# RDS for PostgreSQL（private サブネット・Multi-AZ）。
 #
 # - バージョンは要件定義書（docs/requirements/tech-stack.md）の PostgreSQL 18 に合わせる
 #   （ローカルの docker compose と同じメジャー）。マイナーは AWS が選ぶ。
+# - Multi-AZ を有効にし、別 AZ に待機系を置く。アプリは同じ RDS エンドポイントを使い、
+#   障害時の切り替えは AWS が行う（読み取り分散用のリードレプリカではない）。
 # - パスワードは書き込み専用の `password_wo` で渡し、tfstate に残さない（secrets.tf）。
 # - `skip_final_snapshot = true`・`deletion_protection = false` は、学習用で
 #   「使い終わるたびに destroy する」運用に合わせたもの。destroy するとデータは消える。
@@ -35,7 +37,7 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
-  multi_az               = false
+  multi_az               = var.rds_multi_az
 
   backup_retention_period = 1
   skip_final_snapshot     = true

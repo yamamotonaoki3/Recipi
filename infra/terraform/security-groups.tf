@@ -1,7 +1,8 @@
 # セキュリティグループ（通信の許可リスト）。
 #
 # 通信の流れ:
-#   API Gateway ─ VPC Link（vpclink SG）─ 8000 ─> ECS（ecs SG）─ 5432 ─> RDS（rds SG）
+#   API Gateway ─ VPC Link（vpclink SG）─ 8000 ─> ALB（alb SG）
+#                                      └─ 8000 ─> ECS（ecs SG）─ 5432 ─> RDS（rds SG）
 #
 # ルールを SG の中に直接書かず、aws_vpc_security_group_*_rule に分けている理由:
 # vpclink SG と ecs SG はお互いを参照し合う。SG の中に書くと「A を作るには B が要り、
@@ -9,7 +10,7 @@
 
 resource "aws_security_group" "vpclink" {
   name        = "${var.project_name}-vpclink"
-  description = "API Gateway VPC Link (to ECS only)"
+  description = "API Gateway VPC Link (to internal ALB)"
   vpc_id      = aws_vpc.main.id
   tags        = { Name = "${var.project_name}-vpclink" }
 }
@@ -21,6 +22,13 @@ resource "aws_security_group" "ecs" {
   tags        = { Name = "${var.project_name}-ecs" }
 }
 
+resource "aws_security_group" "alb" {
+  name        = "${var.project_name}-alb"
+  description = "Internal ALB for API"
+  vpc_id      = aws_vpc.main.id
+  tags        = { Name = "${var.project_name}-alb" }
+}
+
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds"
   description = "RDS PostgreSQL (from ECS only)"
@@ -28,9 +36,27 @@ resource "aws_security_group" "rds" {
   tags        = { Name = "${var.project_name}-rds" }
 }
 
-# --- VPC Link → ECS ------------------------------------------------------------
-resource "aws_vpc_security_group_egress_rule" "vpclink_to_ecs" {
+# --- VPC Link → ALB → ECS ------------------------------------------------------
+resource "aws_vpc_security_group_egress_rule" "vpclink_to_alb" {
   security_group_id            = aws_security_group.vpclink.id
+  referenced_security_group_id = aws_security_group.alb.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.app_port
+  to_port                      = var.app_port
+  description                  = "to internal ALB"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_from_vpclink" {
+  security_group_id            = aws_security_group.alb.id
+  referenced_security_group_id = aws_security_group.vpclink.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.app_port
+  to_port                      = var.app_port
+  description                  = "from API Gateway VPC Link"
+}
+
+resource "aws_vpc_security_group_egress_rule" "alb_to_ecs" {
+  security_group_id            = aws_security_group.alb.id
   referenced_security_group_id = aws_security_group.ecs.id
   ip_protocol                  = "tcp"
   from_port                    = var.app_port
@@ -38,13 +64,13 @@ resource "aws_vpc_security_group_egress_rule" "vpclink_to_ecs" {
   description                  = "to ECS app port"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "ecs_from_vpclink" {
+resource "aws_vpc_security_group_ingress_rule" "ecs_from_alb" {
   security_group_id            = aws_security_group.ecs.id
-  referenced_security_group_id = aws_security_group.vpclink.id
+  referenced_security_group_id = aws_security_group.alb.id
   ip_protocol                  = "tcp"
   from_port                    = var.app_port
   to_port                      = var.app_port
-  description                  = "from API Gateway VPC Link"
+  description                  = "from internal ALB"
 }
 
 # --- ECS → 外（HTTPS）と RDS ------------------------------------------------------
@@ -68,7 +94,7 @@ resource "aws_vpc_security_group_egress_rule" "ecs_to_rds" {
   description                  = "to RDS PostgreSQL"
 }
 
-# DNS（Cloud Map・AWS の名前解決）は VPC 内の DNS（VPC CIDR の +2）へ出る。
+# AWS の名前解決は VPC 内の DNS（VPC CIDR の +2）へ出る。
 resource "aws_vpc_security_group_egress_rule" "ecs_dns_udp" {
   security_group_id = aws_security_group.ecs.id
   cidr_ipv4         = var.vpc_cidr

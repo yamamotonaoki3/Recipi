@@ -34,7 +34,7 @@ variable "public_subnet_cidrs" {
 
 variable "private_subnet_cidrs" {
   type        = list(string)
-  description = "2 つの AZ に作る private サブネット（ECS・RDS・VPC Link を置く）の CIDR"
+  description = "2 つの AZ に作る private サブネット（ALB・ECS・RDS・VPC Link を置く）の CIDR"
   default     = ["10.20.10.0/24", "10.20.11.0/24"]
 
   validation {
@@ -55,10 +55,38 @@ variable "rds_instance_class" {
   default     = "db.t4g.micro"
 }
 
+variable "rds_multi_az" {
+  type        = bool
+  description = "RDS を Multi-AZ（プライマリ＋別AZの待機系）で構成するか"
+  default     = true
+}
+
 variable "rds_allocated_storage" {
   type        = number
   description = "RDS のストレージ容量（GB）"
   default     = 20
+}
+
+variable "rds_max_connections" {
+  type        = number
+  description = "RDS の max_connections（接続予算の検証に使う）"
+  default     = 110
+
+  validation {
+    condition     = var.rds_max_connections > 0
+    error_message = "rds_max_connections は 0 より大きくしてください。"
+  }
+}
+
+variable "rds_reserved_connections" {
+  type        = number
+  description = "定期ジョブ・マイグレーション・管理接続のためにRDSへ残す接続数"
+  default     = 30
+
+  validation {
+    condition     = var.rds_reserved_connections >= 0
+    error_message = "rds_reserved_connections は 0 以上にしてください。"
+  }
 }
 
 variable "ecs_task_cpu" {
@@ -77,6 +105,72 @@ variable "ecs_desired_count" {
   type        = number
   description = "ECS サービスで常に動かすタスクの数"
   default     = 1
+}
+
+variable "ecs_min_count" {
+  type        = number
+  description = "ECS Auto Scaling の最小タスク数"
+  default     = 1
+
+  validation {
+    condition     = var.ecs_min_count >= 1
+    error_message = "ecs_min_count は 1 以上にしてください。"
+  }
+}
+
+variable "ecs_max_count" {
+  type        = number
+  description = "ECS Auto Scaling の最大タスク数"
+  default     = 4
+
+  validation {
+    condition     = var.ecs_max_count >= 1
+    error_message = "ecs_max_count は 1 以上にしてください。"
+  }
+}
+
+variable "ecs_scale_cpu_target" {
+  type        = number
+  description = "ECS CPU使用率のスケール目標（%）"
+  default     = 70
+
+  validation {
+    condition     = var.ecs_scale_cpu_target > 0 && var.ecs_scale_cpu_target < 100
+    error_message = "ecs_scale_cpu_target は 0 より大きく 100 未満にしてください。"
+  }
+}
+
+variable "ecs_scale_memory_target" {
+  type        = number
+  description = "ECS メモリ使用率のスケール目標（%）"
+  default     = 70
+
+  validation {
+    condition     = var.ecs_scale_memory_target > 0 && var.ecs_scale_memory_target < 100
+    error_message = "ecs_scale_memory_target は 0 より大きく 100 未満にしてください。"
+  }
+}
+
+variable "db_pool_size" {
+  type        = number
+  description = "1 ECSタスクあたりのDB接続プール本数"
+  default     = 10
+
+  validation {
+    condition     = var.db_pool_size >= 1
+    error_message = "db_pool_size は 1 以上にしてください。"
+  }
+}
+
+variable "db_max_overflow" {
+  type        = number
+  description = "1 ECSタスクあたりのDB接続プールの一時追加本数"
+  default     = 10
+
+  validation {
+    condition     = var.db_max_overflow >= 0
+    error_message = "db_max_overflow は 0 以上にしてください。"
+  }
 }
 
 variable "backend_image_tag" {
