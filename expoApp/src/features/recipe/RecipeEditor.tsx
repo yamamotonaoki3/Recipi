@@ -158,11 +158,20 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
     return items.filter((item) => item.text.trim().length > 0);
   }
 
+  function proofreadSectionForId(id: string): string {
+    if (id === "title") return "タイトル";
+    if (id === "description") return "説明";
+    if (state.steps.some((step) => step.localId === id)) return "手順";
+    return "材料";
+  }
+
   async function handleProofread() {
     proofreadAbort.current?.abort();
     const controller = new AbortController();
     proofreadAbort.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 20_000);
+    // サーバーはタイトル・説明・材料・手順を小分けにして順に校正する。各呼び出しは
+    // 15秒で止まるが、全体の完了を待つためクライアント側は60秒まで待機する。
+    const timeout = setTimeout(() => controller.abort(), 60_000);
     setProofreadBusy(true);
     setProofreadCompleted(false);
     setProofreadMessage(null);
@@ -763,6 +772,7 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
                   onIgnore={ignoreOne}
                   onApplyAll={applyAll}
                   onIgnoreAll={() => setProofreadSuggestions([])}
+                  sectionForId={proofreadSectionForId}
                 />
               )}
             {proofreadSuggestions.length > 0 && (
@@ -772,6 +782,7 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
                 onIgnore={ignoreOne}
                 onApplyAll={applyAll}
                 onIgnoreAll={() => setProofreadSuggestions([])}
+                sectionForId={proofreadSectionForId}
               />
             )}
             {!proofreadBusy && !proofreadCompleted && proofreadMessage === null && (

@@ -133,6 +133,18 @@ ollama run qwen3.5:9b
 ollama ps
 ```
 
+実モデルの校正品質は、Ollamaを起動した状態で次の固定ケースを実行して確認する。
+このスクリプトは外部AIを使うためCIでは実行しない。
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m scripts.evaluate_ai_proofread
+```
+
+固定ケースは `backend/tests/data/ai_proofread_quality_cases.json` に置く。明らかな
+誤字・正しい文章・材料の分量と単位・本文内の指示文を含め、候補の `original` が
+入力と完全一致することはAPI側でも検証する。
+
 ホストでバックエンドを起動する場合は `OLLAMA_BASE_URL=http://localhost:11434`、
 Dockerの `api` からホストOllamaへ接続する場合は
 `OLLAMA_BASE_URL=http://host.docker.internal:11434` を使用する。Ollama未起動・
