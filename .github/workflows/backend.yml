@@ -34,6 +34,18 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
 
+  container-smoke:
+    needs: changes
+    # Dockerfile・.dockerignoreを含むbackend変更時だけ、本番イメージの起動契約を確認する。
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 本番Dockerイメージをビルドして起動確認する
+        shell: pwsh
+        run: ./backend/scripts/container_smoke_test.ps1
+
   test:
     needs: changes
     # 判定が「対象の変更なし」のときだけ飛ばす。判定が失敗・未完了なら安全側で走らせる。

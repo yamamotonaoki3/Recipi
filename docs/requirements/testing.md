@@ -77,7 +77,7 @@
 
 | ワークフロー      | トリガー                                                              | 内容                                                                                                                                                                                                                                      |
 | ----------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend.yml`     | `backend/**` を含む push / PR                                         | ruff（lint・format）→ mypy → Alembic マイグレーション → pytest（単体 ＋ 結合を 1 回で実行。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ `check_coverage.py` で行・分岐の下限を判定 → PR にカバレッジをコメント（#86） |
+| `backend.yml`     | `backend/**` を含む push / PR                                         | Dockerイメージのビルド・非root起動・`/healthz`確認 → ruff（lint・format）→ mypy → Alembic マイグレーション → pytest（単体 ＋ 結合を 1 回で実行。`services: postgres` ＋ MinIO コンテナ、`.env.test` は CI で生成）→ `check_coverage.py` で行・分岐の下限を判定 → PR にカバレッジをコメント（#86） |
 | `frontend-ts.yml` | `expoApp/**` を含む push / PR                                         | `checks` ジョブ: ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、`--coverage` で行・分岐の下限を判定）→ Web ビルド（`npm run build:web`）                                                                                |
 | `contract.yml`    | backend / `openapi.json` / 生成設定の変更                             | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後）                                                                                                                                  |
 | `e2e.yml`         | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行 → E2E データの後始末（`cleanup_e2e.py`、残数 0 を確認）                                                                                            |
@@ -101,7 +101,7 @@
 - **本番は AWS**（[architecture.md](architecture.md) §本番デプロイ）。backend のデプロイは **手動実行のワークフロー** `.github/workflows/deploy-backend.yml`（Issue #167）で行う。ECR への push → タスク定義の更新 → マイグレーション → ECS サービスの更新 → `/healthz`・`/healthz/db` の確認までを 1 回で行い、失敗したら前のタスク定義に戻す。
 - **main への push で自動デプロイはしない**（学習用で、確認するときだけ環境を立てて後で destroy する運用のため）。**マージの必須チェックは従来の 5 件のまま**で、デプロイのワークフローは含めない。
 - 通常の CI 側は引き続きビルド / パッケージ検証を行う:
-  - backend: Docker イメージの `build` が通ること。
+- backend: Docker イメージの `build`、非rootユーザーでの起動、`/healthz` が通ること。`backend/.dockerignore` は環境ファイル・テスト成果物・仮想環境をビルドコンテキストから除外する。
   - frontend: `expo export`（Web ビルド）＋ `tauri build`（未署名デスクトップパッケージ）のスモーク。
 - `infra/**` を変更する PR では Terraform の `fmt -check` / `validate`（`.github/workflows/terraform.yml`）。AWS には接続せず、`apply` もしない。
 - frontend は配布物（`.msi` 等）を手動ワークフローの artifact として取り出す運用で、ストア配布は対象外。
