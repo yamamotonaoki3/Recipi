@@ -49,7 +49,9 @@ export function ProofreadPanel({
               <Text className="text-sm text-neutral-700">
                 {suggestion.original} → {suggestion.corrected}
               </Text>
-              {suggestion.note && <Text className="text-xs text-neutral-500">{suggestion.note}</Text>}
+              {suggestion.note && (
+                <Text className="text-xs text-neutral-500">{suggestion.note}</Text>
+              )}
               <View className="flex-row gap-2">
                 <Pressable
                   testID={`proofread-apply-${suggestion.id}`}

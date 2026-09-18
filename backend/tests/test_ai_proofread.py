@@ -427,16 +427,17 @@ def test_dictionary_does_not_suggest_a_correct_non_recipe_use() -> None:
     )
 
     assert hints == []
-    assert dictionary_suggestions(
-        [ProofreadItem(id="description", kind="description", text="この料理の訳を読む。")]
-    ) == []
+    assert (
+        dictionary_suggestions(
+            [ProofreadItem(id="description", kind="description", text="この料理の訳を読む。")]
+        )
+        == []
+    )
 
 
 def test_dictionary_returns_a_verified_recipe_context_suggestion() -> None:
     """食材を焼く文脈の変換ミスは、LLMが見落としても候補として返す。"""
-    suggestions = dictionary_suggestions(
-        [ProofreadItem(id="step", kind="step", text="肉を訳。")]
-    )
+    suggestions = dictionary_suggestions([ProofreadItem(id="step", kind="step", text="肉を訳。")])
 
     assert len(suggestions) == 1
     assert suggestions[0].original == "肉を訳。"
