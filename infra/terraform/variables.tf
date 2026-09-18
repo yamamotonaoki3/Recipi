@@ -184,6 +184,12 @@ variable "cors_allow_origins" {
   default     = "tauri://localhost,http://tauri.localhost"
 }
 
+variable "enable_anthropic_proofread" {
+  type        = bool
+  description = "Anthropic APIキーをECSタスクへ注入し、AI校正を本番で有効化するか。Secretへ値を登録してからtrueにする"
+  default     = false
+}
+
 variable "api_throttle_rate_limit" {
   type        = number
   description = "API Gateway の 1 秒あたりの平均リクエスト数の上限"

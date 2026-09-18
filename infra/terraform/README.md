@@ -37,6 +37,54 @@ VPC 2AZ: public x2（IGW・NAT 1 つ） / private x2（ALB・ECS・RDS Multi-AZ�
 - `terraform.tfvars`・`backend.hcl`・`*.tfstate*`・`*.tfplan`・`.terraform/` はコミットしない（`.gitignore` 済み）。plan の出力もログや CI に貼らない。
 - AWS の認証情報はコードや tfvars に書かず、AWS CLI のプロファイルから使う。plan / apply に使う IAM ユーザーには、ここで作るリソース（VPC・ECS・ALB・RDS・S3・CloudFront・API Gateway・Secrets Manager・IAM・ECR・CloudWatch Logs）を操作する権限と、state 用バケットの読み書き権限が要る。
 
+### Anthropic APIキーを有効化する（AI校正）
+
+APIキーの**値**は Terraform・`terraform.tfvars`・Git・チャットに書かない。Terraform は
+Secrets Manager の空のコンテナ（`recipi/anthropic-api-key`）だけを作り、ECS には Secret の
+ARN だけを渡す。値を登録する人と、Terraform を実行する人を分けてもよい。
+
+#### 1. Terraform でSecretコンテナを作る
+
+本体の初回 apply 前なら通常の `terraform apply` に含まれる。既に本体を作成済みなら、
+次だけを実行して空のコンテナを作る。
+
+```bash
+terraform apply -target=aws_secretsmanager_secret.anthropic_api_key
+```
+
+この時点では `enable_anthropic_proofread` を `true` にしてはいけない。Secret に値が無い
+状態でECSが参照すると、タスクが起動できなくなる。
+
+#### 2. Anthropic ConsoleとAWS Consoleで値を登録する（利用者が行う）
+
+1. Anthropic Consoleで、Recipi本番専用のAPIキーを作成する。キーは作成時にだけ控え、他の用途と共有しない。
+2. AWS Consoleを **ap-northeast-1（東京）** に切り替える。
+3. Secrets Manager → `recipi/anthropic-api-key` → 「Retrieve secret value」→「Edit」を開く。
+4. Secret typeは**プレーンテキスト**のままにし、値としてAPIキーだけを貼り付けて保存する。JSONや `ANTHROPIC_API_KEY=` の接頭辞は付けない。
+5. APIキーをGit・`terraform.tfvars`・`.env.production`・Issue・PRコメント・チャットへ貼らない。
+6. 保存後は、キー値ではなく「登録完了」とだけ連絡する。
+
+#### 3. ECSへの注入を有効化する（Secret登録後）
+
+Secretに値を登録した後でのみ、`terraform.tfvars` に次を追加する。
+
+```hcl
+enable_anthropic_proofread = true
+```
+
+必ず先に `terraform plan` を確認する。ECSタスク定義の `secrets` に
+`ANTHROPIC_API_KEY` が追加され、タスク実行ロールの `secretsmanager:GetSecretValue` が
+このSecret ARNだけに広がることを確認してから apply する。Secretの**値**は plan / state
+/ ECSタスク定義には現れない。
+
+```bash
+terraform plan
+terraform apply
+```
+
+apply後は `/healthz` を確認し、認証済みの `POST /api/v1/ai/proofread` で実モデルの校正を
+確認する。失敗時はAI校正だけが `503 AI_UNAVAILABLE` になり、レシピ保存は利用できる。
+
 ## はじめての apply（通し手順）
 
 > **先にリージョンをそろえる**。この手順の `aws` コマンドはすべて **ap-northeast-1**（東京）を前提にしている。AWS CLI のプロファイルの既定リージョンが違う（または設定されていない）と、別のリージョンを見に行って「クラスタが無い」等で失敗する。ターミナルで一度だけ次を実行しておく。
