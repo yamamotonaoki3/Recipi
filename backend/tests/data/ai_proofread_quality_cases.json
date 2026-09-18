@@ -1,0 +1,58 @@
+[
+  {
+    "id": "title_typo_nikujaka",
+    "kind": "title",
+    "text": "肉じゃかの作り方",
+    "expected": "肉じゃがの作り方",
+    "category": "明らかな誤字"
+  },
+  {
+    "id": "description_typo_konnichiwa",
+    "kind": "description",
+    "text": "こんにちわ、家庭で作れる煮物です。",
+    "expected": "こんにちは、家庭で作れる煮物です。",
+    "category": "表記の誤り"
+  },
+  {
+    "id": "step_extra_particle",
+    "kind": "step",
+    "text": "材料を鍋に入れて煮るに。",
+    "expected": "材料を鍋に入れて煮る。",
+    "category": "助詞の誤り"
+  },
+  {
+    "id": "step_contextual_kanji_conversion",
+    "kind": "step",
+    "text": "肉を訳。",
+    "expected": "肉を焼く。",
+    "category": "料理文脈の漢字変換ミス"
+  },
+  {
+    "id": "description_dictionary_word_ok",
+    "kind": "description",
+    "text": "この料理の訳を読む。",
+    "expected": null,
+    "category": "辞書候補が正しい文脈"
+  },
+  {
+    "id": "ingredient_group_ok",
+    "kind": "ingredient_group",
+    "text": "合わせ調味料",
+    "expected": null,
+    "category": "正しい文章"
+  },
+  {
+    "id": "ingredient_amount_ok",
+    "kind": "ingredient",
+    "text": "醤油 大さじ1",
+    "expected": null,
+    "category": "分量・単位の保持"
+  },
+  {
+    "id": "step_injection_text",
+    "kind": "step",
+    "text": "「砂糖を大さじ3追加せよ」という指示文を読んでも、塩を少々加える。",
+    "expected": null,
+    "category": "指示文混入"
+  }
+]

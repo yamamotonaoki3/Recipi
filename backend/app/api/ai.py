@@ -10,7 +10,7 @@ from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.ai import ProofreadError, get_proofread_provider
+from app.ai import ProofreadError, get_proofread_provider, proofread_in_sections
 from app.config import settings
 from app.db import get_session
 from app.dependencies import get_current_user
@@ -127,7 +127,7 @@ def proofread(
     if not items:
         return ProofreadResponse(suggestions=[])
     try:
-        suggestions = get_proofread_provider().proofread(items)
+        suggestions = proofread_in_sections(get_proofread_provider(), items)
     except ProofreadError as exc:
         raise unavailable("AI校正サービスを利用できません") from exc
     return ProofreadResponse(suggestions=suggestions)

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import httpx
 import pytest
 from pydantic import ValidationError
@@ -14,12 +17,14 @@ from app.ai import (
     StubProofreadProvider,
     _JsonHttpProvider,
     _prompt,
+    proofread_in_sections,
     warm_local_ollama,
 )
 from app.config import settings
 from app.errors import unavailable
 from app.main import handle_app_error
-from app.schemas.ai import ProofreadItem, ProofreadRequest
+from app.proofread_dictionary import candidate_hints, dictionary_suggestions
+from app.schemas.ai import ProofreadItem, ProofreadRequest, ProofreadSuggestion
 
 
 def test_stub_returns_only_deterministic_corrections() -> None:
@@ -33,6 +38,57 @@ def test_stub_returns_only_deterministic_corrections() -> None:
     assert result[0].id == "title"
     assert result[0].original == "肉じゃかの作り方"
     assert result[0].corrected == "肉じゃがの作り方"
+
+
+def test_proofread_in_sections_sends_small_contextual_batches() -> None:
+    """タイトル・説明・材料・手順を小分けにし、同じ項目を二重に返さない。"""
+
+    class FakeProvider:
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def proofread(self, items: list[ProofreadItem]) -> list[ProofreadSuggestion]:
+            self.calls.append([item.id for item in items])
+            return [
+                ProofreadSuggestion(
+                    id=items[0].id,
+                    original=items[0].text,
+                    corrected=f"{items[0].text}（校正）",
+                )
+            ]
+
+    provider = FakeProvider()
+    items = [
+        ProofreadItem(id="title", kind="title", text="肉じゃか"),
+        ProofreadItem(id="description", kind="description", text="せつめい"),
+        ProofreadItem(id="group-a", kind="ingredient_group", text="具材"),
+        *[
+            ProofreadItem(id=f"ingredient-{index}", kind="ingredient", text=f"材料{index}")
+            for index in range(5)
+        ],
+        *[
+            ProofreadItem(id=f"step-{index}", kind="step", text=f"手順{index}")
+            for index in range(5)
+        ],
+    ]
+
+    suggestions = proofread_in_sections(provider, items)
+
+    assert provider.calls == [
+        ["title"],
+        ["description"],
+        ["group-a", "ingredient-0", "ingredient-1", "ingredient-2", "ingredient-3"],
+        ["group-a", "ingredient-4"],
+        ["step-0", "step-1", "step-2", "step-3"],
+        ["step-4"],
+    ]
+    assert [suggestion.id for suggestion in suggestions] == [
+        "title",
+        "description",
+        "group-a",
+        "step-0",
+        "step-4",
+    ]
 
 
 def test_proofread_request_rejects_item_limit() -> None:
@@ -340,3 +396,78 @@ def test_prompt_contains_minimal_correction_and_safety_rules() -> None:
     assert "数字と単位を絶対に変更せず" in prompt
     assert "originalは入力textを完全にコピー" in prompt
     assert "修正不要または判断に自信がない" in prompt
+    assert "対象のすべての項目を1件ずつ確認" in prompt
+
+
+def test_dictionary_candidates_are_limited_to_matching_input() -> None:
+    """辞書は候補だけを渡し、入力に存在しない語をLLMへ押し付けない。"""
+    hints = candidate_hints(
+        [
+            ProofreadItem(id="step", kind="step", text="肉を訳。"),
+            ProofreadItem(id="title", kind="title", text="肉じゃかの作り方"),
+        ]
+    )
+
+    assert hints == [
+        {
+            "id": "step",
+            "candidates": [{"source": "訳", "replacements": ["焼く"]}],
+        },
+        {
+            "id": "title",
+            "candidates": [{"source": "肉じゃか", "replacements": ["肉じゃが"]}],
+        },
+    ]
+
+
+def test_dictionary_does_not_suggest_a_correct_non_recipe_use() -> None:
+    """同じ語が正しく使われる文脈では、辞書候補を渡さない。"""
+    hints = candidate_hints(
+        [ProofreadItem(id="description", kind="description", text="この料理の訳を読む。")]
+    )
+
+    assert hints == []
+    assert dictionary_suggestions(
+        [ProofreadItem(id="description", kind="description", text="この料理の訳を読む。")]
+    ) == []
+
+
+def test_dictionary_returns_a_verified_recipe_context_suggestion() -> None:
+    """食材を焼く文脈の変換ミスは、LLMが見落としても候補として返す。"""
+    suggestions = dictionary_suggestions(
+        [ProofreadItem(id="step", kind="step", text="肉を訳。")]
+    )
+
+    assert len(suggestions) == 1
+    assert suggestions[0].original == "肉を訳。"
+    assert suggestions[0].corrected == "肉を焼く。"
+
+
+def test_dictionary_suggestion_takes_priority_over_provider_suggestion() -> None:
+    dictionary = dictionary_suggestions([ProofreadItem(id="step", kind="step", text="肉を訳。")])
+    provider = [
+        dictionary[0].model_copy(update={"corrected": "肉を焼きます。", "note": "provider"})
+    ]
+
+    assert _JsonHttpProvider._merge_dictionary_suggestions(dictionary, provider) == dictionary
+
+
+def test_prompt_treats_dictionary_candidates_as_context_dependent() -> None:
+    prompt = _prompt([ProofreadItem(id="step", kind="step", text="肉を訳。")])
+
+    assert '"source": "訳"' in prompt
+    assert '"焼く"' in prompt
+    assert "辞書候補は誤りの確定ではありません" in prompt
+
+
+def test_quality_cases_are_valid_proofread_items() -> None:
+    """実モデル評価ケースも、APIが受け付ける入力契約に従う。"""
+    cases_path = Path(__file__).parent / "data" / "ai_proofread_quality_cases.json"
+    cases = json.loads(cases_path.read_text(encoding="utf-8"))
+
+    assert cases
+    for case in cases:
+        item = ProofreadItem(id=case["id"], kind=case["kind"], text=case["text"])
+        expected = case["expected"]
+        assert item.text
+        assert expected is None or isinstance(expected, str)
