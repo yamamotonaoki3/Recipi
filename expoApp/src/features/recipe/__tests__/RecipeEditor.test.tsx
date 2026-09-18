@@ -12,6 +12,7 @@ import * as recipeApi from "../api";
 import { ApiError } from "@/features/auth/api";
 import * as imageApi from "@/features/image/api";
 import { RecipeEditor } from "../RecipeEditor";
+import * as proofreadApi from "../proofread";
 
 const mockReplace = jest.fn();
 const mockDismissTo = jest.fn();
@@ -44,6 +45,7 @@ jest.mock("../api", () => {
 });
 
 jest.mock("@/features/image/api", () => ({ uploadImage: jest.fn() }));
+jest.mock("../proofread", () => ({ proofreadRecipe: jest.fn() }));
 
 /**
  * セーフエリアはテストごとに差し替えたいので、この spec だけ `jest.setup.js` の
@@ -73,6 +75,7 @@ const mockGetUnits = recipeApi.getUnits as jest.Mock;
 const mockCreateRecipe = recipeApi.createRecipe as jest.Mock;
 const mockUploadImage = imageApi.uploadImage as jest.Mock;
 const mockLaunchLibrary = ImagePicker.launchImageLibraryAsync as jest.Mock;
+const mockProofreadRecipe = proofreadApi.proofreadRecipe as jest.Mock;
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -99,6 +102,16 @@ async function fillMinimalRecipe(getByTestId: (id: string) => { props: unknown }
   await fireEvent.changeText(getByTestId("editor-title") as never, "肉じゃが");
   await fireEvent.changeText(getByTestId("g0-i0-name") as never, "じゃがいも");
   await fireEvent.changeText(getByTestId("step-0-body") as never, "切って煮る");
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 describe("RecipeEditor（作成）", () => {
@@ -523,6 +536,87 @@ describe("RecipeEditor（作成）", () => {
 
     await fireEvent.press(getByTestId("editor-discard-dialog-confirm"));
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
+  });
+});
+
+describe("RecipeEditor（AI校正の非同期ガード・Issue #203）", () => {
+  it("構造変更後に古い成功応答の修正案を復活させず、再チェックできる", async () => {
+    const pending = deferred<proofreadApi.ProofreadSuggestion[]>();
+    mockProofreadRecipe.mockReturnValue(pending.promise);
+    const { getByTestId, queryByTestId, findByTestId } = await render(
+      <RecipeEditor mode="create" />,
+      { wrapper },
+    );
+
+    await fireEvent.changeText(getByTestId("editor-title"), "肉じゃか");
+    void fireEvent.press(getByTestId("editor-proofread"));
+    await waitFor(() => expect(mockProofreadRecipe).toHaveBeenCalledTimes(1));
+    expect(getByTestId("editor-proofread").props.accessibilityState?.disabled).toBe(true);
+
+    // 手順を追加すると、リクエストを開始した時点の項目構成とは一致しなくなる。
+    await fireEvent.press(getByTestId("editor-add-step"));
+    expect(await findByTestId("proofread-message")).toHaveTextContent(
+      "項目の構成が変わったため、修正案を破棄しました。もう一度チェックしてください",
+    );
+
+    await act(async () => {
+      pending.resolve([
+        { id: "title", original: "肉じゃか", corrected: "肉じゃが", changed: true },
+      ]);
+    });
+
+    await waitFor(() =>
+      expect(getByTestId("editor-proofread").props.accessibilityState?.disabled).toBeFalsy(),
+    );
+    expect(queryByTestId("proofread-suggestion-title")).toBeNull();
+  });
+
+  it("構造変更後に古い失敗応答が専用エラーを上書きしない", async () => {
+    const pending = deferred<proofreadApi.ProofreadSuggestion[]>();
+    mockProofreadRecipe.mockReturnValue(pending.promise);
+    const { getByTestId, findByTestId } = await render(<RecipeEditor mode="create" />, {
+      wrapper,
+    });
+
+    void fireEvent.press(getByTestId("editor-proofread"));
+    await waitFor(() => expect(mockProofreadRecipe).toHaveBeenCalledTimes(1));
+    await fireEvent.press(getByTestId("editor-add-step"));
+
+    await act(async () => {
+      pending.reject(new Error("network down"));
+    });
+
+    expect(await findByTestId("proofread-message")).toHaveTextContent(
+      "項目の構成が変わったため、修正案を破棄しました。もう一度チェックしてください",
+    );
+  });
+
+  it("同じ操作が重複して届いても、古い応答は後発の実行中状態を解除しない", async () => {
+    const first = deferred<proofreadApi.ProofreadSuggestion[]>();
+    const second = deferred<proofreadApi.ProofreadSuggestion[]>();
+    mockProofreadRecipe.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { getByTestId, queryByTestId } = await render(<RecipeEditor mode="create" />, {
+      wrapper,
+    });
+
+    const proofreadButton = getByTestId("editor-proofread");
+    await act(async () => {
+      // DOMイベントがReactの再描画より先に重複して届く状況を直接再現する。
+      void fireEvent.press(proofreadButton);
+      void fireEvent.press(proofreadButton);
+    });
+    expect(mockProofreadRecipe).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      first.resolve([{ id: "title", original: "古い", corrected: "古い結果", changed: true }]);
+    });
+    expect(getByTestId("editor-proofread").props.accessibilityState?.disabled).toBe(true);
+    expect(queryByTestId("proofread-suggestion-title")).toBeNull();
+
+    await act(async () => {
+      second.resolve([{ id: "title", original: "新しい", corrected: "新しい結果", changed: true }]);
+    });
+    await waitFor(() => expect(getByTestId("proofread-suggestion-title")).toBeTruthy());
   });
 });
 
