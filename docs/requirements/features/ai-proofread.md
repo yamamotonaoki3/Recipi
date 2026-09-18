@@ -12,13 +12,15 @@
 
 バックエンドに校正サービスの抽象を置き、`AI_PROVIDER` 環境変数で実装を切り替える（[tech-stack.md](../tech-stack.md) の「AI 連携」）。
 
-- **development** (`AI_PROVIDER=local`): Ollama（既定 `qwen2.5:3b-instruct`）。
+- **development** (`AI_PROVIDER=local`): Ollama（既定 `qwen3.5:9b`、GPU推論）。
 - **production** (`AI_PROVIDER=anthropic`): Anthropic API（`claude-haiku-4-5-20251001`）。
 - **test** (`AI_PROVIDER=stub`): 決定的なダミー。
 
 **API のリクエスト / レスポンス形はプロバイダに依存しない。** ローカルの小型モデルはクラウドより精度が落ちるため、同じ入力でも development と production で結果が変わりうる（「提案」なので許容）。
 
 校正方針（プロンプト / モデル指示）: 「日本語の誤字脱字・送り仮名・明らかな変換ミスのみ最小限に修正する。意味・分量・固有名詞・言い回し・レシピの内容は変えない。」
+
+development ではバックエンド起動時に Ollama へ空の生成リクエストを送り、モデルをウォームアップする。既定の `OLLAMA_KEEP_ALIVE=-1m` により、通常の校正リクエスト後もモデルは GPU メモリに常駐する。Ollama が使えない場合でもアプリ全体は起動し、校正 API のみが正規の `503 AI_UNAVAILABLE` を返す。
 
 ## 3. 画面・UI
 
@@ -106,11 +108,15 @@
 - [ ] `AI_PROVIDER=stub` でモデルも API キーも無しにテストが通る
 - [ ] `AI_PROVIDER=local` と `=anthropic` を同じ API 契約で切り替えられる
 
+実モデル検証では、`qwen3.5:9b` が空白だけを変更する候補を返す場合が確認された。
+そのため、入力文字列との一致確認に加え、空白の差分だけである候補も破棄する。
+これはモデルの品質を補う安全策であり、最終的な修正適用は利用者の操作で行う。
+
 ## 8. 未確定・メモ
 
 すべて Phase 11 着手前 or 実装時（→ [todo.md](../todo.md) #45）:
 
-- ~~dev のローカルモデル選定（Ollama モデル / HuggingFace の日本語 GEC モデル / llama-cpp）と実行方式（compose サービス vs in-process）、必要リソース~~ **確定**: Ollamaの別コンテナ、既定モデル `qwen2.5:3b-instruct`
+- ~~dev のローカルモデル選定（Ollama モデル / HuggingFace の日本語 GEC モデル / llama-cpp）と実行方式（compose サービス vs in-process）、必要リソース~~ **確定**: Ollamaの別コンテナ、既定モデル `qwen3.5:9b`、NVIDIA GPU推論
 - 校正プロンプトの設計、`note` を返すか
 - ~~レート制限の閾値、`ai_usage` テーブルの要否、コスト予算~~ **確定**: `ai_usage` によるユーザー単位20回/時・100回/日
 - ~~対象フィールドの追加検討（タイトル・説明・手順本文・材料名は §1・§3 のとおり確定。材料グループ名を対象に加えるかは未確定）~~ **確定**: 材料グループ名も対象に含める

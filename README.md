@@ -95,7 +95,7 @@ source .venv/bin/activate
 #   .\.venv\Scripts\Activate.ps1
 
 pip install -r requirements.txt -r requirements-dev.txt
-alembic upgrade head            # DB マイグレーション適用
+# development では起動時に alembic upgrade head を自動実行する
 uvicorn app.main:app --reload   # http://localhost:8000
 ```
 

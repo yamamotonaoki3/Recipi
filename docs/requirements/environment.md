@@ -68,7 +68,9 @@
 | `PASSWORD_RESET_ATTEMPT_RETENTION_DAYS` | パスワード再設定の試行記録（成功した request を含む。メール・IP を持つ）の保持日数 | fixed（目安） | `1` | 1 以上。レート制限が数えるのは直近 15 分だけなので 1 日で足りる。Issue #85 |
 | `ANTHROPIC_API_KEY` | Anthropic API キー（**Phase 11・production のみ**） | secret | （`.env.production.example` では空） | 本番のシークレット管理で注入。dev/test では未設定 |
 | `ANTHROPIC_MODEL` | 本番Anthropicモデル | per-env | `claude-haiku-4-5-20251001` | モデルIDを固定し、変更時は品質・コストを再検証 |
-| `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | developmentのOllama接続先・モデル | local | `http://localhost:11434` / `qwen2.5:3b-instruct` | `AI_PROVIDER=local` のときだけ使用 |
+| `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | developmentのOllama接続先・モデル | local | `http://localhost:11434` / `qwen3.5:9b` | `AI_PROVIDER=local` のときだけ使用。GPU推論を推奨 |
+| `OLLAMA_KEEP_ALIVE` | Ollamaがモデルをメモリに保持する時間 | local | `-1m` | Ollama 0.34系での無期限常駐値。PCのGPUメモリを解放したい場合は `5m` などに変更 |
+| `OLLAMA_WARMUP_TIMEOUT_SECONDS` | development起動時のモデル読み込みのタイムアウト（秒） | local | `60` | 起動時に空の生成リクエストでモデルを読み込む。失敗してもAPIは起動し、校正時に503 |
 | `AI_PROVIDER_TIMEOUT_SECONDS` | AIプロバイダのタイムアウト | per-env | `15` | 超過時は503 |
 | `AI_HOURLY_LIMIT` / `AI_DAILY_LIMIT` | ユーザー単位のAI校正回数上限 | per-env | `20` / `100` | `ai_usage`でECSタスク間共有 |
 
@@ -90,6 +92,12 @@
 - **`.env.demo.example`**: README用デモ環境のテンプレート。`.env.development` の秘密値をコピーして使い、`APP_ENV=demo` と DB 名 `recipi_demo` だけを分離する。`backend/scripts/seed_demo.py` はこの環境以外で実行できない。
 - **`.env.test.example`**: `APP_ENV=test` / `AI_PROVIDER=stub` / テスト用 DB・ストレージのプレースホルダ。
 - **`.env.production.example`**: `APP_ENV=production` / `AI_PROVIDER=anthropic` / `ANTHROPIC_API_KEY=`（空）。`MINIO_ROOT_*` は書かない（本番は S3 互換のマネージドを想定）。
+
+### development 起動時の初期化
+
+- `APP_ENV=development` でバックエンドを起動すると、最初に `alembic upgrade head` を実行する。migration に失敗した場合は古いスキーマで API を提供せず、起動を失敗させる。
+- 同じ条件で `AI_PROVIDER=local` のときは、Ollama の `qwen3.5:9b` を起動時にウォームアップし、`OLLAMA_KEEP_ALIVE=-1m` で GPU メモリに常駐させる。Ollama が停止中・タイムアウト時もレシピ編集や保存は使える。AI 校正だけが `503 AI_UNAVAILABLE` になる。
+- `test` / `demo` / `production` は自動 migration・ローカル Ollama の対象外。test は fixture、demo は手動手順、production はデプロイ時の migration タスクを使う。
 
 ### `expoApp/`（frontend-ts 用・作成済み）
 
@@ -113,6 +121,23 @@
   - **クライアント → バックエンド / 画像**（`EXPO_PUBLIC_API_BASE_URL` / `S3_PUBLIC_URL_BASE`。API が返す画像 URL もこれで組み立てる）: 開発マシンをどう指すかに合わせる。Web / デスクトップ / iOS シミュレータは `localhost`、**Android エミュレータは `10.0.2.2`、実機は開発マシンの LAN IP**。`EXPO_PUBLIC_API_BASE_URL` と `S3_PUBLIC_URL_BASE` は**必ず同じホスト表記に揃える**。
   - Android エミュレータでの E2E など、`localhost` が使えない実行では両方を `10.0.2.2` にした `.env` を用意する。
 - **標準の開発フロー**: compose は `postgres` / `minio` だけ起動し、バックエンドは `uvicorn --reload` でホスト実行（高速な反復のため）。`api` サービスはフルスタック実行・E2E 用。
+
+### ローカルAI校正の確認手順
+
+OllamaはWindowsホストで起動し、GPUが利用されていることを `ollama ps` の
+`PROCESSOR` 列で確認する。モデルは次のとおり。
+
+```powershell
+ollama pull qwen3.5:9b
+ollama run qwen3.5:9b
+ollama ps
+```
+
+ホストでバックエンドを起動する場合は `OLLAMA_BASE_URL=http://localhost:11434`、
+Dockerの `api` からホストOllamaへ接続する場合は
+`OLLAMA_BASE_URL=http://host.docker.internal:11434` を使用する。Ollama未起動・
+通信失敗・15秒超過時は、レシピ編集を妨げずAPIが `503 AI_UNAVAILABLE` を返す。
+校正結果は自動適用せず、画面で確認してから適用する。
 
 ## 5. CI（GitHub Actions）でのテスト用の値
 

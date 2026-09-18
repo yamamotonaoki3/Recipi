@@ -222,7 +222,15 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = Field(default="")
     ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "qwen2.5:3b-instruct"
+    # Qwen 3.5 9B。Ollamaの配布版はGPUで動かす量子化モデル（約6.6GB）。
+    OLLAMA_MODEL: str = "qwen3.5:9b"
+    # Ollama がモデルをメモリから退避するまでの時間。Ollama 0.34系では -1m が
+    # 無期限常駐を表す（単位なしの -1 は API が 400 にする）。
+    # development の起動時ウォームアップと通常の校正リクエストの両方で使う。
+    OLLAMA_KEEP_ALIVE: str = "-1m"
+    # 起動時のモデル読み込みだけは通常の校正より余裕を持たせる。失敗しても API は起動し、
+    # 校正リクエスト時に AI_UNAVAILABLE (503) を返す。
+    OLLAMA_WARMUP_TIMEOUT_SECONDS: float = Field(default=60.0, gt=0, le=120)
     AI_PROVIDER_TIMEOUT_SECONDS: float = Field(default=15.0, gt=0, le=60)
     AI_HOURLY_LIMIT: int = Field(default=20, ge=1)
     AI_DAILY_LIMIT: int = Field(default=100, ge=1)

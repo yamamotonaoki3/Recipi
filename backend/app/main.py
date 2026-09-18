@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
 from app import storage
+from app.ai import warm_local_ollama
 from app.api.ai import router as ai_router
 from app.api.auth import router as auth_router
 from app.api.comments import router as comments_router
@@ -41,6 +42,7 @@ from app.db import check_db_connection
 from app.errors import AppError
 from app.logging_config import configure_logging
 from app.middleware import RequestIdMiddleware
+from app.startup import apply_development_migrations
 
 configure_logging(level=settings.LOG_LEVEL, fmt=settings.LOG_FORMAT, app_env=settings.APP_ENV)
 logger = logging.getLogger("app")
@@ -48,12 +50,19 @@ logger = logging.getLogger("app")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """アプリ起動時に、ローカル / テスト用ストレージを初期化する。
+    """アプリ起動時に開発用 DB / AI / ローカルストレージを初期化する。
 
     production では呼ばない（Issue #166）。本番のバケットは Terraform が用意し、
     CloudFront（OAC）経由でだけ読めるよう非公開にしている。ensure_bucket() は
     公開ポリシーを付けようとするため。
     """
+    if settings.APP_ENV == "development":
+        # 開発 DB だけを常に head にし、未適用 migration による実行時エラーを防ぐ。
+        # 失敗は起動失敗として扱う（古いスキーマで API を提供しない）。
+        apply_development_migrations()
+        # Ollama の停止は任意機能である AI 校正だけに影響させる。
+        warm_local_ollama()
+
     if settings.APP_ENV != "production":
         try:
             storage.ensure_bucket()
@@ -108,10 +117,31 @@ async def enforce_web_origin(request: Request, call_next: Any) -> Any:
 app.add_middleware(RequestIdMiddleware)
 
 
+def _cors_error_headers(request: Request) -> dict[str, str]:
+    """エラーハンドラから返すCORSヘッダー。
+
+    通常の成功レスポンスはCORSMiddlewareが付与するが、例外処理の経路では
+    Starletteの外側の例外ミドルウェアがレスポンスを生成する場合があるため、
+    ブラウザ向けエラーにも明示的に付与する。
+    """
+    origin = request.headers.get("origin")
+    if origin and origin in settings.cors_allow_origins:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return {}
+
+
 @app.exception_handler(AppError)
 def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
     """`AppError`（とそのファクトリ関数）を api.md の統一エラー形式に変換する。"""
-    return JSONResponse(status_code=exc.status_code, content=exc.to_envelope())
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.to_envelope(),
+        headers=_cors_error_headers(request),
+    )
 
 
 @app.exception_handler(RequestValidationError)
@@ -126,6 +156,7 @@ def handle_validation_error(request: Request, exc: RequestValidationError) -> JS
                 "details": {"errors": jsonable_encoder(exc.errors())},
             }
         },
+        headers=_cors_error_headers(request),
     )
 
 
@@ -156,7 +187,7 @@ def handle_db_pool_timeout(request: Request, exc: PoolTimeoutError) -> JSONRespo
                 "details": None,
             }
         },
-        headers={"Retry-After": "1"},
+        headers={"Retry-After": "1", **_cors_error_headers(request)},
     )
 
 
@@ -172,6 +203,7 @@ def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         content={
             "error": {"code": "INTERNAL", "message": "サーバー内部エラーです", "details": None}
         },
+        headers=_cors_error_headers(request),
     )
 
 

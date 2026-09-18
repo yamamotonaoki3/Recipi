@@ -76,7 +76,7 @@
 
 | 環境 | `AI_PROVIDER` | 実装 | 内容 |
 | --- | --- | --- | --- |
-| development | `local` | `LocalProofreadProvider` | ローカル推論。Docker Compose の Ollama コンテナ（量子化した小型モデル・CPU 可）または in-process の小型 GEC モデル。API 課金ゼロ・オフライン可。「Python でローカル推論を動かす」学習を兼ねる |
+| development | `local` | `LocalProofreadProvider` | ローカル推論。Docker Compose の Ollama コンテナで Qwen 3.5 9B（量子化・GPU推論）。API 課金ゼロ・オフライン可。「Python でローカル推論を動かす」学習を兼ねる |
 | production | `anthropic` | `AnthropicProofreadProvider` | クラウド LLM API。第一候補 **Anthropic API（Claude Haiku）** ／ `anthropic` Python SDK。`ANTHROPIC_API_KEY` は本番のシークレット管理で注入。OpenAI（`openai` SDK）は差し替え可能な代替 |
 | test | `stub` | `StubProofreadProvider` | 決定的なダミー。モデル・API キー不要（CI に GPU も鍵も要らない） |
 

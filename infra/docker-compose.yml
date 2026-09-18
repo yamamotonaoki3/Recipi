@@ -55,8 +55,10 @@ services:
 
   ollama:
     # AI校正のローカル実験時だけ `--profile ai` で起動する。
-    image: ollama/ollama:0.12.6
+    # NVIDIA Container Runtime経由でGPUを使う（Qwen 3.5 9B向け）。
+    image: ollama/ollama:0.34.1
     profiles: ["ai"]
+    gpus: all
     ports:
       - "11434:11434"
     volumes:
