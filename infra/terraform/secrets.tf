@@ -11,8 +11,8 @@
 #   下の *_version を 1 つ上げて apply する（DB は RDS と DATABASE_URL の両方を上げる）。
 #
 # ECS はタスクの起動時にここから値を取り出し、環境変数としてコンテナに渡す（ecs.tf）。
-# ANTHROPIC_API_KEY は作らない: 値の入っていない秘密を参照すると ECS がタスクを
-# 起動できないため。AI 機能（Phase 11）で足す。
+# Anthropic APIキーはTerraformで値を扱わない。空のSecretコンテナだけを作り、値は
+# ConsoleまたはAWS CLIから手動で登録する。これによりAPIキーはtfstate・planに残らない。
 
 locals {
   db_password_version  = 1
@@ -74,4 +74,15 @@ resource "aws_secretsmanager_secret_version" "log_hash_secret" {
   secret_id                = aws_secretsmanager_secret.log_hash_secret.id
   secret_string_wo         = ephemeral.random_password.log_hash.result
   secret_string_wo_version = local.log_hash_key_version
+}
+
+# --- ANTHROPIC_API_KEY ---------------------------------------------------------
+# 値のversionはTerraformで作らない。値は docs/requirements/environment.md と
+# infra/terraform/README.md の手順に従い、利用者がSecrets Managerへ直接登録する。
+# `enable_anthropic_proofread` が false の間はECSタスク定義から参照しないため、
+# Secretが空の状態でECSタスクが起動不能になることはない。
+resource "aws_secretsmanager_secret" "anthropic_api_key" {
+  name                    = "${var.project_name}/anthropic-api-key"
+  description             = "Anthropic API key for Recipi production proofreading"
+  recovery_window_in_days = 0
 }

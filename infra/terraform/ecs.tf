@@ -75,20 +75,18 @@ resource "aws_ecs_task_definition" "api" {
         # なり、ECS には Ollama が居ないので毎回 15 秒のタイムアウトを待ってから 503 に
         # なる**（その間スレッドを占有する）。本番は "anthropic" を指定する。
         #
-        # ただし ANTHROPIC_API_KEY は Secrets Manager に**まだ作っていない**
-        # （値の入っていない秘密を参照すると ECS がタスクを起動できないため。Issue #168）。
-        # そのため現状は「キー未設定」として即座に 503 を返す。AI 校正を本番で実際に
-        # 使うときは、secrets.tf で秘密を作り、下の secrets ブロックに追加する。
-        # Phase 11 は MVP 対象外なので、いまは有効化しない。
+        # APIキーはSecrets Managerから注入する。空のSecretを参照するとタスク自体が
+        # 起動できないため、値の手動登録を終えて `enable_anthropic_proofread=true` に
+        # した場合だけ下のsecretsブロックへ加える。
         { name = "AI_PROVIDER", value = "anthropic" },
       ]
 
-      # 値は Secrets Manager から取り出される（Terraform にもタスク定義にも値は残らない）。
-      secrets = [
-        { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_url.arn },
-        { name = "JWT_SECRET_KEY", valueFrom = aws_secretsmanager_secret.jwt_secret_key.arn },
-        { name = "LOG_HASH_SECRET", valueFrom = aws_secretsmanager_secret.log_hash_secret.arn },
-      ]
+      # 値は Secrets Manager から取り出される。ここで値を文字列として書かず、
+      # SecretのARNだけをECSへ渡す。値はtfstateにも
+      # タスク定義にも残らず、起動時にECSエージェントが実行ロールで取得する。
+      # 値の登録前にtrueにするとタスク起動が失敗するため、手順書の順序を守ること。
+      # `concat` によりfalse時はANTHROPIC_API_KEY自体がタスク定義に現れない。
+      secrets = local.ecs_task_secrets
 
       # コンテナのヘルスチェック。slim のイメージには curl が無いので、Python 標準の
       # urllib で /healthz を叩く（200 以外や接続失敗なら例外 → 終了コード 1 = 異常）。

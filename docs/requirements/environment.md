@@ -151,6 +151,14 @@ Dockerの `api` からホストOllamaへ接続する場合は
 通信失敗・15秒超過時は、レシピ編集を妨げずAPIが `503 AI_UNAVAILABLE` を返す。
 校正結果は自動適用せず、画面で確認してから適用する。
 
+### 本番のAnthropic APIキー
+
+本番の `ANTHROPIC_API_KEY` は `.env.production` や Terraform 変数へ書かない。AWS Secrets
+Manager の `recipi/anthropic-api-key` にプレーンテキストとして登録し、ECSタスク実行ロールが
+起動時に読み取って環境変数へ注入する。Terraformでは `enable_anthropic_proofread=false` を
+既定とし、Secretに値を登録した後にだけ `true` へ変更する。詳細な利用者手順は
+[`infra/terraform/README.md`](../../infra/terraform/README.md#anthropic-apiキーを有効化するai校正)。
+
 ## 5. CI（GitHub Actions）でのテスト用の値
 
 - CI では `.env.test` を**ワークフロー内で生成**する（`.env.test.example` をコピーし、必要な値を埋める）。

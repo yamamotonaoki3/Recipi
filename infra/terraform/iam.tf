@@ -27,20 +27,17 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_managed" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# 読める秘密は、タスク定義で使う 3 つだけ（ARN を 1 つずつ列挙し、* にしない）。
+# 読める秘密は、タスク定義で使うものだけ（ARN を 1 つずつ列挙し、* にしない）。
+# Anthropicキーは明示的にAI校正を有効化した場合だけ含める。
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   name = "${var.project_name}-ecs-task-execution-secrets"
   role = aws_iam_role.ecs_task_execution.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Action = ["secretsmanager:GetSecretValue"]
-      Resource = [
-        aws_secretsmanager_secret.database_url.arn,
-        aws_secretsmanager_secret.jwt_secret_key.arn,
-        aws_secretsmanager_secret.log_hash_secret.arn,
-      ]
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = local.ecs_task_execution_secret_arns
     }]
   })
 }
