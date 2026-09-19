@@ -167,18 +167,23 @@ jobs:
 
           # image だけを差し替える。logConfiguration・secrets・environment・healthCheck は
           # そのまま引き継ぐ。登録時に渡せない項目は削る。
-          NEW_TD=$(printf '%s' "${CURRENT}" | jq \
+          # 標準入力のストリームではなく一時ファイルを使う。AWS CLI は JSON の
+          # パースエラー時に入力箇所を示さないため、渡す前に jq で検証する。
+          TASK_DEFINITION_JSON="${RUNNER_TEMP}/task-definition.json"
+          printf '%s' "${CURRENT}" | jq \
             --arg name "${CONTAINER_NAME}" --arg image "${IMAGE}" \
             '.taskDefinition
              | .containerDefinitions = [
                  .containerDefinitions[] | if .name == $name then .image = $image else . end
                ]
              | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
-                   .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)')
+                   .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' \
+            > "${TASK_DEFINITION_JSON}"
+          jq -e . "${TASK_DEFINITION_JSON}" > /dev/null
 
-          NEW_ARN=$(printf '%s' "${NEW_TD}" \
-            | aws ecs register-task-definition --cli-input-json file:///dev/stdin \
-                --query 'taskDefinition.taskDefinitionArn' --output text)
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "file://${TASK_DEFINITION_JSON}" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
 
           # 登録された ARN が想定どおりか確かめる（RunTask の権限はファミリーを限定しているため、
           # 想定外の ARN だと権限エラーになる）。ARN そのものは出さない。
