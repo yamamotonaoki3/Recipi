@@ -24,7 +24,7 @@ resource "aws_iam_role" "github_deploy" {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           # main ブランチからの実行だけ（他ブランチ・他リポジトリ・PR からは引き受けられない）。
-          "token.actions.githubusercontent.com:sub" = "repo:yamamotonaoki3/Recipi:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = local.github_oidc_subject
         }
       }
     }]
@@ -34,6 +34,11 @@ resource "aws_iam_role" "github_deploy" {
 locals {
   # account_id は locals.tf で定義している（ここでは参照するだけ）。
   task_definition_arn_base = "arn:aws:ecs:${var.aws_region}:${local.account_id}:task-definition/${aws_ecs_task_definition.api.family}"
+
+  # GitHubのOIDC不変subject形式。owner/repositoryのIDも照合するため、名称の再利用や
+  # リポジトリ移管後に別のリポジトリがこのロールを引き受けることを防ぐ。
+  # `main`からの手動デプロイだけを許可する（GitHub OIDC設定でimmutable subjectが有効）。
+  github_oidc_subject = "repo:yamamotonaoki3@210459743/Recipi@1351369041:ref:refs/heads/main"
 }
 
 # デプロイ（Issue #167）に必要な権限だけを付ける:
