@@ -15,6 +15,14 @@ resource "aws_scheduler_schedule_group" "jobs" {
 
 # --- スケジューラ用の IAM ロール ---------------------------------------------
 # 「このスケジュールグループからの呼び出しだけ」がこのロールを使える（混乱した代理人対策）。
+locals {
+  # EventBridge Scheduler の実行ロールをスケジュールグループ単位に限定する。
+  # aws:SourceArn に個別スケジュール ARN を指定すると、CreateSchedule 時の
+  # 引受検証に一致せずスケジュールを作成できない。
+  scheduler_execution_role_source_arn_condition = "StringEquals"
+  scheduler_execution_role_source_arn           = "arn:aws:scheduler:${var.aws_region}:${local.account_id}:schedule-group/${aws_scheduler_schedule_group.jobs.name}"
+}
+
 data "aws_iam_policy_document" "scheduler_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -28,13 +36,13 @@ data "aws_iam_policy_document" "scheduler_assume" {
       values   = [local.account_id]
     }
     condition {
-      # EventBridge Scheduler が渡す aws:SourceArn は、**スケジュールグループではなく
-      # 個々のスケジュールの ARN**（.../schedule/<グループ名>/<スケジュール名>）。
-      # グループの ARN を指定すると一致せず、どのジョブも起動できない。
-      # このグループのスケジュールだけに絞りつつ、個々の ARN と一致するようにする。
-      test     = "ArnLike"
+      # EventBridge Scheduler の aws:SourceArn は、実行ロールの信頼ポリシーでは
+      # スケジュールグループ ARN（...:schedule-group/<グループ名>）に限定する。
+      # 個別スケジュール ARN やワイルドカードを指定すると、CreateSchedule 時の
+      # 実行ロール引受検証に一致しない。
+      test     = local.scheduler_execution_role_source_arn_condition
       variable = "aws:SourceArn"
-      values   = ["arn:aws:scheduler:${var.aws_region}:${local.account_id}:schedule/${aws_scheduler_schedule_group.jobs.name}/*"]
+      values   = [local.scheduler_execution_role_source_arn]
     }
   }
 }
