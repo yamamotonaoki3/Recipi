@@ -151,6 +151,79 @@ def test_anthropic_empty_content_becomes_proofread_error(monkeypatch: pytest.Mon
         AnthropicProofreadProvider().proofread(_ITEMS)
 
 
+def test_anthropic_forced_tool_use_returns_suggestions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Claude の Tool Use 入力を、テキストJSONとして再解析せず候補に使う。"""
+    captured: dict[str, object] = {}
+
+    def fake_post(*args: object, **kwargs: object) -> _FakeResponse:
+        captured.update(kwargs)
+        return _FakeResponse(
+            {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "submit_proofread",
+                        "input": {
+                            "suggestions": [
+                                {
+                                    "id": "title",
+                                    "original": "肉じゃかの作り方",
+                                    "corrected": "肉じゃがの作り方",
+                                    "changed": True,
+                                    "note": "明らかな誤字を修正しました",
+                                }
+                            ]
+                        },
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "test-only-not-a-real-key")
+
+    result = AnthropicProofreadProvider().proofread(_ITEMS)
+
+    assert result[0].corrected == "肉じゃがの作り方"
+    assert isinstance(captured["json"], dict)
+    assert captured["json"]["tool_choice"] == {"type": "tool", "name": "submit_proofread"}
+    assert captured["json"]["tools"][0]["name"] == "submit_proofread"
+
+
+def test_anthropic_request_includes_structured_few_shot_examples(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """本番プロバイダにも、校正・候補なしの両方を示すFew-shot例を送る。"""
+    captured: dict[str, object] = {}
+
+    def fake_post(*args: object, **kwargs: object) -> _FakeResponse:
+        captured.update(kwargs)
+        return _FakeResponse(
+            {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "submit_proofread",
+                        "input": {"suggestions": []},
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "test-only-not-a-real-key")
+
+    AnthropicProofreadProvider().proofread(_ITEMS)
+
+    assert isinstance(captured["json"], dict)
+    system = captured["json"]["system"]
+    assert "<examples>" in system
+    assert "肉じゃかの作り方" in system
+    assert "材料を鍋に入れて煮るに。" in system
+    assert "醤油 大さじ1" in system
+    assert "suggestions を空配列" in system
+
+
 def test_ollama_unexpected_provider_error_becomes_proofread_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

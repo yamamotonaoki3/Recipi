@@ -133,6 +133,6 @@
 
 | メソッド | パス | 認証 | 概要 |
 | --- | --- | --- | --- |
-| POST | `/ai/proofread` | 必要 | レシピの誤字脱字チェック。body に `items: [{ id, kind, text }]`（`kind` = `title` / `description` / `step` / `ingredient`。`items` 200 件 / 各 `text` 2,000 字 / 合計 8,000 字 / `id` 64 字 まで）→ `suggestions: [{ id, original, corrected, changed, note? }]`。自動適用しない。入力上限超過 400 / レート制限 429 / プロバイダ障害・タイムアウト 503（`AI_UNAVAILABLE`） |
+| POST | `/ai/proofread` | 必要 | レシピの誤字脱字チェック。body に `items: [{ id, kind, text }]`（`kind` = `title` / `description` / `step` / `ingredient` / `ingredient_group`。`items` 200 件 / 各 `text` 2,000 字 / 合計 8,000 字 / `id` 64 字 まで）→ `suggestions: [{ id, original, corrected, changed, note? }]`。自動適用しない。入力上限超過 400 / レート制限 429 / プロバイダ障害・タイムアウト 503（`AI_UNAVAILABLE`） |
 
 プロバイダ（`AI_PROVIDER` = `local` / `anthropic` / `stub`）はサーバー内部の切替で、リクエスト / レスポンス形は不変（[features/ai-proofread.md](features/ai-proofread.md) / [tech-stack.md](tech-stack.md)）。

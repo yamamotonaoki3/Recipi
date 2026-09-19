@@ -76,13 +76,13 @@
 
 | 環境 | `AI_PROVIDER` | 実装 | 内容 |
 | --- | --- | --- | --- |
-| development | `local` | `LocalProofreadProvider` | ローカル推論。Docker Compose の Ollama コンテナで Qwen 3.5 9B（量子化・GPU推論）。API 課金ゼロ・オフライン可。「Python でローカル推論を動かす」学習を兼ねる |
-| production | `anthropic` | `AnthropicProofreadProvider` | クラウド LLM API。第一候補 **Anthropic API（Claude Haiku）** ／ `anthropic` Python SDK。`ANTHROPIC_API_KEY` は本番のシークレット管理で注入。OpenAI（`openai` SDK）は差し替え可能な代替 |
+| development | `local` | `OllamaProofreadProvider` | WindowsホストのOllamaで `qwen3.5:9b` をGPU推論する。API課金ゼロ・オフライン可。ホスト実行は `localhost:11434`、Docker APIからは `host.docker.internal:11434` を使う |
+| production | `anthropic` | `AnthropicProofreadProvider` | Anthropic Messages APIの `claude-haiku-4-5-20251001`。Tool UseのJSON Schemaで候補を構造化する。`ANTHROPIC_API_KEY` は AWS Secrets Manager からECSへ注入し、SDKではなく既存の `httpx` で呼び出す |
 | test | `stub` | `StubProofreadProvider` | 決定的なダミー。モデル・API キー不要（CI に GPU も鍵も要らない） |
 
-- 具体モデル・dev の実行方式（compose サービス vs in-process）・モデルバージョンの最終ロックは Phase 11 着手前の spike（→ [todo.md](todo.md) #45）。
-- ローカルの小型モデルはクラウドより精度が落ちるため、同じ入力でも development と production で校正結果が変わりうる（「提案」機能なので許容。[non-functional.md](non-functional.md)）。
-- 秘密情報（`ANTHROPIC_API_KEY` 等）はグローバル CLAUDE.md「秘密情報の標準取り扱い要件」に従う（`.env` のみ、`.env.*.example` はプレースホルダ）。
+- モデル・実行方式は確定済み。固定8ケースを local / anthropic の両方で評価し、モデル・プロンプト・候補辞書の変更時に回帰確認する。
+- 最終適用は利用者が行うため、プロバイダごとの候補差は許容する。
+- ローカルの秘密は `.env`、本番の `ANTHROPIC_API_KEY` は AWS Secrets Manager にのみ保存する。`.env.*.example` はプレースホルダのみ。
 
 ## データベース
 
