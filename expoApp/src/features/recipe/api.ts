@@ -6,7 +6,7 @@
  * 見ればよいようにする。`ApiError` は auth 側の実装を再利用する。
  */
 import { api } from "@/api/client";
-import { ApiError } from "@/features/auth/api";
+import { apiErrorFromResponse, ApiError } from "@/features/auth/api";
 import type { components } from "@/api/schema";
 
 export type RecipeResponse = components["schemas"]["RecipeResponse"];
@@ -18,8 +18,6 @@ export type IngredientOutput = components["schemas"]["IngredientOutput"];
 export type StepOutput = components["schemas"]["StepOutput"];
 export type UnitsResponse = components["schemas"]["UnitsResponse"];
 export type UnitOption = components["schemas"]["UnitOption"];
-
-type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 
 /**
  * サーバーの 400（VALIDATION_ERROR）の `details.errors`（Pydantic の
@@ -41,18 +39,11 @@ export function extractValidationErrors(error: ApiError): ServerValidationError[
   );
 }
 
-function toApiError(error: unknown, status: number): ApiError {
-  const envelope = error as Partial<ErrorEnvelope> | undefined;
-  const message = envelope?.error?.message ?? "通信エラーが発生しました";
-  const code = envelope?.error?.code;
-  return new ApiError(message, code, status, envelope?.error?.details ?? null);
-}
-
 export async function getRecipe(recipeId: string): Promise<RecipeResponse> {
   const { data, error, response } = await api.GET("/api/v1/recipes/{recipe_id}", {
     params: { path: { recipe_id: recipeId } },
   });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
@@ -70,13 +61,13 @@ export async function listMyRecipes(query: {
       },
     },
   });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
 export async function createRecipe(body: RecipeWriteRequest): Promise<RecipeResponse> {
   const { data, error, response } = await api.POST("/api/v1/recipes", { body });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
@@ -88,7 +79,7 @@ export async function updateRecipe(
     params: { path: { recipe_id: recipeId } },
     body,
   });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
@@ -96,7 +87,7 @@ export async function deleteRecipe(recipeId: string): Promise<void> {
   const { error, response } = await api.DELETE("/api/v1/recipes/{recipe_id}", {
     params: { path: { recipe_id: recipeId } },
   });
-  if (error) throw toApiError(error, response.status);
+  if (error) throw apiErrorFromResponse(error, response);
 }
 
 export async function getUnits(): Promise<UnitsResponse> {

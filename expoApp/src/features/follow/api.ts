@@ -7,7 +7,7 @@
  */
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
-import { ApiError } from "@/features/auth/api";
+import { apiErrorFromResponse } from "@/features/auth/api";
 
 export type UserRow = components["schemas"]["UserRow"];
 export type UserRowListResponse = components["schemas"]["UserRowListResponse"];
@@ -18,20 +18,12 @@ export type ConnectionTab = "following" | "followers";
 /** 一覧の対象。自分なら `"me"`（自分の ID を知らなくても呼べるショートカット）。 */
 export type ConnectionTarget = "me" | (string & {});
 
-type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
-
-function toApiError(error: unknown, status: number, fallback: string): ApiError {
-  const envelope = error as Partial<ErrorEnvelope> | undefined;
-  const message = envelope?.error?.message ?? fallback;
-  return new ApiError(message, envelope?.error?.code, status, envelope?.error?.details ?? null);
-}
-
 /** `userId` をフォローする（二重にフォローしても成功する）。 */
 export async function followUser(userId: string): Promise<void> {
   const { error, response } = await api.POST("/api/v1/users/{user_id}/follow", {
     params: { path: { user_id: userId } },
   });
-  if (error) throw toApiError(error, response.status, "フォローに失敗しました");
+  if (error) throw apiErrorFromResponse(error, response, "フォローに失敗しました");
 }
 
 /** `userId` のフォローを解除する（フォローしていなくても成功する）。 */
@@ -39,7 +31,7 @@ export async function unfollowUser(userId: string): Promise<void> {
   const { error, response } = await api.DELETE("/api/v1/users/{user_id}/follow", {
     params: { path: { user_id: userId } },
   });
-  if (error) throw toApiError(error, response.status, "フォロー解除に失敗しました");
+  if (error) throw apiErrorFromResponse(error, response, "フォロー解除に失敗しました");
 }
 
 /**
@@ -67,6 +59,6 @@ export async function listConnections(
           });
 
   const { data, error, response } = result;
-  if (error || !data) throw toApiError(error, response.status, "読み込みに失敗しました");
+  if (error || !data) throw apiErrorFromResponse(error, response, "読み込みに失敗しました");
   return data;
 }

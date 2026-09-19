@@ -25,16 +25,37 @@ export class ApiError extends Error {
     // `{ errors: [...] }` が入り、レシピ作成/編集画面がフィールド別の
     // エラー表示に使う（features/recipe/api.ts の extractValidationErrors）。
     public readonly details: Record<string, unknown> | null = null,
+    // 503 の Retry-After ヘッダーを API ラッパーがミリ秒へ変換して渡す。
+    public readonly retryAfterMs: number | undefined = undefined,
   ) {
     super(message);
   }
 }
 
-function toApiError(error: unknown, status: number): ApiError {
+/** `Retry-After` の秒数形式だけを、Query の待機時間に使うミリ秒へ変換する。 */
+export function retryAfterMsFromResponse(response: Pick<Response, "headers">): number | undefined {
+  const value = response.headers?.get("Retry-After")?.trim();
+  if (value === undefined || !/^\d+$/.test(value)) return undefined;
+
+  const seconds = Number(value);
+  return Number.isSafeInteger(seconds) ? seconds * 1_000 : undefined;
+}
+
+export function apiErrorFromResponse(
+  error: unknown,
+  response: Pick<Response, "status" | "headers">,
+  fallback = "通信エラーが発生しました",
+): ApiError {
   const envelope = error as Partial<ErrorEnvelope> | undefined;
-  const message = envelope?.error?.message ?? "通信エラーが発生しました";
+  const message = envelope?.error?.message ?? fallback;
   const code = envelope?.error?.code;
-  return new ApiError(message, code, status, envelope?.error?.details ?? null);
+  return new ApiError(
+    message,
+    code,
+    response.status,
+    envelope?.error?.details ?? null,
+    retryAfterMsFromResponse(response),
+  );
 }
 
 export async function signup(body: {
@@ -45,7 +66,7 @@ export async function signup(body: {
   securityAnswer: string;
 }): Promise<AuthTokenResponse> {
   const { data, error, response } = await api.POST("/api/v1/auth/signup", { body });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
@@ -55,7 +76,7 @@ export async function login(body: {
   rememberMe: boolean;
 }): Promise<AuthTokenResponse> {
   const { data, error, response } = await api.POST("/api/v1/auth/login", { body });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
@@ -66,7 +87,7 @@ export async function reactivate(body: {
   rememberMe: boolean;
 }): Promise<AuthTokenResponse> {
   const { data, error, response } = await api.POST("/api/v1/auth/reactivate", { body });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
@@ -75,13 +96,13 @@ export async function getCurrentUser(accessToken: string): Promise<CurrentUserRe
   const { data, error, response } = await api.GET("/api/v1/auth/me", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
 export async function logout(body: { refreshToken?: string } = {}): Promise<void> {
   const { error, response } = await api.POST("/api/v1/auth/logout", { body });
-  if (error) throw toApiError(error, response.status);
+  if (error) throw apiErrorFromResponse(error, response);
 }
 
 export async function requestPasswordReset(body: {
@@ -90,7 +111,7 @@ export async function requestPasswordReset(body: {
   const { data, error, response } = await api.POST("/api/v1/auth/password-reset/request", {
     body,
   });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }
 
@@ -100,5 +121,5 @@ export async function confirmPasswordReset(body: {
   newPassword: string;
 }): Promise<void> {
   const { error, response } = await api.POST("/api/v1/auth/password-reset/confirm", { body });
-  if (error) throw toApiError(error, response.status);
+  if (error) throw apiErrorFromResponse(error, response);
 }

@@ -21,6 +21,7 @@ setupNativeAppFocus();
 
 const MAX_SERVICE_UNAVAILABLE_RETRIES = 2;
 const SERVICE_UNAVAILABLE_RETRY_DELAY_MS = 1_000;
+const MAX_RETRY_AFTER_MS = 30_000;
 
 /** 過負荷(503)だけを有限回リトライし、再試行嵐を防ぐ。 */
 export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
@@ -31,7 +32,10 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
   );
 }
 
-export function retryDelayQuery(attemptIndex: number): number {
+export function retryDelayQuery(attemptIndex: number, error?: unknown): number {
+  if (error instanceof ApiError && error.status === 503 && error.retryAfterMs !== undefined) {
+    return Math.min(error.retryAfterMs, MAX_RETRY_AFTER_MS);
+  }
   return SERVICE_UNAVAILABLE_RETRY_DELAY_MS * 2 ** attemptIndex;
 }
 
