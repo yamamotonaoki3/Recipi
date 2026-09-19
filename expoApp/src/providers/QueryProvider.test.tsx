@@ -23,6 +23,19 @@ it("503だけを最大2回まで指数バックオフで再試行する", () => 
   expect(retryDelayQuery(1)).toBe(2_000);
 });
 
+it("503 の Retry-After を指数バックオフより優先し、30秒で上限を設ける", () => {
+  const retryAfter = new ApiError("混み合っています", "SERVICE_UNAVAILABLE", 503, null, 5_000);
+  const capped = new ApiError("混み合っています", "SERVICE_UNAVAILABLE", 503, null, 60_000);
+
+  const delayWithError = retryDelayQuery as unknown as (
+    attemptIndex: number,
+    error: unknown,
+  ) => number;
+
+  expect(delayWithError(0, retryAfter)).toBe(5_000);
+  expect(delayWithError(0, capped)).toBe(30_000);
+});
+
 it("子要素を描画する", async () => {
   await render(
     <QueryProvider>

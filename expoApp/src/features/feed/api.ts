@@ -6,7 +6,7 @@
  * ようにする。`ApiError` は auth 側の実装を再利用する。
  */
 import { api } from "@/api/client";
-import { ApiError } from "@/features/auth/api";
+import { apiErrorFromResponse } from "@/features/auth/api";
 import type { components } from "@/api/schema";
 
 export type RecipeFeedResponse = components["schemas"]["RecipeFeedResponse"];
@@ -22,15 +22,6 @@ export type RecipeFeedItem = components["schemas"]["RecipeFeedItem"];
  *                 Issue #100 で有効化。features/favorite.md §3）
  */
 export type FeedKind = "all" | "following" | "followers" | "favorites";
-
-type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
-
-function toApiError(error: unknown, status: number): ApiError {
-  const envelope = error as Partial<ErrorEnvelope> | undefined;
-  const message = envelope?.error?.message ?? "通信エラーが発生しました";
-  const code = envelope?.error?.code;
-  return new ApiError(message, code, status, envelope?.error?.details ?? null);
-}
 
 /**
  * ホームフィードを 1 ページ取得する（features/home-feed.md §5）。
@@ -57,6 +48,6 @@ export async function listFeed(query: {
       },
     },
   });
-  if (error || !data) throw toApiError(error, response.status);
+  if (error || !data) throw apiErrorFromResponse(error, response);
   return data;
 }

@@ -11,9 +11,8 @@
  */
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
-import { ApiError } from "@/features/auth/api";
+import { apiErrorFromResponse } from "@/features/auth/api";
 
-type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 export type Comment = components["schemas"]["CommentResponse"];
 export type CommentList = components["schemas"]["CommentListResponse"];
 export type CommentCreate = components["schemas"]["CommentCreateRequest"];
@@ -22,12 +21,6 @@ export type CommentCreate = components["schemas"]["CommentCreateRequest"];
  * `imageKey` は 省略 = 変更なし / 今と同じキー = 維持 / null = 削除 / 新しいキー = 差し替え。
  */
 export type CommentUpdate = components["schemas"]["CommentUpdateRequest"];
-
-function toApiError(error: unknown, status: number, fallback: string): ApiError {
-  const envelope = error as Partial<ErrorEnvelope> | undefined;
-  const message = envelope?.error?.message ?? fallback;
-  return new ApiError(message, envelope?.error?.code, status, envelope?.error?.details ?? null);
-}
 
 /** あるレシピの感想一覧（1 ページ分）。 */
 export async function listComments(
@@ -38,7 +31,7 @@ export async function listComments(
     params: { path: { recipe_id: recipeId }, query: params },
   });
   if (error || !response.ok || !data) {
-    throw toApiError(error, response.status, "感想を読み込めませんでした");
+    throw apiErrorFromResponse(error, response, "感想を読み込めませんでした");
   }
   return data;
 }
@@ -50,7 +43,7 @@ export async function createComment(recipeId: string, input: CommentCreate): Pro
     body: input,
   });
   if (error || !response.ok || !data) {
-    throw toApiError(error, response.status, "感想を投稿できませんでした");
+    throw apiErrorFromResponse(error, response, "感想を投稿できませんでした");
   }
   return data;
 }
@@ -62,7 +55,7 @@ export async function updateComment(commentId: string, input: CommentUpdate): Pr
     body: input,
   });
   if (error || !response.ok || !data) {
-    throw toApiError(error, response.status, "感想を保存できませんでした");
+    throw apiErrorFromResponse(error, response, "感想を保存できませんでした");
   }
   return data;
 }
@@ -73,6 +66,6 @@ export async function deleteComment(commentId: string): Promise<void> {
     params: { path: { comment_id: commentId } },
   });
   if (error || !response.ok) {
-    throw toApiError(error, response.status, "感想を削除できませんでした");
+    throw apiErrorFromResponse(error, response, "感想を削除できませんでした");
   }
 }

@@ -11,6 +11,7 @@ import {
   logout,
   reactivate,
   requestPasswordReset,
+  retryAfterMsFromResponse,
   signup,
 } from "./api";
 
@@ -24,6 +25,16 @@ beforeEach(() => {
   mockPost.mockReset();
   mockPatch.mockReset();
   mockGet.mockReset();
+});
+
+describe("retryAfterMsFromResponse", () => {
+  it("秒数形式だけをミリ秒へ変換し、未指定・不正値は無視する", () => {
+    expect(retryAfterMsFromResponse({ headers: new Headers({ "Retry-After": "5" }) })).toBe(5_000);
+    expect(retryAfterMsFromResponse({ headers: new Headers() })).toBeUndefined();
+    expect(
+      retryAfterMsFromResponse({ headers: new Headers({ "Retry-After": "soon" }) }),
+    ).toBeUndefined();
+  });
 });
 
 describe("signup", () => {
@@ -128,6 +139,19 @@ describe("getCurrentUser", () => {
     await expect(getCurrentUser("invalid-token")).rejects.toMatchObject({
       status: 401,
       code: "UNAUTHORIZED",
+    });
+  });
+
+  it("503 の Retry-After を再試行待機時間として ApiError に渡す", async () => {
+    mockGet.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: "SERVICE_UNAVAILABLE", message: "混み合っています" } },
+      response: { status: 503, headers: new Headers({ "Retry-After": "5" }) },
+    });
+
+    await expect(getCurrentUser("access-token")).rejects.toMatchObject({
+      status: 503,
+      retryAfterMs: 5_000,
     });
   });
 });

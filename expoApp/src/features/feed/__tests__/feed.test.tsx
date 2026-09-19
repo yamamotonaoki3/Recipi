@@ -70,6 +70,18 @@ describe("listFeed", () => {
     mockGet.mockResolvedValueOnce({ response: { status: 500 } });
     await expect(listFeed({})).rejects.toMatchObject({ message: "通信エラーが発生しました" });
   });
+
+  it("503 の Retry-After を ApiError へ渡す", async () => {
+    mockGet.mockResolvedValueOnce({
+      error: { error: { code: "SERVICE_UNAVAILABLE", message: "混み合っています" } },
+      response: { status: 503, headers: new Headers({ "Retry-After": "2" }) },
+    });
+
+    await expect(listFeed({})).rejects.toMatchObject({
+      status: 503,
+      retryAfterMs: 2_000,
+    });
+  });
 });
 
 describe("useFeed", () => {
