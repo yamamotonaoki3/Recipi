@@ -2,20 +2,20 @@
 
 手軽にレシピを登録・共有・検索できるアプリ。モバイルファーストで **Android / iOS / デスクトップ（Windows・macOS）** に対応。
 
-- **現在**: 要件定義フェーズ完了 → MVP（Phase 0〜4）を実装中。
+- **現在**: MVP と後続の主要機能を実装済み。未対応・改善候補は [`docs/requirements/todo.md`](docs/requirements/todo.md) で管理。
 - **要件定義書**: [`docs/requirements/`](docs/requirements/)（索引: [`docs/requirements/README.md`](docs/requirements/README.md)）
 - **ロードマップ / MVP ライン**: [`docs/requirements/roadmap.md`](docs/requirements/roadmap.md)
 - **技術スタック**: バックエンド = Python 3.14 + FastAPI + SQLModel + Alembic ／ フロント = TypeScript + React Native + Expo（必須）＋ Kotlin Multiplatform（随時）。詳細は [`docs/requirements/tech-stack.md`](docs/requirements/tech-stack.md)
 
-## リポジトリ構成（実装が進むと増える）
+## リポジトリ構成
 
 ```text
 Recipi/
 ├── .env.development.example / .env.demo.example / .env.test.example / .env.production.example   環境変数のテンプレート
 ├── .github/workflows/   CI（backend / frontend-ts / contract / e2e）
-├── backend/             Python バックエンド（FastAPI）        ← Phase 0 で追加
-├── expoApp/             TypeScript フロント（Expo / RN）      ← Phase 0 で追加
-├── infra/docker-compose.yml   api + postgres + minio          ← Phase 0 で追加
+├── backend/             Python バックエンド（FastAPI）
+├── expoApp/             TypeScript フロント（Expo / RN）
+├── infra/docker-compose.yml   api + postgres + minio
 └── docs/requirements/   要件定義書
 ```
 
@@ -72,9 +72,7 @@ uvicorn app.main:app --reload
 
 同じ seed を再実行しても、デモ料理人 あかりのアカウントが存在する場合は変更せず終了します。デモデータを作り直す必要がある場合も、開発DBではなく `recipi_demo` のみを対象にしてください。
 
-## ローカルで動かす・テストする（Phase 0 以降）
-
-> `backend/` と `expoApp/` は Phase 0 で追加される。それまでは要件定義書のみ。
+## ローカルで動かす・テストする
 
 **1. インフラ（DB・ストレージ）だけ起動**（バックエンドはホストで動かす。`api` サービスはフルスタック実行・E2E 用）
 
@@ -110,6 +108,29 @@ pytest --cov-report=json        # 単体 ＋ 結合。pytest 設定が APP_ENV=t
 python -m scripts.check_coverage coverage.json --lines 85 --branches 75
                                 # 行・分岐カバレッジの下限（testing.md §3）
 ```
+
+### ローカルAI誤字脱字チェック
+
+OllamaをWindowsホストで起動し、`qwen3.5:9b` を取得します。`ollama ps` の
+`PROCESSOR` が `GPU` ならGPU推論で動いています。
+
+```powershell
+ollama pull qwen3.5:9b
+ollama run qwen3.5:9b
+ollama ps
+```
+
+`.env.development` には `AI_PROVIDER=local`、`OLLAMA_BASE_URL=http://localhost:11434`、
+`OLLAMA_MODEL=qwen3.5:9b` を設定します。バックエンド起動後、固定の品質ケースは
+次で確認できます。
+
+```powershell
+cd backend
+python -m scripts.evaluate_ai_proofread
+```
+
+Docker内のAPIからホストOllamaへ接続する場合だけ、`OLLAMA_BASE_URL` を
+`http://host.docker.internal:11434` に変更します。
 
 **4. フロントエンド（`expoApp/`）** — コマンドは OS 共通
 
@@ -163,7 +184,9 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8000 npx tauri build --bundles msi
 
 ## 本番環境（AWS）
 
-本番は **AWS**（ap-northeast-1）で、構成は Terraform（[`infra/terraform/`](infra/terraform/)）で管理しています。公開の入口は API Gateway HTTP API で、VPC Link ＋ Cloud Map 経由で private サブネットの ECS Fargate に届きます。DB は RDS PostgreSQL 18、画像は非公開の S3 ＋ CloudFront（OAC）配信、ログとアラームは CloudWatch ＋ SNS（メール）、定期ジョブは EventBridge Scheduler が ECS タスクとして動かします。backend のデプロイは GitHub Actions の手動ワークフロー（OIDC）で行い、main への push で自動デプロイはしません。
+本番は **AWS**（ap-northeast-1）で、構成は Terraform（[`infra/terraform/`](infra/terraform/)）で管理しています。公開の入口は API Gateway HTTP API で、VPC Link ＋ Cloud Map 経由で private サブネットの ECS Fargate に届きます。DB は RDS PostgreSQL 18、画像は非公開の S3 ＋ CloudFront（OAC）配信、ログとアラームは CloudWatch ＋ SNS（メール）、定期ジョブは EventBridge Scheduler が ECS タスクとして動かします。AI校正は Anthropic API を使い、APIキーは AWS Secrets Manager からECSへ注入します。backend のデプロイは GitHub Actions の手動ワークフロー（OIDC）で行い、main への push で自動デプロイはしません。
+
+アプリコードだけを更新する場合は、Terraform apply ではなく手動の `deploy-backend` ワークフローで、ECRへのイメージpush・マイグレーション・ECS更新を行います。Terraform apply は、AWSリソースやECSの環境変数・Secrets Manager参照など**インフラ定義を変更した場合だけ**実行します。
 
 学習用のため常時稼働させず、**確認するときだけ `terraform apply` して、終わったら `terraform destroy`** する運用です。はじめて立てるときの通し手順（state 用バケット → ECR → イメージの push → apply → マイグレーション → GitHub Secrets → destroy）と費用の目安は [`infra/terraform/README.md`](infra/terraform/README.md)、設計の全体像とトレードオフは [`docs/requirements/architecture.md`](docs/requirements/architecture.md) の「本番デプロイ」にあります。
 

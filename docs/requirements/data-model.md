@@ -173,7 +173,7 @@ erDiagram
 - **材料グループ**: レシピは 1 個以上の `ingredient_groups` を持つ（グループ未使用のレシピ = 名前なしグループ 1 つ）。各グループは 1 個以上の `ingredients` を持つ。`ingredients.position` はグループ内の 1 起点連番。詳細は [features/recipe.md](features/recipe.md)。
 - **材料のレシピ参照**: `ingredients.ref_recipe_id` が非 NULL の行は「別レシピへのリンク付き材料」。指定できるのはそのレシピの投稿者本人が所有するレシピのみ（自己参照不可）。参照先が削除されると `ref_recipe_id` は SET NULL になり、`ref_recipe_title`（スナップショット）だけが残る。詳細は [features/recipe.md](features/recipe.md)。
 - `units` の初期データは Alembic のシードマイグレーションで投入する（[features/unit.md](features/unit.md)）。
-- **AI 校正**（[features/ai-proofread.md](features/ai-proofread.md)・Phase 11）は新規テーブル必須ではない。レート制限は当面アプリ内カウンタでも可。使用回数 / コスト追跡用の `ai_usage`（`user_id` / `date` / `count` 等）を持つかは → [todo.md](todo.md)。
+- **AI 校正**（[features/ai-proofread.md](features/ai-proofread.md)・Phase 11）は `ai_usage` テーブルを使う。`user_id`・時間枠（hour / day）・開始時刻・count を一意に保持し、20回/時・100回/日のレート制限を複数ECSタスク間で共有する。
 - パスワード・秘密の答えはハッシュ化して保存（`password_hash` / `security_answer_hash`）。
 - リフレッシュトークンの検証用データは `token_hash` で保持する。
 - 画像は `avatar_key` / `thumbnail_key` / `image_key` を正として永続化し、表示用 URL はレスポンス構築時にキーから生成する。**キーの接頭辞が配信の経路を決める**（Issue #185）: `uploads/`（アバター）は安定 URL、`private/`（レシピのサムネ・手順画像・感想画像）は期限付きの署名付き URL。いずれも URL はキーから組み立てる派生値で、DB には永続化しない。**レシピの公開・非公開を切り替えてもキーは変わらない**（[features/image.md](features/image.md)）。

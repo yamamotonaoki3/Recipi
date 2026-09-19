@@ -71,7 +71,7 @@ Recipi/
 - `app/` に FastAPI アプリ。DB アクセスは SQLModel（SQLAlchemy 2.0）、ドライバは psycopg 3、接続は `postgresql+psycopg://`。
 - スキーマ変更は Alembic マイグレーションで管理し、`units` などのシードデータも Alembic で投入する。SQLModel のモデル定義で表現できない DB 制約（複合外部キー・部分インデックス・`CHECK`・トリガー）は手書きマイグレーションで補う（[data-model.md](data-model.md)）。
 - ローカル開発は Docker Compose で `postgres` / `minio` を起動し、バックエンドは `uvicorn --reload` でホスト実行する（高速な反復のため）。フルスタック実行（E2E 等）は Compose の `api` サービス。`.env.*` のホスト名の扱いは [environment.md](environment.md) §4。本番の ASGI 実行構成は **uvicorn の単一プロセス**（ECS Fargate 0.25 vCPU / 0.5GB・通常1タスク、負荷時はAuto Scalingで最大4タスク。`infra/terraform/ecs.tf` / `ecs-autoscaling.tf`）。
-- **AI 連携（`app/ai/`、Phase 11）**: 校正サービスの抽象（Protocol）＋ 実装（`local` / `anthropic` / `stub`）。`AI_PROVIDER` 環境変数で選択（[tech-stack.md](tech-stack.md) / [features/ai-proofread.md](features/ai-proofread.md)）。`api` サービスには `AI_PROVIDER` と（production のみ）`ANTHROPIC_API_KEY` を環境変数で渡す（`docker-compose.yml` は `${...}` 参照、実値は `.env`）。dev のローカル推論用サービス（例: `ollama`）を compose に追加するかは Phase 11 の spike（→ [todo.md](todo.md)）。将来の他の AI 機能も同じ `app/ai/` と `/api/v1/ai/` 名前空間に置く。
+- **AI 連携（`app/ai/`、Phase 11）**: 校正サービスの抽象（Protocol）＋ 実装（`local` / `anthropic` / `stub`）。`AI_PROVIDER` 環境変数で選択（[tech-stack.md](tech-stack.md) / [features/ai-proofread.md](features/ai-proofread.md)）。開発はWindowsホストのOllama（`qwen3.5:9b`）へ接続し、ComposeにOllamaサービスは置かない。productionはSecrets Managerの `ANTHROPIC_API_KEY` をECSタスク起動時に環境変数へ注入する。Anthropic応答はTool UseのJSON Schemaで構造化する。将来の他のAI機能も同じ `app/ai/` と `/api/v1/ai/` 名前空間に置く。
 
 ### 処理方式（トランザクション / 同期 / 非同期 / バッチ）
 
@@ -91,7 +91,6 @@ Recipi/
 | `api` | FastAPI（Uvicorn）。backend。`AI_PROVIDER` 等の環境変数を受け取る |
 | `postgres` | PostgreSQL |
 | `minio` | S3 互換オブジェクトストレージ（画像保存。詳細は [features/image.md](features/image.md)）。イメージは `quay.io/minio/minio` のリリースタグ固定（[environment.md](environment.md) §4・Issue #89） |
-| `ollama`（Phase 11・要検討） | dev の AI 校正のローカル推論。追加するかは spike（→ [todo.md](todo.md)） |
 
 ## テスト / CI
 
@@ -104,9 +103,9 @@ Recipi/
 
 > 全環境変数の一覧と各値の性質は [environment.md](environment.md)。
 
-- DB 認証情報・JWT 署名鍵・ストレージ認証情報・**AI プロバイダの API キー（`ANTHROPIC_API_KEY` 等）**などの**実値は `.gitignore` 対象の `.env` にのみ置く**。
+- ローカルのDB認証情報・JWT署名鍵などの実値は `.gitignore` 対象の `.env` に置く。本番の `ANTHROPIC_API_KEY` は `.env`・Terraform変数・イメージへ書かず、AWS Secrets ManagerからECSへ注入する。
 - `docker-compose.yml` などコミット対象ファイルは環境変数展開（`${DB_PASSWORD}`・`${ANTHROPIC_API_KEY}` など）で参照し、実値を埋め込まない。
-- 環境別の `.env.development.example` / `.env.test.example` / `.env.production.example` にプレースホルダのみを記載してコミットする（root CLAUDE.md「環境変数は開発 / テスト / 本番で分離」）。AI 関連は `.env.development.example` に `AI_PROVIDER=local`、`.env.test.example` に `AI_PROVIDER=stub`、`.env.production.example` に `AI_PROVIDER=anthropic` / `ANTHROPIC_API_KEY=`（プレースホルダ）。
+- 環境別の `.env.development.example` / `.env.test.example` / `.env.production.example` にプレースホルダのみを記載してコミットする（root CLAUDE.md「環境変数は開発 / テスト / 本番で分離」）。AI 関連は `.env.development.example` に `AI_PROVIDER=local`、`.env.test.example` に `AI_PROVIDER=stub`、`.env.production.example` に `AI_PROVIDER=anthropic` を記載し、本番キー本体はSecrets Managerにのみ置く。
 - `root` / `password` / `admin` のような推測可能な値を使わない。
 - 詳細な運用は [non-functional.md](non-functional.md) のセキュリティ節も参照。
 
