@@ -32,9 +32,9 @@ run "passes_the_image_dimension_to_the_ecs_task" {
   command = plan
 
   variables {
-    backend_image_tag    = "test-image"
-    alert_email          = "alerts@example.com"
-    image_max_dimension  = 1536
+    backend_image_tag   = "test-image"
+    alert_email         = "alerts@example.com"
+    image_max_dimension = 1536
   }
 
   assert {
