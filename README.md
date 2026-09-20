@@ -38,31 +38,40 @@ cp .env.test.example .env.test
 
 ## README 用デモ環境
 
-既存の開発データを削除せずに、専用DB `recipi_demo` へサンプルを投入する手順です。デモ seed は `APP_ENV=demo` **かつ** DB名に `demo` を含む接続先でしか実行できません。
+第三者が自分のPC上で起動できる、公開URLを使わないデモ環境です。開発用PostgreSQLとは別コンテナ・別ボリューム・別ポート（`5433`）の専用DB `recipi_demo` を使います。デモseedは `APP_ENV=demo` **かつ** DB名に `demo` を含む接続先でしか実行できません。
 
-用意される内容は、3ユーザー・3件の公開レシピ・生成したレシピ画像・材料・手順・フォロー・お気に入り・感想・通知・閲覧履歴です。画像はリポジトリ同梱の生成画像であり、外部サイトからの取得物は含みません。
+前提は Docker Desktop、Python 3.14、Node.js（npm）です。AI校正は固定応答の `stub` で動くため、Ollama・GPU・外部APIキーは不要です。Composeはデモ専用のMinIOも起動し、同梱のレシピ画像を保存します。
 
 ```powershell
-# 1. 開発用の実際の資格情報を保ったまま、デモ用ファイルを作る。
-Copy-Item .env.development .env.demo
-# .env.demo を開き、APP_ENV=demo と DATABASE_URL の末尾を /recipi_demo に変更する。
+# 1. デモ専用のランダムな資格情報を含む .env.demo を作る。
+python backend/scripts/create_demo_env.py
+# 旧方式で作った .env.demo が既にある場合だけ、必要ならバックアップ後に --force を付ける。
+# python backend/scripts/create_demo_env.py --force
 
-# 2. DB / MinIO を起動する。
-docker compose --env-file .env.demo -f infra/docker-compose.yml up -d postgres minio
+# 2. デモ専用PostgreSQLを起動する（開発用の5432とは別）。
+docker compose --env-file .env.demo -f infra/docker-compose.demo.yml up -d
 
 # 3. デモ用DBへマイグレーションとデータ投入を行う。
 cd backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 $env:APP_ENV = "demo"
-alembic upgrade head
-python -m scripts.seed_demo
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m scripts.seed_demo
+.\.venv\Scripts\python.exe -m scripts.demo_seed_expansion
 
 # 4. バックエンドをデモ設定で起動する。
-uvicorn app.main:app --reload
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-> 既に PostgreSQL の Docker ボリュームを作成済みの場合、`infra/postgres-init/02-create-demo-db.sql` は自動実行されません。その場合は `docker compose --env-file .env.demo -f infra/docker-compose.yml exec postgres createdb -U <POSTGRES_USER> recipi_demo` を1回だけ実行してから手順3へ進んでください。
+別のPowerShellでフロントエンドを起動します。
 
-フロントエンドは通常どおり `expoApp/.env.development` の API URL を使って起動します。Webの場合は `http://localhost:8000` を指していることを確認してください。
+```powershell
+cd expoApp
+npm install
+$env:EXPO_PUBLIC_API_BASE_URL = "http://localhost:8000"
+npm run web
+```
 
 | 表示名 | メールアドレス | パスワード |
 | --- | --- | --- |
@@ -70,7 +79,7 @@ uvicorn app.main:app --reload
 | デモ食べ歩き みなと | `demo.foodie@example.com` | `DemoPass123!` |
 | デモ初心者 ひなた | `demo.beginner@example.com` | `DemoPass123!` |
 
-同じ seed を再実行しても、デモ料理人 あかりのアカウントが存在する場合は変更せず終了します。デモデータを作り直す必要がある場合も、開発DBではなく `recipi_demo` のみを対象にしてください。
+同じseedを再実行しても、デモ料理人 あかりのアカウントが存在する場合は変更せず終了します。停止は `docker compose --env-file .env.demo -f infra/docker-compose.demo.yml down`、デモDB・デモ画像を完全に作り直すときだけ末尾に `-v` を付けます。この操作はデモ用ボリュームだけを削除し、開発DB・開発MinIO・AWSには影響しません。
 
 ## ローカルで動かす・テストする
 
