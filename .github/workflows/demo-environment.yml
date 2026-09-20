@@ -1,0 +1,28 @@
+name: demo-environment
+
+on:
+  push:
+    paths:
+      - "backend/scripts/create_demo_env.py"
+      - "infra/docker-compose.demo.yml"
+      - ".env.demo.example"
+      - ".github/workflows/demo-environment.yml"
+  pull_request:
+    paths:
+      - "backend/scripts/create_demo_env.py"
+      - "infra/docker-compose.demo.yml"
+      - ".env.demo.example"
+      - ".github/workflows/demo-environment.yml"
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: backend/.python-version
+      - name: デモ用環境ファイルを生成する
+        run: python backend/scripts/create_demo_env.py
+      - name: デモ用Composeの構文を検証する
+        run: docker compose --env-file .env.demo -f infra/docker-compose.demo.yml config --quiet

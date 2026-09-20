@@ -48,13 +48,19 @@ configure_logging(level=settings.LOG_LEVEL, fmt=settings.LOG_FORMAT, app_env=set
 logger = logging.getLogger("app")
 
 
+def should_initialize_local_storage(app_env: str) -> bool:
+    """MinIO を初期化するローカル開発環境かを返す。"""
+    return app_env == "development"
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """アプリ起動時に開発用 DB / AI / ローカルストレージを初期化する。
 
     production では呼ばない（Issue #166）。本番のバケットは Terraform が用意し、
-    CloudFront（OAC）経由でだけ読めるよう非公開にしている。ensure_bucket() は
-    公開ポリシーを付けようとするため。
+    CloudFront（OAC）経由でだけ読めるよう非公開にしている。demo でも呼ばない。
+    デモの MinIO バケットと画像は seed スクリプトが明示的に作成・投入するため、
+    起動処理が ensure_bucket() を実行する必要はない。
     """
     if settings.APP_ENV == "development":
         # 開発 DB だけを常に head にし、未適用 migration による実行時エラーを防ぐ。
@@ -63,7 +69,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # Ollama の停止は任意機能である AI 校正だけに影響させる。
         warm_local_ollama()
 
-    if settings.APP_ENV != "production":
+    if should_initialize_local_storage(settings.APP_ENV):
         try:
             storage.ensure_bucket()
         except Exception:

@@ -17,7 +17,7 @@
 | 環境 | 用途 | DB / ストレージ | AI プロバイダ |
 | --- | --- | --- | --- |
 | `development` | ローカル開発（Docker Compose） | compose の `postgres` / `minio` | `local`（ローカル推論・Phase 11） |
-| `demo` | README 用の動作デモ | 開発DBとは別の `recipi_demo` / ローカル MinIO | `local` |
+| `demo` | README 用の動作デモ | 別コンテナの `recipi_demo`（localhost:5433）/ MinIO（localhost:9002） | `stub` |
 | `test` | 自動テスト（ローカル・CI） | 使い捨ての Postgres / MinIO | `stub`（決定的ダミー） |
 | `production` | 本番（**AWS**・[architecture.md](architecture.md) §本番デプロイ） | RDS PostgreSQL 18 / S3 ＋ CloudFront | `anthropic`（クラウド LLM・Phase 11） |
 
@@ -89,7 +89,7 @@
 ### リポジトリルート（backend / infra 用・4 ファイル）
 
 - **`.env.development.example`**: 上表 backend の development 相当のプレースホルダ。`APP_ENV=development` / `AI_PROVIDER=local` / MinIO のルート資格情報あり。
-- **`.env.demo.example`**: README用デモ環境のテンプレート。`.env.development` の秘密値をコピーして使い、`APP_ENV=demo` と DB 名 `recipi_demo` だけを分離する。`backend/scripts/seed_demo.py` はこの環境以外で実行できない。
+- **`.env.demo.example`**: README用デモ環境のテンプレート。`python backend/scripts/create_demo_env.py` がランダムなローカル専用値を含む `.env.demo` を作る。開発用とは別コンテナ・別ポートの `recipi_demo` とMinIOを使い、AIは `stub`。`backend/scripts/seed_demo.py` はこの環境以外で実行できない。
 - **`.env.test.example`**: `APP_ENV=test` / `AI_PROVIDER=stub` / テスト用 DB・ストレージのプレースホルダ。
 - **`.env.production.example`**: `APP_ENV=production` / `AI_PROVIDER=anthropic` / `ANTHROPIC_API_KEY=`（空）。`MINIO_ROOT_*` は書かない（本番は S3 互換のマネージドを想定）。
 

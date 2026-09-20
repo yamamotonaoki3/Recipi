@@ -47,6 +47,12 @@ _ASSET_DIR = Path(__file__).resolve().parents[1] / "demo_assets"
 _IMAGE_KEYS = {
     "curry": "private/demo/recipe-chicken-curry.png",
     "salmon": "private/demo/recipe-salmon-bowl.png",
+    "pancakes": "private/demo/recipe-yogurt-pancakes.png",
+}
+_IMAGE_RECIPE_TITLES = {
+    "curry": "ごろごろ野菜のチキンカレー",
+    "salmon": "サーモンとアボカドの彩り丼",
+    "pancakes": "ふんわりヨーグルトパンケーキ",
 }
 
 
@@ -66,7 +72,11 @@ def _put_demo_images() -> dict[str, int]:
     孤児のオブジェクトは増えない。
     """
     storage.ensure_bucket()
-    image_files = {"curry": "curry.png", "salmon": "salmon-bowl.png"}
+    image_files = {
+        "curry": "curry.png",
+        "salmon": "salmon-bowl.png",
+        "pancakes": "yogurt-pancakes.png",
+    }
     sizes: dict[str, int] = {}
     for name, filename in image_files.items():
         data = (_ASSET_DIR / filename).read_bytes()
@@ -86,6 +96,35 @@ def _user(email: str, display_name: str, bio: str) -> User:
     )
 
 
+def _backfill_existing_demo_images(session: Session, image_sizes: dict[str, int]) -> None:
+    """既存のデモDBにも、新しく追加した画像を安全に反映する。"""
+    recipes = session.exec(select(Recipe)).all()
+    recipes_by_title = {recipe.title: recipe for recipe in recipes}
+    for name, title in _IMAGE_RECIPE_TITLES.items():
+        recipe = recipes_by_title.get(title)
+        if recipe is None:
+            continue
+        image_key = _IMAGE_KEYS[name]
+        recipe.thumbnail_key = image_key
+        first_step = session.exec(
+            select(Step).where(Step.recipe_id == recipe.id, Step.position == 1)
+        ).first()
+        if first_step is not None:
+            first_step.image_key = image_key
+        if session.exec(select(Upload).where(Upload.key == image_key)).first() is None:
+            session.add(
+                Upload(
+                    user_id=recipe.user_id,
+                    key=image_key,
+                    status="consumed",
+                    content_type="image/png",
+                    size_bytes=image_sizes[name],
+                    expires_at=datetime.now(UTC) + timedelta(days=1),
+                )
+            )
+    session.commit()
+
+
 def seed_demo() -> str:
     """デモデータを 1 トランザクションで作成し、結果メッセージを返す。"""
     assert_demo_target(settings.APP_ENV, settings.DATABASE_URL)
@@ -93,7 +132,9 @@ def seed_demo() -> str:
     with Session(engine) as session:
         existing = session.exec(select(User).where(User.email == DEMO_EMAILS[0])).first()
         if existing is not None:
-            return "デモデータは既に投入されています（変更なし）。"
+            image_sizes = _put_demo_images()
+            _backfill_existing_demo_images(session, image_sizes)
+            return "デモデータは既に投入されています（画像を確認・補完しました）。"
 
     image_sizes = _put_demo_images()
     now = datetime.now(UTC)
@@ -150,6 +191,7 @@ def seed_demo() -> str:
             description="ヨーグルトを加えて軽い食感に仕上げる朝食パンケーキです。",
             servings=2,
             is_public=True,
+            thumbnail_key=_IMAGE_KEYS["pancakes"],
             favorite_count=1,
             comment_count=1,
             created_at=now - timedelta(days=1),
@@ -258,6 +300,7 @@ def seed_demo() -> str:
                     recipe_id=pancakes.id,
                     position=1,
                     body="材料を混ぜ、弱火のフライパンで両面を焼きます。",
+                    image_key=_IMAGE_KEYS["pancakes"],
                 ),
             ]
         )
@@ -374,7 +417,7 @@ def seed_demo() -> str:
         for name, image_key in _IMAGE_KEYS.items():
             session.add(
                 Upload(
-                    user_id=chef.id if name == "curry" else foodie.id,
+                    user_id=chef.id if name in {"curry", "pancakes"} else foodie.id,
                     key=image_key,
                     status="consumed",
                     content_type="image/png",

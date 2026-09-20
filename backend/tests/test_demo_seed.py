@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.seed_demo import assert_demo_target
+from scripts.seed_demo import _IMAGE_KEYS, assert_demo_target
+from scripts.seed_demo_db import assert_demo_target as assert_demo_db_target
 
 
 def test_demo_seed_accepts_demo_environment_and_database() -> None:
     assert_demo_target("demo", "postgresql+psycopg://user:password@localhost:5432/recipi_demo")
+    assert_demo_db_target("demo", "postgresql+psycopg://user:password@localhost:5433/recipi_demo")
+
+
+def test_demo_seed_includes_a_pancake_image() -> None:
+    assert _IMAGE_KEYS["pancakes"] == "private/demo/recipe-yogurt-pancakes.png"
 
 
 @pytest.mark.parametrize(
