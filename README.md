@@ -1,57 +1,45 @@
 # Recipi
 
-手軽にレシピを登録・共有・検索できるアプリ。モバイルファーストで **Android / iOS / デスクトップ（Windows・macOS）** に対応。
+レシピを登録・共有・検索できる、モバイルファーストのレシピアプリです。認証、レシピと画像の管理、検索、フォロー、お気に入り、感想、通知、AIによる誤字脱字チェックを実装しています。
 
-- **現在**: MVP と後続の主要機能を実装済み。未対応・改善候補は [`docs/requirements/todo.md`](docs/requirements/todo.md) で管理。
-- **要件定義書**: [`docs/requirements/`](docs/requirements/)（索引: [`docs/requirements/README.md`](docs/requirements/README.md)）
-- **ロードマップ / MVP ライン**: [`docs/requirements/roadmap.md`](docs/requirements/roadmap.md)
-- **技術スタック**: バックエンド = Python 3.14 + FastAPI + SQLModel + Alembic ／ フロント = TypeScript + React Native + Expo（必須）＋ Kotlin Multiplatform（随時）。詳細は [`docs/requirements/tech-stack.md`](docs/requirements/tech-stack.md)
+公開URLのデモは用意していません。代わりに、Docker Desktop があれば第三者も自分のPC上でデモデータ入りの環境を起動できます。
 
-## リポジトリ構成
+## 主な機能
 
-```text
-Recipi/
-├── .env.development.example / .env.demo.example / .env.test.example / .env.production.example   環境変数のテンプレート
-├── .github/workflows/   CI（backend / frontend-ts / contract / e2e）
-├── backend/             Python バックエンド（FastAPI）
-├── expoApp/             TypeScript フロント（Expo / RN）
-├── infra/docker-compose.yml   api + postgres + minio
-└── docs/requirements/   要件定義書
-```
+- メールアドレス認証、ログイン保持、パスワードリセット、プロフィール編集・退会
+- レシピの作成・編集・削除、材料グループ、手順ごとの画像、下書きの離脱防止
+- 公開レシピのフィード、タイトル・材料名検索、閲覧履歴
+- ユーザーのフォロー / フォロワー、お気に入り、感想、アプリ内通知
+- レシピ編集時のAI誤字脱字チェック（候補を確認してから個別・一括で適用）
+- 期限付きURLによるレシピ画像配信、Dockerコンテナのスモークテスト、GitHub Actions CI
 
-## 環境変数のセットアップ
+機能ごとの仕様と受け入れ基準は [`docs/requirements/features/`](docs/requirements/features/) にまとめています。
 
-実際の値は `.env.<環境>`（`.gitignore` 対象・コミットされない）にだけ置く。テンプレート（`.env.*.example`）にはプレースホルダしか書かない。全変数の意味は [`docs/requirements/environment.md`](docs/requirements/environment.md)。
+## 技術構成
 
-```bash
-# 開発用（アプリを動かす）
-cp .env.development.example .env.development
-#  → .env.development を開いて changeme / <...> を自分の値に置き換える
-#     （パスワードは生成した文字列を使う。root / password / admin は使わない）
+| 領域 | 使用技術 |
+| --- | --- |
+| フロントエンド | TypeScript / React Native / Expo Router / TanStack Query / Tauri 2 |
+| バックエンド | Python 3.14 / FastAPI / SQLModel / Alembic |
+| ローカル基盤 | PostgreSQL 18 / MinIO / Docker Compose |
+| AI校正 | 開発: Ollama `qwen3.5:9b`、本番: Anthropic API |
+| 本番基盤 | AWS ECS Fargate / RDS PostgreSQL Multi-AZ / S3 + CloudFront / API Gateway / Terraform |
+| 品質 | pytest / ruff / mypy / Jest / Playwright / GitHub Actions |
 
-# テスト用（自動テストを回す。開発用とは別の使い捨て DB を指す）
-cp .env.test.example .env.test
-#  → .env.test も同様に埋める。DB 名は recipi_test など開発用と分ける
-```
+## すぐ試す: ローカルデモ
 
-> フロントエンド（`expoApp/`）の環境変数は `expoApp/.env.development` に置く（Expo は `expoApp/` から読むため）。テンプレートは Issue #34 で `expoApp/.env.*.example` として追加される。
+Windows PowerShellで確認済みの手順です。デモ環境は開発環境と完全に分離され、PostgreSQLは `5433`、MinIOは `9002` / `9003` を使用します。Ollama、GPU、外部APIキーは不要です。
 
-## README 用デモ環境
-
-第三者が自分のPC上で起動できる、公開URLを使わないデモ環境です。開発用PostgreSQLとは別コンテナ・別ボリューム・別ポート（`5433`）の専用DB `recipi_demo` を使います。デモseedは `APP_ENV=demo` **かつ** DB名に `demo` を含む接続先でしか実行できません。
-
-前提は Docker Desktop、Python 3.14、Node.js（npm）です。AI校正は固定応答の `stub` で動くため、Ollama・GPU・外部APIキーは不要です。Composeはデモ専用のMinIOも起動し、同梱のレシピ画像を保存します。
+前提: Docker Desktop、Python 3.14、Node.js（npm）。
 
 ```powershell
-# 1. デモ専用のランダムな資格情報を含む .env.demo を作る。
+# 1. デモ専用のランダムなローカル設定を作る（.env.demoはGit管理外）
 python backend/scripts/create_demo_env.py
-# 旧方式で作った .env.demo が既にある場合だけ、必要ならバックアップ後に --force を付ける。
-# python backend/scripts/create_demo_env.py --force
 
-# 2. デモ専用PostgreSQLを起動する（開発用の5432とは別）。
+# 2. デモ用のPostgreSQLとMinIOを起動する
 docker compose --env-file .env.demo -f infra/docker-compose.demo.yml up -d
 
-# 3. デモ用DBへマイグレーションとデータ投入を行う。
+# 3. デモ用DBを準備し、バックエンドを起動する
 cd backend
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -59,8 +47,6 @@ $env:APP_ENV = "demo"
 .\.venv\Scripts\python.exe -m alembic upgrade head
 .\.venv\Scripts\python.exe -m scripts.seed_demo
 .\.venv\Scripts\python.exe -m scripts.demo_seed_expansion
-
-# 4. バックエンドをデモ設定で起動する。
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
@@ -68,137 +54,56 @@ $env:APP_ENV = "demo"
 
 ```powershell
 cd expoApp
-npm install
+npm ci
 $env:EXPO_PUBLIC_API_BASE_URL = "http://localhost:8000"
 npm run web
 ```
 
-| 表示名 | メールアドレス | パスワード |
+起動後、Expoが表示したURLをブラウザで開いてログインしてください。全デモアカウントのパスワードは `DemoPass123!` です。
+
+| 用途 | アカウント | 確認できること |
 | --- | --- | --- |
-| デモ料理人 あかり | `demo.chef@example.com` | `DemoPass123!` |
-| デモ食べ歩き みなと | `demo.foodie@example.com` | `DemoPass123!` |
-| デモ初心者 ひなた | `demo.beginner@example.com` | `DemoPass123!` |
+| 基本操作 | `demo.chef@example.com` | レシピ一覧、画像、通知、フォロワー7人のプロフィール |
+| 相互フォロー | `demo.ema@example.com` / `demo.riku@example.com` | 相互フォローと異なるフォロー数 |
+| 未フォロー | `demo.kai@example.com` | フォロー0・フォロワー0の空状態 |
+| 片方向フォロー | `demo.noa@example.com` | フォロー3・フォロワー1の状態 |
 
-同じseedを再実行しても、デモ料理人 あかりのアカウントが存在する場合は変更せず終了します。停止は `docker compose --env-file .env.demo -f infra/docker-compose.demo.yml down`、デモDB・デモ画像を完全に作り直すときだけ末尾に `-v` を付けます。この操作はデモ用ボリュームだけを削除し、開発DB・開発MinIO・AWSには影響しません。
+デモには10ユーザー、10レシピ、10コメント、10通知、レシピのサムネイル・手順画像を投入します。未お気に入りのレシピも含むため、お気に入り前後の表示も確認できます。
 
-## ローカルで動かす・テストする
-
-**1. インフラ（DB・ストレージ）だけ起動**（バックエンドはホストで動かす。`api` サービスはフルスタック実行・E2E 用）
-
-```bash
-docker compose --env-file .env.development -f infra/docker-compose.yml up -d postgres minio
-```
-
-**2. バックエンド（`backend/`）をホストで起動**（`.env.development` の `<host>` は `localhost`）
-
-```bash
-cd backend
-
-# 仮想環境の作成と有効化
-python -m venv .venv
-# macOS / Linux:
-source .venv/bin/activate
-# Windows PowerShell:
-#   .\.venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt -r requirements-dev.txt
-# development では起動時に alembic upgrade head を自動実行する
-uvicorn app.main:app --reload   # http://localhost:8000
-```
-
-**3. バックエンドのチェック（CI と同じ内容）** — `backend/` で実行
-
-```bash
-ruff check .
-ruff format --check .
-mypy .
-pytest --cov-report=json        # 単体 ＋ 結合。pytest 設定が APP_ENV=test を
-                                # 強制し .env.test の使い捨て DB を使う
-python -m scripts.check_coverage coverage.json --lines 85 --branches 75
-                                # 行・分岐カバレッジの下限（testing.md §3）
-```
-
-### ローカルAI誤字脱字チェック
-
-OllamaをWindowsホストで起動し、`qwen3.5:9b` を取得します。`ollama ps` の
-`PROCESSOR` が `GPU` ならGPU推論で動いています。
+停止は次のコマンドです。`-v` を付けると**デモ用**DB・画像だけを初期化します。開発環境・AWSには影響しません。
 
 ```powershell
-ollama pull qwen3.5:9b
-ollama run qwen3.5:9b
-ollama ps
+docker compose --env-file .env.demo -f infra/docker-compose.demo.yml down
+# 完全に作り直す場合だけ
+docker compose --env-file .env.demo -f infra/docker-compose.demo.yml down -v
 ```
 
-`.env.development` には `AI_PROVIDER=local`、`OLLAMA_BASE_URL=http://localhost:11434`、
-`OLLAMA_MODEL=qwen3.5:9b` を設定します。バックエンド起動後、固定の品質ケースは
-次で確認できます。
+## 開発・テスト
 
-```powershell
-cd backend
-python -m scripts.evaluate_ai_proofread
-```
+通常の開発環境はデモ環境とは別です。バックエンド、フロントエンド、環境変数の詳細はそれぞれのREADMEを参照してください。
 
-Docker内のAPIからホストOllamaへ接続する場合だけ、`OLLAMA_BASE_URL` を
-`http://host.docker.internal:11434` に変更します。
+- [バックエンドのセットアップ・テスト](backend/README.md)
+- [Expo / Tauri フロントエンドのセットアップ・テスト](expoApp/README.md)
+- [環境変数とシークレットの一覧](docs/requirements/environment.md)
+- [テスト・CI/CD方針](docs/requirements/testing.md)
 
-**4. フロントエンド（`expoApp/`）** — コマンドは OS 共通
-
-```bash
-cd expoApp
-npm install
-npm run web                     # ブラウザで確認（デスクトップの土台）
-npm run tauri dev               # デスクトップアプリとして起動
-
-# チェック（CI と同じ内容）
-npm run lint
-npm run format                  # Prettier（--check）
-npm run typecheck
-npm test -- --coverage          # jest（単体・結合。API は MSW でモック）。
-                                # --coverage を付けると行・分岐の下限も判定する
-
-# E2E（バックエンド一式を compose で起動してから）
-npm run e2e:web                 # Web（Playwright）
-npm run e2e:android             # Android（Appium + WebdriverIO。Appium サーバーとエミュレータが必要）
-```
-
-**5. デスクトップ（Windows）の未署名 `.msi` を作る**（デモ用。コード署名・ストア配布は対象外。Issue #136）
-
-前提: Rust の stable（Windows は MSVC 版。`rustup show` で `x86_64-pc-windows-msvc`）と、Visual Studio の C++ ビルドツール。WebView2 ランタイム（Windows 10/11 には同梱）。`.msi` を作るための WiX は、初回のビルドで Tauri が自動でダウンロードする（失敗したらビルドのログでネットワーク等を確かめる）。
-
-API の接続先はビルド時にアプリへ埋め込まれる（`EXPO_PUBLIC_API_BASE_URL`。未指定なら `http://localhost:8000`）。先に 2. の手順でバックエンドを `http://localhost:8000` で動かしておく。
-
-```powershell
-# Windows PowerShell（expoApp/ で実行）
-$env:EXPO_PUBLIC_API_BASE_URL = "http://localhost:8000"
-npx tauri build --bundles msi   # Web ビルド（expo export）→ Rust のビルド → .msi
-```
-
-```bash
-# bash（Git Bash など。expoApp/ で実行）
-EXPO_PUBLIC_API_BASE_URL=http://localhost:8000 npx tauri build --bundles msi
-```
-
-- できるもの: `src-tauri/target/release/bundle/msi/Recipi_0.1.0_x64_en-US.msi`（インストーラー）と `src-tauri/target/release/app.exe`（インストールせずに直接起動できる本体）。作るのは `.msi` だけ（`--bundles msi`。macOS の `.dmg` はこの手順の対象外）
-- インストールせずに試すときは、`src-tauri/target/release/app.exe` をその場で起動する（単体で別の場所へコピーしない）
-- ログイン情報（リフレッシュトークン）は Stronghold の `%APPDATA%\com.recipi.app\recipi-vault.hold` に保存される。「ログインを保持」ON なら、閉じて開き直してもログインしたまま
-- 未署名なので、配布先の Windows の設定・評価状況によって SmartScreen の警告が出ることがある
-- GitHub Actions の手動ワークフロー `tauri`（「Run workflow」）でも、Windows で `.msi` を作って artifact `recipi-msi` に保存できる（ローカルの api 向けのデモ用）
-
-### テストの方針
-
-- **単体 / 結合 / Web E2E ＋ 静的解析（品質チェック）＋ 契約テスト**を通常の CI（GitHub Actions）で回す。
-- 実行時間の長い Android E2E と Tauri 検証は、Phase 完了時・リリース前・関連する共通基盤の変更時に GitHub Actions から手動実行する。
-- テストは **ブラックボックス（仕様ベース）＋ ホワイトボックス（実装・分岐ベース）** を併用する。
-- 詳細: [`docs/requirements/testing.md`](docs/requirements/testing.md)
+ローカルでAI校正を実モデルで試す場合は、Ollamaで `qwen3.5:9b` を取得し、`.env.development` を `AI_PROVIDER=local` に設定します。品質確認の手順と、本番のAnthropic構成は [AI誤字脱字チェックの仕様](docs/requirements/features/ai-proofread.md) を参照してください。
 
 ## 本番環境（AWS）
 
-本番は **AWS**（ap-northeast-1）で、構成は Terraform（[`infra/terraform/`](infra/terraform/)）で管理しています。公開の入口は API Gateway HTTP API で、VPC Link ＋ Cloud Map 経由で private サブネットの ECS Fargate に届きます。DB は RDS PostgreSQL 18、画像は非公開の S3 ＋ CloudFront（OAC）配信、ログとアラームは CloudWatch ＋ SNS（メール）、定期ジョブは EventBridge Scheduler が ECS タスクとして動かします。AI校正は Anthropic API を使い、APIキーは AWS Secrets Manager からECSへ注入します。backend のデプロイは GitHub Actions の手動ワークフロー（OIDC）で行い、main への push で自動デプロイはしません。
+本番構成は Terraform で管理しています。API GatewayからVPC Link・Cloud Map・内部ALBを経由してECS Fargateへ接続し、RDS Multi-AZ、非公開S3 + CloudFront、CloudWatch + SNS、EventBridge Schedulerを利用します。
 
-アプリコードだけを更新する場合は、Terraform apply ではなく手動の `deploy-backend` ワークフローで、ECRへのイメージpush・マイグレーション・ECS更新を行います。Terraform apply は、AWSリソースやECSの環境変数・Secrets Manager参照など**インフラ定義を変更した場合だけ**実行します。
+学習用のため、AWS環境は常時稼働させず、検証時だけ `terraform apply` を行い、終了後に `terraform destroy` します。初回構築、Secrets ManagerへのAPIキー登録、手動デプロイ、費用・後始末は [`infra/terraform/README.md`](infra/terraform/README.md) に記載しています。
 
-学習用のため常時稼働させず、**確認するときだけ `terraform apply` して、終わったら `terraform destroy`** する運用です。はじめて立てるときの通し手順（state 用バケット → ECR → イメージの push → apply → マイグレーション → GitHub Secrets → destroy）と費用の目安は [`infra/terraform/README.md`](infra/terraform/README.md)、設計の全体像とトレードオフは [`docs/requirements/architecture.md`](docs/requirements/architecture.md) の「本番デプロイ」にあります。
+## ドキュメント
 
-## 開発ワークフロー
+- [要件定義書の索引](docs/requirements/README.md)
+- [アーキテクチャ・リポジトリ構成](docs/requirements/architecture.md)
+- [画面設計](docs/requirements/screens/README.md)
+- [データモデル](docs/requirements/data-model.md)
+- [API仕様](docs/requirements/api.md)
+- [未対応・改善候補](docs/requirements/todo.md)
 
-作業は必ず GitHub Issue から。`main` へは直接 push せず PR 経由（[`CLAUDE.md`](CLAUDE.md)）。
+## 開発フロー
+
+作業はGitHub Issueから開始し、専用ブランチとPull Requestを経由して `main` へ取り込みます。`main` への直接pushは行いません。
