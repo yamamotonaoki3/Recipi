@@ -388,3 +388,39 @@ def test_ref_recipe_link_survives_target_deletion_as_snapshot(client: TestClient
     linked = ref["ingredientGroups"][0]["ingredients"][0]["refRecipe"]
     assert linked["id"] is None
     assert linked["title"] == "自家製だれ"
+
+
+def test_put_preserves_deleted_ref_recipe_title_snapshot(client: TestClient) -> None:
+    """削除済み参照を含むレシピを編集しても、削除状態の表示情報を失わない。"""
+    headers = auth_headers(client)
+    base = client.post(
+        RECIPES_URL, json=recipe_payload(title="自家製だれ"), headers=headers
+    ).json()["id"]
+    parent_id = client.post(
+        RECIPES_URL,
+        json=recipe_payload(
+            title="煮物",
+            ingredientGroups=[
+                {"name": None, "ingredients": [{"name": "だれ", "refRecipeId": base}]}
+            ],
+        ),
+        headers=headers,
+    ).json()["id"]
+    assert client.delete(f"{RECIPES_URL}/{base}", headers=headers).status_code == 204
+
+    # 編集画面が取得した削除済み参照のスナップショットを、全置換 PUT に再送する。
+    updated = recipe_payload(
+        title="煮物（更新）",
+        ingredientGroups=[
+            {
+                "name": None,
+                "ingredients": [
+                    {"name": "だれ", "refRecipeId": None, "refRecipeTitle": "自家製だれ"}
+                ],
+            }
+        ],
+    )
+    response = client.put(f"{RECIPES_URL}/{parent_id}", json=updated, headers=headers)
+    assert response.status_code == 200, response.text
+    linked = response.json()["ingredientGroups"][0]["ingredients"][0]["refRecipe"]
+    assert linked == {"id": None, "title": "自家製だれ"}

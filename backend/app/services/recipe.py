@@ -247,7 +247,14 @@ def _rebuild_children(
 
         for ing_pos, ing_in in enumerate(group_in.ingredients, start=1):
             ref_id = ing_in.ref_recipe_id
-            ref_title = ref_titles.get(ref_id) if ref_id is not None else None
+            # 生きている参照先は DB から得た現タイトルを使う。一方、削除済み参照は
+            # ref_recipe_id が SET NULL 済みなので、編集画面が GET で受け取った
+            # スナップショットを再送して初めて全置換 PUT でも保持できる。
+            ref_title = (
+                ref_titles[ref_id]
+                if ref_id is not None
+                else (ing_in.ref_recipe_title or "").strip() or None
+            )
             session.add(
                 Ingredient(
                     recipe_id=recipe.id,

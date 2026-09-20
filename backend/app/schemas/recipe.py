@@ -88,8 +88,15 @@ class IngredientInput(CamelModel):
     unit: str | None = Field(default=None, max_length=UNIT_MAX)
     # 別レシピへのリンク。本人所有・自己参照不可の検証は service 層で行う。
     ref_recipe_id: uuid.UUID | None = None
+    # 削除済み参照のタイトルを PUT の全置換でも保持するための値。
+    # 生きている ref_recipe_id を指定した場合は service 層が参照先の現タイトルを
+    # 優先するので、この値は信用しない。
+    ref_recipe_title: str | None = Field(default=None, max_length=TITLE_MAX)
 
     _reject_blank_name = field_validator("name")(_reject_blank)
+    _normalize_blank_ref_recipe_title = field_validator("ref_recipe_title", mode="before")(
+        _blank_to_none
+    )
 
 
 class IngredientGroupInput(CamelModel):

@@ -290,7 +290,7 @@ describe("RecipeDetailScreen", () => {
     expect(mockPush).toHaveBeenCalledWith("/home/recipes/r2");
   });
 
-  it("参照先削除済み（refRecipe.id=null）はタップで「削除されました」を出す", async () => {
+  it("参照先削除済み（refRecipe.id=null）はリンクにせず、タイトルと削除済み表示を残す", async () => {
     mockGetRecipe.mockResolvedValue(
       makeRecipe({
         ingredientGroups: [
@@ -309,9 +309,15 @@ describe("RecipeDetailScreen", () => {
         ],
       }),
     );
-    const { findByTestId } = await render(<RecipeDetailScreen basePath="/home" />, { wrapper });
-    await fireEvent.press(await findByTestId("detail-ingredient-link-0-0"));
-    expect(await findByTestId("recipe-dead-ref-dialog")).toBeTruthy();
+    const { findByTestId, findByText, queryByTestId } = await render(
+      <RecipeDetailScreen basePath="/home" />,
+      {
+        wrapper,
+      },
+    );
+    expect(await findByTestId("detail-ingredient-deleted-0-0")).toBeTruthy();
+    expect(await findByText("自家製だれ（削除済み）")).toBeTruthy();
+    expect(queryByTestId("detail-ingredient-link-0-0")).toBeNull();
     expect(mockPush).not.toHaveBeenCalled();
   });
 

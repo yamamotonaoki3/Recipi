@@ -66,7 +66,6 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
   };
 
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deadRefMessage, setDeadRefMessage] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
 
   // --- 閲覧履歴への記録（features/view-history.md §3・processing-model.md §10）---
@@ -275,27 +274,31 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
                   unit: ing.unit,
                   placement: ing.placement as Placement,
                 });
-                const isLink = ing.refRecipe != null;
+                const isLiveRef = ing.refRecipe?.id != null;
+                const isDeletedRef = ing.refRecipe?.id === null;
                 return (
                   <View
                     key={ii}
                     testID={`detail-ingredient-${gi}-${ii}`}
                     className="flex-row justify-between"
                   >
-                    {isLink ? (
+                    {isLiveRef ? (
                       <Pressable
                         testID={`detail-ingredient-link-${gi}-${ii}`}
-                        onPress={() => {
-                          if (ing.refRecipe?.id) {
-                            router.push(`${basePath}/recipes/${ing.refRecipe.id}` as never);
-                          } else {
-                            setDeadRefMessage(true);
-                          }
-                        }}
+                        onPress={() =>
+                          router.push(`${basePath}/recipes/${ing.refRecipe!.id}` as never)
+                        }
                         accessibilityRole="link"
                       >
                         <Text className="text-base text-orange-600 underline">{ing.name}</Text>
                       </Pressable>
+                    ) : isDeletedRef ? (
+                      <Text
+                        testID={`detail-ingredient-deleted-${gi}-${ii}`}
+                        className="text-base text-neutral-500"
+                      >
+                        {ing.name}（削除済み）
+                      </Text>
                     ) : (
                       <Text className="text-base text-neutral-800">{ing.name}</Text>
                     )}
@@ -373,17 +376,6 @@ export function RecipeDetailScreen({ basePath }: { basePath: string }) {
         destructive={false}
         onConfirm={() => setDeleteError(false)}
         onCancel={() => setDeleteError(false)}
-      />
-
-      <ConfirmDialog
-        visible={deadRefMessage}
-        testID="recipe-dead-ref-dialog"
-        title="このレシピは削除されました"
-        message="リンク先のレシピは存在しません。"
-        confirmLabel="OK"
-        destructive={false}
-        onConfirm={() => setDeadRefMessage(false)}
-        onCancel={() => setDeadRefMessage(false)}
       />
     </View>
   );
