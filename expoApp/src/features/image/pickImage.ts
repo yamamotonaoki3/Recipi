@@ -13,9 +13,9 @@ import { Platform } from "react-native";
 import type { UploadFile } from "./api";
 
 /**
- * 送信前に縮小する長辺のピクセル数。**サーバーの `IMAGE_MAX_DIMENSION` と
- * 同じ値にそろえること**（ずれると、送った画像がサーバーで再度縮小されて
- * 無駄な劣化が起きる）。
+ * 公開設定APIを取得できない場合に使う、送信前の縮小長辺（px）。通常は
+ * サーバーの `IMAGE_MAX_DIMENSION` を公開設定APIから取得してそろえる
+ * （ずれると、送った画像がサーバーで再度縮小されて無駄な劣化が起きる）。
  *
  * これは「画質のため」ではなく **アップロードを成功させるため**の処理。
  * スマホの標準カメラは 4:3・約 4000x3000（12MP）で撮り、JPEG なら 1 枚
@@ -23,7 +23,7 @@ import type { UploadFile } from "./api";
  * 利用者からは「なぜか画像が上げられない」としか見えない。
  * 送る前に 2048x1536 程度へ縮めておけば失敗しなくなり、通信量も減る。
  */
-const MAX_DIMENSION = 2048;
+export const DEFAULT_IMAGE_MAX_DIMENSION = 2048;
 
 /** JPEG の圧縮率（0〜1、1 が最高画質）。料理写真なので画質寄りにしておく。 */
 const COMPRESS = 0.8;
@@ -38,6 +38,19 @@ export type PickedImage = {
 
 /** 利用者がキャンセルしたことを表す。エラーではないので例外にしない。 */
 export type PickResult = PickedImage | null;
+
+/**
+ * 指定された上限へ縮小するための操作を返す。上限以下の画像は拡大しない。
+ * 画像の向きに応じて長辺だけを指定することで、短辺は縦横比を保って計算される。
+ */
+export function imageResizeAction(
+  width: number,
+  height: number,
+  maxDimension: number,
+): { width: number } | { height: number } | null {
+  if (Math.max(width, height) <= maxDimension) return null;
+  return width >= height ? { width: maxDimension } : { height: maxDimension };
+}
 
 /**
  * 権限を要求する。拒否されたら理由付きで例外を投げる。
@@ -67,12 +80,16 @@ async function ensurePermission(source: PickSource): Promise<void> {
  * 長辺が上限以下ならそのまま返す（拡大はしない）。`resize` に `width` だけ
  * 渡すと高さは比率を保って自動計算されるので、長辺がどちらかで指定を変える。
  */
-async function shrink(uri: string, width: number, height: number): Promise<string> {
-  if (Math.max(width, height) <= MAX_DIMENSION) return uri;
+async function shrink(
+  uri: string,
+  width: number,
+  height: number,
+  maxDimension: number,
+): Promise<string> {
+  const resizeAction = imageResizeAction(width, height, maxDimension);
+  if (!resizeAction) return uri;
 
-  const context = ImageManipulator.manipulate(uri).resize(
-    width >= height ? { width: MAX_DIMENSION } : { height: MAX_DIMENSION },
-  );
+  const context = ImageManipulator.manipulate(uri).resize(resizeAction);
   let rendered: Awaited<ReturnType<typeof context.renderAsync>> | null = null;
   try {
     rendered = await context.renderAsync();
@@ -121,7 +138,10 @@ async function toUploadFile(uri: string): Promise<UploadFile> {
  * `quality: 1` にしているのは、ここでは劣化させず `shrink()` で
  * サイズを揃えてから 1 回だけ圧縮するため（二重圧縮を避ける）。
  */
-export async function pickImage(source: PickSource = "library"): Promise<PickResult> {
+export async function pickImage(
+  source: PickSource = "library",
+  maxDimension: number = DEFAULT_IMAGE_MAX_DIMENSION,
+): Promise<PickResult> {
   await ensurePermission(source);
 
   const options: ImagePicker.ImagePickerOptions = {
@@ -140,6 +160,6 @@ export async function pickImage(source: PickSource = "library"): Promise<PickRes
   const asset = result.assets[0];
   if (!asset) return null;
 
-  const uri = await shrink(asset.uri, asset.width, asset.height);
+  const uri = await shrink(asset.uri, asset.width, asset.height, maxDimension);
   return { uri, file: await toUploadFile(uri) };
 }

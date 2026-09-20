@@ -163,6 +163,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Client Config
+         * @description 画像選択に必要な公開設定だけを返す（認証・DBアクセス不要）。
+         */
+        get: operations["get_client_config_api_v1_client_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/comments/{comment_id}": {
         parameters: {
             query?: never;
@@ -762,6 +782,14 @@ export interface components {
              * @description JPEG / PNG / WebP の画像 1 枚
              */
             file: string;
+        };
+        /**
+         * ClientConfigResponse
+         * @description クライアントのローカル処理に必要な、安全な設定だけを返す。
+         */
+        ClientConfigResponse: {
+            /** Imagemaxdimension */
+            imageMaxDimension: number;
         };
         /**
          * CommentCreateRequest
@@ -1977,6 +2005,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_client_config_api_v1_client_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientConfigResponse"];
                 };
             };
         };

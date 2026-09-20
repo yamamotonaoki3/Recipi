@@ -17,6 +17,10 @@ import * as imageApi from "@/features/image/api";
 import { ApiError } from "@/features/auth/api";
 
 jest.mock("@/features/image/api", () => ({ uploadImage: jest.fn() }));
+jest.mock("@tanstack/react-query", () => ({
+  ...jest.requireActual("@tanstack/react-query"),
+  useQueryClient: () => ({ fetchQuery: jest.fn().mockRejectedValue(new Error("offline")) }),
+}));
 
 const mockUpload = imageApi.uploadImage as jest.Mock;
 const mockLaunchLibrary = ImagePicker.launchImageLibraryAsync as jest.Mock;

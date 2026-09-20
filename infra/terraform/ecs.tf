@@ -20,6 +20,36 @@ resource "aws_cloudwatch_log_group" "api" {
   retention_in_days = 365
 }
 
+locals {
+  # 非秘密の実行設定。タスク定義とTerraformテストで同じ値を参照し、
+  # API側のIMAGE_MAX_DIMENSIONとクライアント公開設定の基準を一元化する。
+  ecs_task_environment = [
+    { name = "APP_ENV", value = "production" },
+    { name = "LOG_LEVEL", value = "INFO" },
+    { name = "LOG_FORMAT", value = "json" },
+    { name = "AUTH_COOKIE_SECURE", value = "true" },
+    # DB 接続プールは1タスクあたり同時20本（10＋予備10）まで、空き待ちは5秒。
+    # RDS の接続上限に、定期ジョブ・マイグレーション・手動接続の余地を残す。
+    { name = "DB_POOL_SIZE", value = tostring(var.db_pool_size) },
+    { name = "DB_MAX_OVERFLOW", value = tostring(var.db_max_overflow) },
+    { name = "DB_POOL_TIMEOUT_SECONDS", value = "5" },
+    { name = "CORS_ALLOW_ORIGINS", value = var.cors_allow_origins },
+    # 空のキーはタスクロールの一時認証情報を使う指定（Issue #166）。
+    { name = "S3_ENDPOINT_URL", value = "" },
+    { name = "S3_ACCESS_KEY_ID", value = "" },
+    { name = "S3_SECRET_ACCESS_KEY", value = "" },
+    { name = "S3_REGION", value = var.aws_region },
+    { name = "S3_BUCKET", value = aws_s3_bucket.images.id },
+    # URL は https://<CloudFront>/uploads/... として返す。
+    { name = "S3_PUBLIC_URL_BASE", value = "https://${aws_cloudfront_distribution.images.domain_name}" },
+    # API Gateway の VPC Link が置かれる private サブネットだけを信頼する（Issue #166）。
+    { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.private_subnet_cidrs) },
+    { name = "IMAGE_MAX_DIMENSION", value = tostring(var.image_max_dimension) },
+    # ECS に Ollama はいないため、本番は Anthropic を明示する（Issue #199）。
+    { name = "AI_PROVIDER", value = "anthropic" },
+  ]
+}
+
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project_name}-api"
   requires_compatibilities = ["FARGATE"]
@@ -45,41 +75,7 @@ resource "aws_ecs_task_definition" "api" {
         protocol      = "tcp"
       }]
 
-      environment = [
-        { name = "APP_ENV", value = "production" },
-        { name = "LOG_LEVEL", value = "INFO" },
-        { name = "LOG_FORMAT", value = "json" },
-        { name = "AUTH_COOKIE_SECURE", value = "true" },
-        # DB 接続プール。1タスクあたり同時20本（10 ＋ 予備10）まで、空き待ちは5秒。
-        # 待ちきれない分は 500 ではなく 503 ＋ Retry-After を返して早く手放す。
-        # RDS db.t4g.micro の max_connections（約 110）に対し、定期ジョブ・
-        # マイグレーション・手動接続の分を残せる範囲にしている。
-        { name = "DB_POOL_SIZE", value = tostring(var.db_pool_size) },
-        { name = "DB_MAX_OVERFLOW", value = tostring(var.db_max_overflow) },
-        { name = "DB_POOL_TIMEOUT_SECONDS", value = "5" },
-        { name = "CORS_ALLOW_ORIGINS", value = var.cors_allow_origins },
-        # 画像は AWS の S3。エンドポイントとアクセスキーは空にし、タスクロールの
-        # 一時的な認証情報を使う（空を「AWS の標準・タスクロール」として扱う処理は Issue #166）。
-        { name = "S3_ENDPOINT_URL", value = "" },
-        { name = "S3_ACCESS_KEY_ID", value = "" },
-        { name = "S3_SECRET_ACCESS_KEY", value = "" },
-        { name = "S3_REGION", value = var.aws_region },
-        { name = "S3_BUCKET", value = aws_s3_bucket.images.id },
-        # 画像の URL は https://<CloudFront>/uploads/...（backend/app/services/image.py）。
-        { name = "S3_PUBLIC_URL_BASE", value = "https://${aws_cloudfront_distribution.images.domain_name}" },
-        # API Gateway の VPC Link の ENI が置かれる private サブネット。ここから来た
-        # リクエストだけ、専用ヘッダー X-Recipi-Client-Ip をクライアントの IP として使う
-        # （backend/app/request_utils.py。Issue #166）。VPC 全体にはしない。
-        { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.private_subnet_cidrs) },
-        # AI 校正のプロバイダ（Issue #199）。**明示しないと既定の "local"（Ollama）に
-        # なり、ECS には Ollama が居ないので毎回 15 秒のタイムアウトを待ってから 503 に
-        # なる**（その間スレッドを占有する）。本番は "anthropic" を指定する。
-        #
-        # APIキーはSecrets Managerから注入する。空のSecretを参照するとタスク自体が
-        # 起動できないため、値の手動登録を終えて `enable_anthropic_proofread=true` に
-        # した場合だけ下のsecretsブロックへ加える。
-        { name = "AI_PROVIDER", value = "anthropic" },
-      ]
+      environment = local.ecs_task_environment
 
       # 値は Secrets Manager から取り出される。ここで値を文字列として書かず、
       # SecretのARNだけをECSへ渡す。値はtfstateにも

@@ -31,6 +31,7 @@ from app import storage
 from app.ai import warm_local_ollama
 from app.api.ai import router as ai_router
 from app.api.auth import router as auth_router
+from app.api.client_config import router as client_config_router
 from app.api.comments import router as comments_router
 from app.api.images import router as images_router
 from app.api.notifications import router as notifications_router
@@ -214,6 +215,7 @@ def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
 
 
 app.include_router(auth_router)
+app.include_router(client_config_router)
 app.include_router(ai_router)
 app.include_router(users_router)
 app.include_router(recipes_router)

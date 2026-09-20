@@ -158,7 +158,7 @@ class Settings(BaseSettings):
     # - スマホ全画面（幅 390pt × 3 倍 DPI ≒ 1170px）に対して余裕がある
     # - タブレットやデスクトップの大きい画面でも粗くならない
     # - JPEG で 300〜600KB 程度に収まり、通信量・保存容量も現実的
-    IMAGE_MAX_DIMENSION: int = 2048
+    IMAGE_MAX_DIMENSION: int = Field(default=2048, ge=1)
     # 圧縮率の高い画像はバイト数が 5MiB 未満でも、展開すると大量のピクセルを
     # 占有してメモリを圧迫するため、バイト数とは別に画素数にも上限を設ける。
     IMAGE_MAX_PIXELS: int = 40_000_000
