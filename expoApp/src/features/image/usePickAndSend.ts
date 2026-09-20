@@ -12,7 +12,9 @@
  * 作り直すと `pickAndSend` も毎回作り直され、依存している effect が余計に走る。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
+import { getImageMaxDimension } from "./clientConfig";
 import { pickImage, type PickSource } from "./pickImage";
 import type { UploadFile } from "./api";
 import { ApiError } from "@/features/auth/api";
@@ -29,6 +31,7 @@ export type UsePickAndSendResult<T> = {
 };
 
 export function usePickAndSend<T>(send: (file: UploadFile) => Promise<T>): UsePickAndSendResult<T> {
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +59,8 @@ export function usePickAndSend<T>(send: (file: UploadFile) => Promise<T>): UsePi
       safe(() => setError(null));
       safe(() => setStatus("picking"));
       try {
-        const picked = await pickImage(source);
+        const maxDimension = await getImageMaxDimension(queryClient);
+        const picked = await pickImage(source, maxDimension);
         if (superseded()) return null;
         // キャンセルはエラーではないので、メッセージを出さず静かに戻す。
         if (!picked) return null;
@@ -79,7 +83,7 @@ export function usePickAndSend<T>(send: (file: UploadFile) => Promise<T>): UsePi
         if (!superseded()) safe(() => setStatus("idle"));
       }
     },
-    [send],
+    [queryClient, send],
   );
 
   const clearError = useCallback(() => setError(null), []);

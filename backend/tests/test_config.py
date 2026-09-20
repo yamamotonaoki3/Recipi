@@ -165,7 +165,7 @@ def test_non_production_allows_default_jwt_secret(monkeypatch: pytest.MonkeyPatc
         "PASSWORD_RESET_ATTEMPT_RETENTION_DAYS",
     ],
 )
-@pytest.mark.parametrize("value", ["0", "-1"])
+@pytest.mark.parametrize("value", ["0", "-1", "1.5"])
 def test_cleanup_settings_reject_non_positive(
     monkeypatch: pytest.MonkeyPatch, tmp_path, name: str, value: str
 ):
@@ -208,6 +208,18 @@ def test_image_url_ttl_rejects_invalid_values(
     """画像 URL の有効期限は 1 秒以上 7 日以下で、範囲外なら起動できない。"""
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
     monkeypatch.setenv("IMAGE_URL_TTL_SECONDS", value)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=tmp_path / ".env.missing")
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_image_max_dimension_rejects_non_positive_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, value: str
+):
+    """公開設定にも使う画像長辺上限は、0以下で起動させない（Issue #230）。"""
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("IMAGE_MAX_DIMENSION", value)
 
     with pytest.raises(ValidationError):
         Settings(_env_file=tmp_path / ".env.missing")

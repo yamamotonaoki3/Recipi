@@ -173,6 +173,17 @@ variable "db_max_overflow" {
   }
 }
 
+variable "image_max_dimension" {
+  type        = number
+  description = "API とクライアントが使う画像の長辺上限（px）"
+  default     = 2048
+
+  validation {
+    condition     = var.image_max_dimension >= 1 && floor(var.image_max_dimension) == var.image_max_dimension
+    error_message = "image_max_dimension は1以上の整数にしてください。"
+  }
+}
+
 variable "backend_image_tag" {
   type        = string
   description = "ECR の backend イメージのタグ（初回は手動で push したタグ。以降はデプロイのワークフローが更新する）"

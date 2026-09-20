@@ -122,6 +122,7 @@ cp terraform.tfvars.example terraform.tfvars
 
 - `alert_email` … アラームの通知先メールアドレス
 - `backend_image_tag` … この時点では仮の値（プレースホルダ）を書く。実際に使うタグは、次の手順でイメージを push した後に書き換える。
+- `image_max_dimension` … 画像の長辺上限。既定は `2048`。変更するとECSの `IMAGE_MAX_DIMENSION` と、クライアント公開設定APIの値が同時に変わる。
 
 ### 4. ECR リポジトリだけを先に作る
 

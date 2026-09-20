@@ -75,6 +75,20 @@
         "title": "Body_upload_image_api_v1_images_post",
         "type": "object"
       },
+      "ClientConfigResponse": {
+        "description": "クライアントのローカル処理に必要な、安全な設定だけを返す。",
+        "properties": {
+          "imageMaxDimension": {
+            "title": "Imagemaxdimension",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "imageMaxDimension"
+        ],
+        "title": "ClientConfigResponse",
+        "type": "object"
+      },
       "CommentCreateRequest": {
         "description": "`POST /recipes/{id}/comments` の body。本文は必須、画像は任意。",
         "properties": {
@@ -2613,6 +2627,28 @@
         "summary": "Signup",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/client-config": {
+      "get": {
+        "description": "画像選択に必要な公開設定だけを返す（認証・DBアクセス不要）。",
+        "operationId": "get_client_config_api_v1_client_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Client Config",
+        "tags": [
+          "client-config"
         ]
       }
     },
