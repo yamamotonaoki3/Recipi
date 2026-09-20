@@ -201,6 +201,37 @@ describe("toWriteRequest", () => {
       refRecipeId: null,
     });
   });
+
+  it("削除済み参照のタイトルを PUT 用リクエストへ再送する", () => {
+    const s = initialFormState();
+    const ingredient = s.groups[0].ingredients[0];
+    const state: RecipeFormState = {
+      ...s,
+      title: "煮物",
+      groups: [
+        {
+          ...s.groups[0],
+          ingredients: [
+            {
+              ...ingredient,
+              name: "だれ",
+              refRecipeId: null,
+              refRecipeTitle: "自家製だれ",
+            },
+          ],
+        },
+      ],
+      steps: [{ ...s.steps[0], body: "煮る" }],
+    };
+
+    expect(toWriteRequest(state, { mode: "edit" }).ingredientGroups[0].ingredients[0]).toEqual({
+      name: "だれ",
+      quantity: null,
+      unit: null,
+      refRecipeId: null,
+      refRecipeTitle: "自家製だれ",
+    });
+  });
 });
 
 describe("fromRecipeResponse / hydrate 往復", () => {

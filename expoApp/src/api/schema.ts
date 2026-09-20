@@ -939,6 +939,8 @@ export interface components {
             quantity?: number | string | null;
             /** Refrecipeid */
             refRecipeId?: string | null;
+            /** Refrecipetitle */
+            refRecipeTitle?: string | null;
             /** Unit */
             unit?: string | null;
         };

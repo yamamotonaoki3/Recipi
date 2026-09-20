@@ -151,7 +151,7 @@
 - `ingredients[].refRecipeId` は任意（null 可）。指定するレシピは本人所有・自己参照でないこと（違反は 400）。
 - `thumbnailKey` は任意（null 可）。`steps[].imageKey` も任意（null 可）。
 - `key` は事前に `POST /images`（[image.md](image.md)）で取得した一時アップロードのキー。サーバーが本参照として確定する。
-- `title_normalized` / `name_normalized` / `ref_recipe_title` はサーバー生成（クライアントは送らない）。
+- `title_normalized` / `name_normalized` はサーバー生成。`ref_recipe_title` も生きている参照先ではサーバーが生成する。**削除済み参照**は、編集画面が GET で受け取った `refRecipe.title` を `refRecipeTitle` として PUT に再送し、全置換後もスナップショットを保持する。
 
 ### PUT `/recipes/{id}`（認証必要、本人のみ）
 

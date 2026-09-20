@@ -429,6 +429,9 @@ export function buildSubmission(
             quantity: i.quantity.trim() === "" ? null : i.quantity.trim(),
             unit: i.unit.trim() === "" ? null : i.unit.trim(),
             refRecipeId: i.refRecipeId,
+            // 削除済み参照は id が null でも、GET で受け取ったタイトルを PUT に
+            // 再送してサーバー側のスナップショットを全置換から守る。
+            ...(i.refRecipeTitle === null ? {} : { refRecipeTitle: i.refRecipeTitle }),
           })),
         },
       };
@@ -502,6 +505,7 @@ export function isDirty(current: RecipeFormState, baseline: RecipeFormState): bo
         quantity: i.quantity,
         unit: i.unit,
         refRecipeId: i.refRecipeId,
+        refRecipeTitle: i.refRecipeTitle,
       })),
     })),
     steps: s.steps.map((st) => ({ body: st.body, imageKey: st.imageKey })),
