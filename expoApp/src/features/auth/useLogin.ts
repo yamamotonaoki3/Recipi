@@ -15,6 +15,7 @@ import { login as loginApi, reactivate as reactivateApi } from "./api";
 import { usesCookieAuth } from "@/lib/authPlatform";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
+import { saveRememberChoice } from "./rememberChoice";
 
 export type LoginInput = {
   email: string;
@@ -67,6 +68,7 @@ export function useLogin() {
           // 無視する。
         }
       }
+      saveRememberChoice(input.rememberMe);
       useSession.getState().setAuth({
         accessToken: result.accessToken,
         refreshToken: result.refreshToken ?? "",
@@ -109,6 +111,7 @@ export function useReactivate() {
           // 副次的な後始末なので無視する。
         }
       }
+      saveRememberChoice(input.rememberMe);
       useSession.getState().setAuth({
         accessToken: result.accessToken,
         refreshToken: result.refreshToken ?? "",
