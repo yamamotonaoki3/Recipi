@@ -39,6 +39,7 @@
 | `POSTGRES_PASSWORD` | compose の postgres のパスワード | secret | `changeme` | 生成した文字列。`password` 等は使わない |
 | `JWT_SECRET_KEY` | アクセストークン（JWT）の署名鍵 | secret | `changeme-generate-a-long-random-string` | 十分な長さのランダム値。[features/auth.md](features/auth.md) |
 | `ACCESS_TOKEN_TTL_MINUTES` | アクセストークンの有効期限 | fixed（目安） | `15` | 短命（[non-functional.md](non-functional.md)） |
+| `ACCESS_TOKEN_TTL_SECONDS` | アクセストークンの有効期限を**秒**で指定（任意）。指定すると `ACCESS_TOKEN_TTL_MINUTES` より**優先**される。正の整数のみ（0・負値・空文字は設定エラー）。未指定なら分の値を 60 倍する | 未指定 | 未指定 | E2E で数十秒の寿命が要るときだけ使う（Issue #245・#246） |
 | `REFRESH_TOKEN_TTL_DAYS` | リフレッシュトークンの有効期限 | fixed（目安） | `60` | 保持 ON / OFF での差は [todo.md](todo.md) #16 |
 | `S3_ENDPOINT_URL` | オブジェクトストレージのエンドポイント | per-env | `http://localhost:9000` | dev/test は MinIO、prod は S3 互換（[features/image.md](features/image.md)） |
 | `S3_REGION` | リージョン | per-env | `us-east-1` | MinIO は任意値でよい |

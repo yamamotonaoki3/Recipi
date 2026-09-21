@@ -103,6 +103,15 @@ class Settings(BaseSettings):
     # --- 認証（JWT）— 実際に使うのは Phase 1（#35）から ----------------
     JWT_SECRET_KEY: str = "dev-only-not-a-real-secret"
     ACCESS_TOKEN_TTL_MINUTES: int = 15
+    # 分より細かい寿命を指定したいときだけ使う（既定は未指定）。主な用途は E2E で、
+    # 401 → リフレッシュ → リトライの経路を実機で通すために「数十秒で切れる
+    # アクセストークン」が要る（Issue #245・#246）。分だけでは最短 1 分になる。
+    #
+    # **指定すると分より優先される。** 逆にすると、分に既定値 15 がある以上
+    # 秒の指定が効かなくなる。既定は None なので、「未指定」と「0 を指定した」を
+    # 区別できる（0 と負値は gt=0 で弾く）。実際の寿命は
+    # `access_token_ttl_seconds` プロパティが決める。
+    ACCESS_TOKEN_TTL_SECONDS: int | None = Field(default=None, gt=0)
     REFRESH_TOKEN_TTL_DAYS: int = 60
     # WebブラウザのHttpOnly Cookie認証設定。
     AUTH_COOKIE_NAME: str = "recipi_refresh_token"
@@ -241,6 +250,19 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.APP_ENV == "test"
+
+    @property
+    def access_token_ttl_seconds(self) -> int:
+        """アクセストークンの実際の寿命（秒）。
+
+        秒が指定されていればそれを、無ければ分を 60 倍した値を返す。
+        **分の値そのものには新しい制約を課さない**（0 や負値を渡したときの既存の
+        挙動をここで変えないため）。トークンを発行する側はこのプロパティだけを
+        見ればよく、優先順位の分岐を持たない。
+        """
+        if self.ACCESS_TOKEN_TTL_SECONDS is not None:
+            return self.ACCESS_TOKEN_TTL_SECONDS
+        return self.ACCESS_TOKEN_TTL_MINUTES * 60
 
     @property
     def cors_allow_origins(self) -> list[str]:
