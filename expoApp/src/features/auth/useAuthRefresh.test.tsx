@@ -137,4 +137,48 @@ describe("useAuthRefresh", () => {
     expect(secureStorage.deleteRefreshToken).toHaveBeenCalled();
     expect(useSession.getState().hydrated).toBe(true);
   });
+
+  describe("Web の rememberMe の復元（Issue #275）", () => {
+    async function restoreOnWeb(stored: string | null) {
+      mockUsesCookieAuth.mockReturnValue(true);
+      // jest（ネイティブ環境）には window.localStorage が無いので代用品を差し込む。
+      const data = new Map<string, string>(stored === null ? [] : [["recipi.rememberMe", stored]]);
+      Object.defineProperty(globalThis, "window", {
+        value: {
+          localStorage: {
+            getItem: (k: string) => data.get(k) ?? null,
+            setItem: (k: string, v: string) => void data.set(k, v),
+          },
+        },
+        configurable: true,
+        writable: true,
+      });
+      mockPost.mockResolvedValue({
+        data: { accessToken: "a", refreshToken: null },
+        error: undefined,
+      });
+      mockGet.mockResolvedValue({
+        data: { id: "u", displayName: "N", avatarUrl: null },
+        error: undefined,
+        response: { status: 200 },
+      });
+      const { result } = await renderHook(() => useAuthRefresh());
+      await waitFor(() => expect(result.current).toBe("restored"));
+    }
+
+    it("保持 OFF でログインしていたなら、再読み込み後も false のまま", async () => {
+      await restoreOnWeb("0");
+      expect(useSession.getState().rememberMe).toBe(false);
+    });
+
+    it("保持 ON でログインしていたなら true", async () => {
+      await restoreOnWeb("1");
+      expect(useSession.getState().rememberMe).toBe(true);
+    });
+
+    it("控えが無ければ false（勝手に長期 Cookie へ切り替えない）", async () => {
+      await restoreOnWeb(null);
+      expect(useSession.getState().rememberMe).toBe(false);
+    });
+  });
 });

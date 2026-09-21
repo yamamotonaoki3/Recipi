@@ -11,6 +11,7 @@ import { useMutation } from "@tanstack/react-query";
 import { signup as signupApi } from "./api";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
+import { saveRememberChoice } from "./rememberChoice";
 
 export type SignupInput = {
   email: string;
@@ -39,6 +40,7 @@ export function useSignup() {
       } catch {
         // 無視する。
       }
+      saveRememberChoice(false);
       useSession.getState().setAuth({
         accessToken: result.accessToken,
         refreshToken: result.refreshToken ?? "",

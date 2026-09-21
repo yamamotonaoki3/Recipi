@@ -69,3 +69,39 @@ test("メール確認・再認証エラーを経てメールを変更し、プ�
     timeout: 15_000,
   });
 });
+
+test("保持しないでログイン → 再読み込み → メール変更しても長期 Cookie に切り替わらない（Issue #275）", async ({
+  page,
+}) => {
+  const email = `e2euser_email_keep_${makeRunId()}@example.com`;
+  const newEmail = `e2euser_email_keep_new_${makeRunId()}@example.com`;
+  // 登録直後のセッションは「保持しない」（ブラウザを閉じると消えるセッション Cookie）。
+  await signUp(page, email, "E2E Remember Off");
+
+  // 再読み込み → Cookie からセッションを復元。ここで選択が失われると true 扱いになる。
+  await page.reload();
+  await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
+
+  await page.getByTestId("nav-my-page").last().click();
+  await page.getByTestId("my-page-account-settings").last().click();
+  const field = (id: string) => page.getByTestId(`account-settings-${id}`).last();
+  await expect(field("email-current-password")).toBeVisible({ timeout: 15_000 });
+  await field("email-current-password").fill(PASSWORD);
+  await field("email").fill(newEmail);
+  await field("email-confirm").fill(newEmail);
+  await field("email-submit").click();
+
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => new URL(r.url()).pathname === EMAIL_PATH),
+    page.getByTestId("account-settings-email-dialog-confirm").last().click(),
+  ]);
+  expect(response.status()).toBe(200);
+  // サーバーは送られた rememberMe で Cookie を作る。保持しない選択が守られていれば、有効期限の無い
+  // セッション Cookie が返る（true が送られていれば Max-Age が付く）。
+  const setCookie = (await response.headersArray())
+    .filter((h) => h.name.toLowerCase() === "set-cookie")
+    .map((h) => h.value)
+    .join("\n");
+  expect(setCookie).toContain("recipi_refresh_token=");
+  expect(setCookie).not.toMatch(/max-age|expires/i);
+});

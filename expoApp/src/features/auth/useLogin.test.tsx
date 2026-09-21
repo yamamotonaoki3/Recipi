@@ -8,11 +8,13 @@ import { renderHook, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import { login } from "./api";
+import { saveRememberChoice } from "./rememberChoice";
 import { useLogin } from "./useLogin";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
 
 jest.mock("./api", () => ({ login: jest.fn() }));
+jest.mock("./rememberChoice", () => ({ saveRememberChoice: jest.fn() }));
 jest.mock("@/lib/secureStorage", () => ({
   secureStorage: {
     setRefreshToken: jest.fn().mockResolvedValue(undefined),
@@ -39,6 +41,27 @@ beforeEach(() => {
 });
 
 describe("useLogin", () => {
+  it.each([true, false])(
+    "ログイン時の rememberMe=%s を Web の控えに保存する（Issue #275）",
+    async (rememberMe) => {
+      mockLogin.mockResolvedValue({
+        user: { id: "u1", displayName: "太郎" },
+        accessToken: "access-1",
+        refreshToken: rememberMe ? "refresh-1" : null,
+      });
+
+      const { result } = await renderHook(() => useLogin(), { wrapper });
+      result.current.mutate({
+        email: "testuser_001@example.com",
+        password: "TestPass123!",
+        rememberMe,
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(saveRememberChoice).toHaveBeenCalledWith(rememberMe);
+    },
+  );
+
   it("成功すると setAuth され、rememberMe=true なら secureStorage に保存する", async () => {
     mockLogin.mockResolvedValue({
       user: { id: "u1", displayName: "太郎" },

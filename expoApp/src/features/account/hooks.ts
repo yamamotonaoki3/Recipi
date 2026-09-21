@@ -10,6 +10,7 @@ import { PROFILE_ROOT_KEY } from "@/features/profile/hooks";
 import { usesCookieAuth } from "@/lib/authPlatform";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
+import { saveRememberChoice } from "@/features/auth/rememberChoice";
 
 /**
  * 秘密の質問の変更。成功してもキャッシュは更新しない
@@ -49,6 +50,7 @@ export function useChangeEmail() {
           // 副次的な後始末は変更結果を覆さない。
         }
       }
+      saveRememberChoice(current.rememberMe);
       useSession.getState().setAuth({
         accessToken: result.accessToken,
         refreshToken,

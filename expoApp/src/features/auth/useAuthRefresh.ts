@@ -21,6 +21,7 @@ import { getCurrentUser } from "@/features/auth/api";
 import { usesCookieAuth } from "@/lib/authPlatform";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession, type SessionUser } from "@/store/session";
+import { readRememberChoice } from "./rememberChoice";
 
 const REFRESH_TIMEOUT_MS = 5000;
 
@@ -97,7 +98,8 @@ export function useAuthRefresh(): AuthRestoreStatus {
           accessToken: data.accessToken,
           refreshToken: data.refreshToken ?? "",
           user,
-          rememberMe: true,
+          // Web は Cookie の中身が見えないので、ログイン時に控えた選択を使う（Issue #275）。
+          rememberMe: readRememberChoice(),
         });
         setStatus("restored");
       } catch {
