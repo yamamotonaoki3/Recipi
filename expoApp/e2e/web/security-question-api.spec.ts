@@ -26,7 +26,7 @@
  * 上限に近づいていないか確かめること（`password-reset.spec.ts` も同じ理由で
  * 429 の検証を backend 側に任せている）。
  */
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./console-guard";
 
 import { PASSWORD, makeRunId } from "./helpers";
 

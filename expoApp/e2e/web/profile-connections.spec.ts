@@ -19,7 +19,8 @@
  * テストデータは `e2euser_prof_{a|b}_<runId>@example.com` と `[E2E_TEST]`。
  * CI の後始末（cleanup_e2e.py）が、ユーザー・レシピ・フォロー・感想をまとめて消す。
  */
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./console-guard";
 
 import {
   createPublicRecipe,

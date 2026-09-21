@@ -11,7 +11,7 @@
  */
 import path from "node:path";
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./console-guard";
 
 import { createRecipe, makeRunId, signUp } from "./helpers";
 

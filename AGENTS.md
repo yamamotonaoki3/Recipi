@@ -69,6 +69,10 @@
   - 境界値・競合・監査ログの網羅はbackendのテストが担当し、API層のE2Eは契約の要点に絞る。
 - 後続Issueへ検証の責任を引き継ぐ場合は、対象Issueの本文へ追記する。
 
+### Web E2E のコンソール監視
+
+Web の spec は `@playwright/test` ではなく `./console-guard` の `test` / `expect` を import する（error レベルのコンソール出力と未捕捉例外でテストを落とす）。自分で作ったページは最初の `goto` の前に `consoleGuard.watch(page)` を呼ぶ。テストが意図して起こす異常系は、そのテストの中だけで URL とメッセージを絞って `consoleGuard.allow(...)` で許可する。本物の不具合をやむを得ず通す場合は `KNOWN_ISSUES` に追跡 Issue 番号と解除条件を付ける。テスト終了後に届くエラーは拾えないため、画像は `toBeVisible()` ではなく `naturalWidth > 0` で読み込みまで確かめる。
+
 ### 品質チェックの範囲
 
 `ruff` や `mypy` をサブディレクトリだけに限定して実行しない。CIはプロジェクト全体（`backend/` では `tests/` を含む）を検査するため、一部のみ通してもローカルで問題を検出できない。backendでは `backend/` 直下で `ruff check .` / `ruff format --check .` / `mypy .` を実行する。テストを追加した後にも再実行する。
