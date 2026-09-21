@@ -113,6 +113,37 @@ def test_build_seed_is_deterministic_and_caps_follows() -> None:
     assert len(first.follows) == 2
 
 
+@pytest.mark.parametrize("hub_followers", [0, 1, 10, 100])
+def test_build_seed_can_set_hub_follower_count(hub_followers: int) -> None:
+    plan = SeedPlan(users=101, recipes=5, follows_per_user=5, hub_followers=hub_followers)
+    data = _build(plan)
+    hub = data.users[0]
+
+    hub_followers_rows = [follow for follow in data.follows if follow.followee_id == hub.id]
+    assert len(hub_followers_rows) == hub_followers
+    assert hub.follower_count == hub_followers
+    assert len({follow.follower_id for follow in hub_followers_rows}) == hub_followers
+
+
+def test_build_seed_without_hub_option_preserves_existing_result() -> None:
+    default = _build(SeedPlan(users=20, recipes=5, follows_per_user=5))
+    explicit_none = _build(SeedPlan(users=20, recipes=5, follows_per_user=5, hub_followers=None))
+
+    def relations(data: seed_perf.SeedData) -> list[tuple[int, int]]:
+        indexes = {user.id: index for index, user in enumerate(data.users)}
+        return [(indexes[row.follower_id], indexes[row.followee_id]) for row in data.follows]
+
+    assert relations(default) == relations(explicit_none)
+    assert [recipe.title for recipe in default.recipes] == [
+        recipe.title for recipe in explicit_none.recipes
+    ]
+
+
+def test_build_seed_rejects_hub_follower_count_larger_than_other_users() -> None:
+    with pytest.raises(ValueError, match="hub_followers"):
+        _build(SeedPlan(users=3, recipes=1, hub_followers=3))
+
+
 def test_build_seed_rejects_empty_plan() -> None:
     with pytest.raises(ValueError):
         _build(SeedPlan(users=0, recipes=1))
@@ -127,6 +158,13 @@ def test_main_requires_yes(module, capsys: pytest.CaptureFixture[str]) -> None:
 def test_seed_main_rejects_non_positive_counts(capsys: pytest.CaptureFixture[str]) -> None:
     assert seed_perf.main(["--users", "0", "--yes"]) == 2
     assert "1 以上" in capsys.readouterr().err
+
+
+def test_seed_main_rejects_hub_followers_outside_user_range(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert seed_perf.main(["--users", "3", "--hub-followers", "3", "--yes"]) == 2
+    assert "--hub-followers" in capsys.readouterr().err
 
 
 def test_insert_stages_put_parents_before_children() -> None:

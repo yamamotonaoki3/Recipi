@@ -106,6 +106,11 @@ class SeedPlan:
     recipes: int = 3000
     follows_per_user: int = 5
     favorites_per_user: int = 10
+    # 1 人目（ハブ）の**最終的な実フォロワー数**。None なら調整しない。
+    #
+    # 通知の fan-out の重さを決めるのは「投稿者のフォロワー数」なので、全員一律の
+    # `follows_per_user` では 10 / 100 / 1,000 のような水準を作れない（Issue #248）。
+    hub_followers: int | None = None
 
 
 @dataclass
@@ -162,6 +167,8 @@ def build_seed(
     """
     if plan.users < 1 or plan.recipes < 1:
         raise ValueError("users と recipes は 1 以上にしてください。")
+    if plan.hub_followers is not None and not 0 <= plan.hub_followers < plan.users:
+        raise ValueError("hub_followers は 0 以上、users 未満にしてください。")
     rng = random.Random(_RANDOM_SEED)
     data = SeedData()
 
@@ -227,6 +234,32 @@ def build_seed(
         user.following_count = k
         user.follower_count = k
 
+    if plan.hub_followers is not None:
+        hub = data.users[0]
+        hub_followers = [follow for follow in data.follows if follow.followee_id == hub.id]
+        retained = hub_followers[: plan.hub_followers]
+        existing_follower_ids = {follow.follower_id for follow in hub_followers}
+        additional = [
+            Follow(follower_id=user.id, followee_id=hub.id, created_at=now)
+            for user in data.users[1:]
+            if user.id not in existing_follower_ids
+        ][: max(0, plan.hub_followers - len(retained))]
+        hub_followers = [*retained, *additional]
+        data.follows = [
+            follow for follow in data.follows if follow.followee_id != hub.id
+        ] + hub_followers
+
+        # 調整対象はハブだけでなく、追加・削除されたフォロワーの following_count
+        # も含むため、指定時だけ実際の行から再計算する。
+        following_counts = {user.id: 0 for user in data.users}
+        follower_counts = {user.id: 0 for user in data.users}
+        for follow in data.follows:
+            following_counts[follow.follower_id] += 1
+            follower_counts[follow.followee_id] += 1
+        for user in data.users:
+            user.following_count = following_counts[user.id]
+            user.follower_count = follower_counts[user.id]
+
     # お気に入り: 自分以外のレシピからランダムに選ぶ。レシピ側のカウント列もそろえる。
     for idx, user in enumerate(data.users):
         candidates = [r for j, r in enumerate(data.recipes) if j % plan.users != idx]
@@ -265,6 +298,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="性能テスト用のデータ（perfuser_）を投入する")
     parser.add_argument("--users", type=int, default=SeedPlan.users, help="ユーザー数")
     parser.add_argument("--recipes", type=int, default=SeedPlan.recipes, help="レシピ数")
+    parser.add_argument(
+        "--hub-followers",
+        type=int,
+        default=None,
+        help="perfuser_001 の最終的なフォロワー数（省略時は既存の輪状フォロー）",
+    )
     parser.add_argument("--yes", action="store_true", help="確認なしで実行する")
     return parser.parse_args(argv)
 
@@ -277,6 +316,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.users < 1 or args.recipes < 1:
         print("--users と --recipes は 1 以上にしてください。", file=sys.stderr)
+        return 2
+    if args.hub_followers is not None and not 0 <= args.hub_followers < args.users:
+        print("--hub-followers は 0 以上、--users 未満にしてください。", file=sys.stderr)
         return 2
 
     # 設定と DB は、引数を確かめた後に読み込む（--help だけで接続しないように）。
@@ -294,7 +336,7 @@ def main(argv: list[str] | None = None) -> int:
 
     url = make_url(settings.DATABASE_URL)
     print(f"接続先: host={url.host} db={url.database}")
-    plan = SeedPlan(users=args.users, recipes=args.recipes)
+    plan = SeedPlan(users=args.users, recipes=args.recipes, hub_followers=args.hub_followers)
     data = build_seed(
         plan,
         load_vocabulary(),
