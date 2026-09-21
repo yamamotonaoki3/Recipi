@@ -12,11 +12,34 @@
  */
 import {
   type FieldErrors,
+  validateEmail,
   validateSecurityAnswer,
   validateSecurityQuestion,
 } from "@/features/auth/validation";
 import { PASSWORD_MAX_LENGTH } from "@/features/auth/constants";
 import { countChars } from "@/lib/textLength";
+
+export type EmailChangeFormValues = {
+  currentPassword: string;
+  email: string;
+  emailConfirm: string;
+};
+
+export type EmailChangeFieldErrors = FieldErrors<keyof EmailChangeFormValues>;
+
+export function validateEmailChangeForm(values: EmailChangeFormValues): EmailChangeFieldErrors {
+  const errors: EmailChangeFieldErrors = {};
+  if (!values.currentPassword) {
+    errors.currentPassword = "現在のパスワードを入力してください";
+  } else if (countChars(values.currentPassword) > PASSWORD_MAX_LENGTH) {
+    errors.currentPassword = `パスワードは${PASSWORD_MAX_LENGTH}文字以内です`;
+  }
+
+  const email = validateEmail(values.email);
+  if (email) errors.email = email;
+  if (values.emailConfirm !== values.email) errors.emailConfirm = "メールアドレスが一致しません";
+  return errors;
+}
 
 export type SecurityQuestionFormValues = {
   currentPassword: string;

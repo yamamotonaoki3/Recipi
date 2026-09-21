@@ -36,10 +36,11 @@ const { secureStorage } = require("../../lib/secureStorage") as SecureStorageMod
 // eslint-disable-next-line import/first
 import { ApiError } from "../auth/api";
 // eslint-disable-next-line import/first
-import { changeSecurityQuestion } from "./api";
+import { changeEmail, changeSecurityQuestion } from "./api";
 
 const BASE_URL = "http://localhost:8000";
 const URL_CHANGE = `${BASE_URL}/api/v1/users/me/security-question`;
+const URL_EMAIL = `${BASE_URL}/api/v1/users/me/email`;
 const URL_REFRESH = `${BASE_URL}/api/v1/auth/refresh`;
 
 const server = setupServer();
@@ -129,4 +130,71 @@ it("429 は ApiError として返す（ログアウトしない）", async () =>
 
   await expect(changeSecurityQuestion(BODY)).rejects.toMatchObject({ status: 429 });
   expect(useSession.getState().accessToken).toBe("access-1");
+});
+
+it("メール変更は rememberMe を含めて送信し、トークン対を返す", async () => {
+  signIn();
+  let received: unknown;
+  server.use(
+    http.put(URL_EMAIL, async ({ request }) => {
+      received = await request.json();
+      return HttpResponse.json({
+        user: { id: "u1", displayName: "太郎" },
+        accessToken: "new-access",
+        refreshToken: "new-refresh",
+      });
+    }),
+  );
+  await expect(
+    changeEmail({ currentPassword: "TestPass123!", email: "new@example.com", rememberMe: true }),
+  ).resolves.toMatchObject({ accessToken: "new-access" });
+  expect(received).toEqual({
+    currentPassword: "TestPass123!",
+    email: "new@example.com",
+    rememberMe: true,
+  });
+});
+
+it("メール重複の409は ApiError として返し、ログアウトしない", async () => {
+  signIn();
+  server.use(
+    http.put(URL_EMAIL, () =>
+      HttpResponse.json(
+        { error: { code: "EMAIL_TAKEN", message: "既に使われています", details: null } },
+        { status: 409 },
+      ),
+    ),
+  );
+  await expect(
+    changeEmail({ currentPassword: "TestPass123!", email: "taken@example.com", rememberMe: true }),
+  ).rejects.toMatchObject({ status: 409, code: "EMAIL_TAKEN" });
+  expect(useSession.getState().isAuthenticated).toBe(true);
+});
+
+it("メール変更の403 REAUTH_FAILEDでもリフレッシュ・ログアウトしない", async () => {
+  signIn();
+  let refreshCalls = 0;
+  server.use(
+    http.put(URL_EMAIL, () =>
+      HttpResponse.json(
+        {
+          error: {
+            code: "REAUTH_FAILED",
+            message: "現在のパスワードが正しくありません",
+            details: null,
+          },
+        },
+        { status: 403 },
+      ),
+    ),
+    http.post(URL_REFRESH, () => {
+      refreshCalls += 1;
+      return HttpResponse.json({ accessToken: "unexpected", refreshToken: "unexpected" });
+    }),
+  );
+  await expect(
+    changeEmail({ currentPassword: "WrongPass1!", email: "new@example.com", rememberMe: true }),
+  ).rejects.toMatchObject({ status: 403, code: "REAUTH_FAILED" });
+  expect(refreshCalls).toBe(0);
+  expect(useSession.getState().isAuthenticated).toBe(true);
 });

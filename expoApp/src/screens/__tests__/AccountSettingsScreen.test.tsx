@@ -10,7 +10,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import { AccountSettingsScreen } from "../AccountSettingsScreen";
-import { changeSecurityQuestion } from "@/features/account/api";
+import { changeEmail, changeSecurityQuestion } from "@/features/account/api";
 import { ApiError } from "@/features/auth/api";
 
 const mockBack = jest.fn();
@@ -23,9 +23,11 @@ jest.mock("expo-router", () => ({
 
 jest.mock("@/features/account/api", () => ({
   changeSecurityQuestion: jest.fn(),
+  changeEmail: jest.fn(),
 }));
 
 const mockChange = changeSecurityQuestion as jest.MockedFunction<typeof changeSecurityQuestion>;
+const mockChangeEmail = changeEmail as jest.MockedFunction<typeof changeEmail>;
 
 async function renderScreen() {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -59,6 +61,7 @@ async function fill(
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockChangeEmail.mockReset();
   mockCanGoBack = true;
 });
 
@@ -85,6 +88,24 @@ it("正しく入力して送ると API を呼び、成功を出して入力欄�
     expect(screen.getByTestId(id).props.value).toBe("");
   }
 });
+
+async function fillEmail(
+  screen: Awaited<ReturnType<typeof renderScreen>>,
+  values: Partial<Record<"password" | "email" | "confirm", string>> = {},
+) {
+  await fireEvent.changeText(
+    screen.getByTestId("account-settings-email-current-password"),
+    values.password ?? "TestPass123!",
+  );
+  await fireEvent.changeText(
+    screen.getByTestId("account-settings-email"),
+    values.email ?? "new@example.com",
+  );
+  await fireEvent.changeText(
+    screen.getByTestId("account-settings-email-confirm"),
+    values.confirm ?? values.email ?? "new@example.com",
+  );
+}
 
 it("確認の答えが一致しなければ API を呼ばない", async () => {
   const screen = await renderScreen();
@@ -153,4 +174,49 @@ it("戻るで前の画面へ。戻り先が無ければマイページへ", asyn
   mockCanGoBack = false;
   await fireEvent.press(screen.getByTestId("account-settings-back"));
   expect(mockReplace).toHaveBeenCalledWith("/my-page");
+});
+
+it("メール確認が不一致なら API を呼ばない", async () => {
+  const screen = await renderScreen();
+  await fillEmail(screen, { confirm: "other@example.com" });
+  await fireEvent.press(screen.getByTestId("account-settings-email-submit"));
+  expect(screen.getByText("メールアドレスが一致しません")).toBeTruthy();
+  expect(mockChangeEmail).not.toHaveBeenCalled();
+});
+
+it("メール変更は確認後に送信し、成功すると入力を消す", async () => {
+  mockChangeEmail.mockResolvedValue({
+    user: { id: "u1", displayName: "太郎" },
+    accessToken: "new-access",
+    refreshToken: "new-refresh",
+  });
+  const screen = await renderScreen();
+  await fillEmail(screen);
+  await fireEvent.press(screen.getByTestId("account-settings-email-submit"));
+  expect(screen.getByTestId("account-settings-email-dialog")).toBeTruthy();
+  expect(screen.getByText(/次回のログインから新しいアドレス/)).toBeTruthy();
+  expect(mockChangeEmail).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByTestId("account-settings-email-dialog-confirm"));
+  await waitFor(() => expect(screen.getByTestId("account-settings-email-success")).toBeTruthy());
+  expect(mockChangeEmail).toHaveBeenCalledWith({
+    currentPassword: "TestPass123!",
+    email: "new@example.com",
+    rememberMe: false,
+  });
+  expect(screen.getByTestId("account-settings-email").props.value).toBe("");
+});
+
+it("403 は現パスワード欄、409 はメール欄に表示する", async () => {
+  mockChangeEmail.mockRejectedValueOnce(new ApiError("x", "REAUTH_FAILED", 403));
+  const screen = await renderScreen();
+  await fillEmail(screen);
+  await fireEvent.press(screen.getByTestId("account-settings-email-submit"));
+  await fireEvent.press(screen.getByTestId("account-settings-email-dialog-confirm"));
+  await waitFor(() => expect(screen.getByText("現在のパスワードが正しくありません")).toBeTruthy());
+
+  mockChangeEmail.mockRejectedValueOnce(new ApiError("x", "EMAIL_TAKEN", 409));
+  await fillEmail(screen);
+  await fireEvent.press(screen.getByTestId("account-settings-email-submit"));
+  await fireEvent.press(screen.getByTestId("account-settings-email-dialog-confirm"));
+  await waitFor(() => expect(screen.getByText("既に使われているメールアドレスです")).toBeTruthy());
 });

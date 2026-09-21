@@ -9,6 +9,8 @@ import type { components } from "@/api/schema";
 import { apiErrorFromResponse } from "@/features/auth/api";
 
 export type ChangeSecurityQuestionRequest = components["schemas"]["ChangeSecurityQuestionRequest"];
+export type ChangeEmailRequest = components["schemas"]["ChangeEmailRequest"];
+export type AuthTokenResponse = components["schemas"]["AuthTokenResponse"];
 
 /**
  * 秘密の質問と答えを変更する。成功は 204（本文なし）。
@@ -21,4 +23,12 @@ export async function changeSecurityQuestion(body: ChangeSecurityQuestionRequest
   // 204 は本文が無いので `data` は空。`error` だけで失敗を判定する（deleteAvatar と同じ）。
   const { error, response } = await api.PUT("/api/v1/users/me/security-question", { body });
   if (error) throw apiErrorFromResponse(error, response, "変更に失敗しました");
+}
+
+/** メールアドレスを変更し、新しいセッション用のトークン対を受け取る。 */
+export async function changeEmail(body: ChangeEmailRequest): Promise<AuthTokenResponse> {
+  const { data, error, response } = await api.PUT("/api/v1/users/me/email", { body });
+  if (error || !data)
+    throw apiErrorFromResponse(error, response, "メールアドレスの変更に失敗しました");
+  return data;
 }
