@@ -1,6 +1,15 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { changeSecurityQuestion, type ChangeSecurityQuestionRequest } from "./api";
+import {
+  changeEmail,
+  changeSecurityQuestion,
+  type ChangeEmailRequest,
+  type ChangeSecurityQuestionRequest,
+} from "./api";
+import { PROFILE_ROOT_KEY } from "@/features/profile/hooks";
+import { usesCookieAuth } from "@/lib/authPlatform";
+import { secureStorage } from "@/lib/secureStorage";
+import { useSession } from "@/store/session";
 
 /**
  * 秘密の質問の変更。成功してもキャッシュは更新しない
@@ -9,5 +18,47 @@ import { changeSecurityQuestion, type ChangeSecurityQuestionRequest } from "./ap
 export function useChangeSecurityQuestion() {
   return useMutation({
     mutationFn: (body: ChangeSecurityQuestionRequest) => changeSecurityQuestion(body),
+  });
+}
+
+export function useChangeEmail() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ currentPassword, email }: Omit<ChangeEmailRequest, "rememberMe">) => {
+      const current = useSession.getState();
+      const result = await changeEmail({ currentPassword, email, rememberMe: current.rememberMe });
+      const refreshToken = result.refreshToken ?? "";
+      if (current.rememberMe) {
+        if (!usesCookieAuth() && !refreshToken) throw new Error("refresh token was not returned");
+        if (!usesCookieAuth()) await secureStorage.setRefreshToken(refreshToken);
+        try {
+          await secureStorage.setUser(JSON.stringify(result.user));
+        } catch (error) {
+          await secureStorage.deleteRefreshToken();
+          throw error;
+        }
+      } else {
+        try {
+          await secureStorage.deleteRefreshToken();
+        } catch {
+          // 副次的な後始末は変更結果を覆さない。
+        }
+        try {
+          await secureStorage.deleteUser();
+        } catch {
+          // 副次的な後始末は変更結果を覆さない。
+        }
+      }
+      useSession.getState().setAuth({
+        accessToken: result.accessToken,
+        refreshToken,
+        user: result.user,
+        rememberMe: current.rememberMe,
+      });
+      return result;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROFILE_ROOT_KEY });
+    },
   });
 }

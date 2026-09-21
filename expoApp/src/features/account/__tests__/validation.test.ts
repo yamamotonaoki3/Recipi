@@ -5,7 +5,12 @@
  * WB: 文字数は `.length` ではなくコードポイントで数える（絵文字 1 つを 1 文字と数える。
  * サーバーと同じ。ずれると境界で「画面では通るのにサーバーで 400」になる）。
  */
-import { validateSecurityQuestionForm, type SecurityQuestionFormValues } from "../validation";
+import {
+  validateEmailChangeForm,
+  validateSecurityQuestionForm,
+  type EmailChangeFormValues,
+  type SecurityQuestionFormValues,
+} from "../validation";
 
 const OK: SecurityQuestionFormValues = {
   currentPassword: "TestPass123!",
@@ -91,5 +96,40 @@ describe("確認用の答え", () => {
 
   it("空白の有無も不一致として扱う（打ち間違いを見逃さない）", () => {
     expect(errorsOf({ securityAnswerConfirm: "ポチ " }).securityAnswerConfirm).toBeDefined();
+  });
+});
+
+const EMAIL_OK: EmailChangeFormValues = {
+  currentPassword: "TestPass123!",
+  email: "new@example.com",
+  emailConfirm: "new@example.com",
+};
+
+function emailErrorsOf(overrides: Partial<EmailChangeFormValues>) {
+  return validateEmailChangeForm({ ...EMAIL_OK, ...overrides });
+}
+
+describe("メールアドレス変更", () => {
+  it("正しい入力ではエラーが無い", () => {
+    expect(emailErrorsOf({})).toEqual({});
+  });
+
+  it("現パスワードとメールアドレスは必須で、形式も確認する", () => {
+    expect(emailErrorsOf({ currentPassword: "" }).currentPassword).toBeDefined();
+    expect(emailErrorsOf({ email: "" }).email).toBeDefined();
+    expect(emailErrorsOf({ email: "not-an-email", emailConfirm: "not-an-email" }).email).toBe(
+      "メールアドレスの形式が正しくありません",
+    );
+  });
+
+  it("確認用メールアドレスが一致しなければ送信を止める", () => {
+    expect(emailErrorsOf({ emailConfirm: "other@example.com" }).emailConfirm).toBe(
+      "メールアドレスが一致しません",
+    );
+  });
+
+  it("現パスワードは72文字までは通し、73文字で止める", () => {
+    expect(emailErrorsOf({ currentPassword: "a".repeat(72) }).currentPassword).toBeUndefined();
+    expect(emailErrorsOf({ currentPassword: "a".repeat(73) }).currentPassword).toBeDefined();
   });
 });

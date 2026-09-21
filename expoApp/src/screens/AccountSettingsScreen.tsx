@@ -3,7 +3,7 @@
  *
  * 「現在のパスワードで再認証してから認証情報を変える」操作をまとめる画面。
  * 表示名・自己紹介など他人への見せ方を変える `ProfileEditScreen` とは性質が違うので分ける。
- * 今は秘密の質問の変更だけ。メールアドレスの変更（#243）もここに足す。
+ * 秘密の質問とメールアドレスの変更（Issue #243）をここで扱う。
  */
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -11,10 +11,13 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BackLabel } from "@/components/BackLabel";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordField } from "@/components/PasswordField";
-import { useChangeSecurityQuestion } from "@/features/account/hooks";
+import { useChangeEmail, useChangeSecurityQuestion } from "@/features/account/hooks";
 import {
+  type EmailChangeFieldErrors,
   type SecurityQuestionFieldErrors,
+  validateEmailChangeForm,
   validateSecurityQuestionForm,
 } from "@/features/account/validation";
 import { ApiError } from "@/features/auth/api";
@@ -56,7 +59,135 @@ export function AccountSettingsScreen() {
       </View>
       <ScrollView contentContainerClassName="gap-8 p-6">
         <SecurityQuestionSection />
+        <EmailChangeSection />
       </ScrollView>
+    </View>
+  );
+}
+
+function EmailChangeSection() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailConfirm, setEmailConfirm] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<EmailChangeFieldErrors>({});
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [succeeded, setSucceeded] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const change = useChangeEmail();
+
+  function handleSubmit() {
+    setErrorMessage(null);
+    setSucceeded(false);
+    const errors = validateEmailChangeForm({ currentPassword, email, emailConfirm });
+    setFieldErrors(errors);
+    if (hasFieldErrors(errors)) return;
+    setConfirmVisible(true);
+  }
+
+  function confirmChange() {
+    setConfirmVisible(false);
+    change.mutate(
+      { currentPassword, email },
+      {
+        onSuccess: () => {
+          setCurrentPassword("");
+          setEmail("");
+          setEmailConfirm("");
+          setSucceeded(true);
+        },
+        onError: (error) => {
+          if (error instanceof ApiError && error.status === 403 && error.code === "REAUTH_FAILED") {
+            setFieldErrors({ currentPassword: "現在のパスワードが正しくありません" });
+          } else if (error instanceof ApiError && error.status === 409) {
+            setFieldErrors({ email: "既に使われているメールアドレスです" });
+          } else if (error instanceof ApiError && error.status === 429) {
+            setErrorMessage("試行回数が上限に達しました。しばらくしてからお試しください");
+          } else if (error instanceof ApiError && error.status === 400) {
+            setErrorMessage("入力内容を確認してください");
+          } else {
+            setErrorMessage("通信エラー。もう一度お試しください");
+          }
+        },
+      },
+    );
+  }
+
+  return (
+    <View className="gap-4">
+      <View className="gap-1">
+        <Text className="text-lg font-bold text-neutral-900">メールアドレスの変更</Text>
+        <Text className="text-sm text-neutral-600">
+          次回のログインから新しいメールアドレスを使います。変更には現在のパスワードが必要です。
+        </Text>
+      </View>
+      <View className="gap-1">
+        <Text className="text-sm text-neutral-700">現在のパスワード</Text>
+        <PasswordField
+          testID="account-settings-email-current-password"
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          errorMessage={fieldErrors.currentPassword}
+        />
+      </View>
+      <View className="gap-1">
+        <Text className="text-sm text-neutral-700">新しいメールアドレス</Text>
+        <TextInput
+          testID="account-settings-email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          className="rounded-lg border border-neutral-300 px-3 py-3 text-base text-neutral-900"
+        />
+        {fieldErrors.email && <Text className="text-sm text-red-600">{fieldErrors.email}</Text>}
+      </View>
+      <View className="gap-1">
+        <Text className="text-sm text-neutral-700">新しいメールアドレス（確認）</Text>
+        <TextInput
+          testID="account-settings-email-confirm"
+          value={emailConfirm}
+          onChangeText={setEmailConfirm}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          className="rounded-lg border border-neutral-300 px-3 py-3 text-base text-neutral-900"
+        />
+        {fieldErrors.emailConfirm && (
+          <Text className="text-sm text-red-600">{fieldErrors.emailConfirm}</Text>
+        )}
+      </View>
+      {errorMessage && (
+        <Text testID="account-settings-email-error" className="text-sm text-red-600">
+          {errorMessage}
+        </Text>
+      )}
+      {succeeded && (
+        <Text testID="account-settings-email-success" className="text-sm text-green-700">
+          メールアドレスを変更しました
+        </Text>
+      )}
+      <Pressable
+        testID="account-settings-email-submit"
+        onPress={handleSubmit}
+        disabled={change.isPending}
+        accessibilityRole="button"
+        className={`items-center rounded-lg py-3 ${change.isPending ? "bg-neutral-300" : "bg-orange-500"}`}
+      >
+        <Text className="font-semibold text-white">
+          {change.isPending ? "変更中…" : "メールアドレスを変更する"}
+        </Text>
+      </Pressable>
+      <ConfirmDialog
+        visible={confirmVisible}
+        title="メールアドレスを変更しますか？"
+        message="次回のログインから新しいアドレスを使います。他の端末はログアウトされます。メールアドレスを公開している場合は、公開プロフィールの表示も変わります。"
+        confirmLabel="変更する"
+        destructive={false}
+        onConfirm={confirmChange}
+        onCancel={() => setConfirmVisible(false)}
+        testID="account-settings-email-dialog"
+      />
     </View>
   );
 }
