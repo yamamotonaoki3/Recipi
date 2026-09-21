@@ -12,6 +12,8 @@ import type { ReactNode } from "react";
 import { AccountSettingsScreen } from "../AccountSettingsScreen";
 import { changeEmail, changeSecurityQuestion } from "@/features/account/api";
 import { ApiError } from "@/features/auth/api";
+import { secureStorage } from "@/lib/secureStorage";
+import { useSession } from "@/store/session";
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
@@ -219,4 +221,55 @@ it("403 は現パスワード欄、409 はメール欄に表示する", async ()
   await fireEvent.press(screen.getByTestId("account-settings-email-submit"));
   await fireEvent.press(screen.getByTestId("account-settings-email-dialog-confirm"));
   await waitFor(() => expect(screen.getByText("既に使われているメールアドレスです")).toBeTruthy());
+});
+
+describe("メール変更の結果が不確かな失敗（Issue #276）", () => {
+  const RELOGIN = /新しいメールアドレスで/;
+
+  async function submit(screen: Awaited<ReturnType<typeof renderScreen>>) {
+    await fillEmail(screen);
+    await fireEvent.press(screen.getByTestId("account-settings-email-submit"));
+    await fireEvent.press(screen.getByTestId("account-settings-email-dialog-confirm"));
+  }
+
+  it("応答が届かないときは「通信エラー。もう一度」ではなく、変更の可能性と再ログインを案内する", async () => {
+    mockChangeEmail.mockRejectedValueOnce(new TypeError("Network request failed"));
+    const screen = await renderScreen();
+    await submit(screen);
+
+    await waitFor(() => expect(screen.getByText(/変更されている可能性/)).toBeTruthy());
+    expect(screen.getByText(RELOGIN)).toBeTruthy();
+    expect(screen.queryByText("通信エラー。もう一度お試しください")).toBeNull();
+    // 自動で再送しない。
+    expect(mockChangeEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("端末への保存に失敗したときは、変更済みであることと再ログインを案内する", async () => {
+    useSession.getState().setAuth({ accessToken: "a", refreshToken: "r", rememberMe: true });
+    mockChangeEmail.mockResolvedValueOnce({
+      user: { id: "u1", displayName: "太郎" },
+      accessToken: "new-access",
+      refreshToken: "new-refresh",
+    });
+    const spy = jest
+      .spyOn(secureStorage, "setRefreshToken")
+      .mockRejectedValueOnce(new Error("disk"));
+    const screen = await renderScreen();
+    await submit(screen);
+
+    await waitFor(() => expect(screen.getByText(/変更されましたが/)).toBeTruthy());
+    expect(screen.getByText(RELOGIN)).toBeTruthy();
+    expect(mockChangeEmail).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+    useSession.getState().clear();
+  });
+
+  it("サーバーが返したエラー（500）は従来どおり通信エラー扱いで、再試行を促す", async () => {
+    mockChangeEmail.mockRejectedValueOnce(new ApiError("x", "INTERNAL", 500));
+    const screen = await renderScreen();
+    await submit(screen);
+    await waitFor(() =>
+      expect(screen.getByText("通信エラー。もう一度お試しください")).toBeTruthy(),
+    );
+  });
 });
