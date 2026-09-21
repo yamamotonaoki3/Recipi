@@ -29,6 +29,8 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -38,6 +40,7 @@ class PendingStorageDeletion(SQLModel, table=True):
     __tablename__ = "pending_storage_deletions"
     __table_args__ = (
         sa.CheckConstraint("attempts >= 0", name="ck_pending_deletions_attempts_non_negative"),
+        sa.Index("ix_pending_deletions_key", "key"),
         # 削除ジョブが「試行回数が少ないものから古い順に」取り出すための索引。
         sa.Index("ix_pending_deletions_attempts_enqueued_at", "attempts", "enqueued_at"),
     )
@@ -45,12 +48,12 @@ class PendingStorageDeletion(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
 
     # 消すべきオブジェクトキー。重複を許容する（上のコメント参照）。
-    key: str = Field(nullable=False, index=True)
+    key: str = Field(nullable=False)
 
     # 何が原因で消すことになったか（調査用。例: "recipe_deleted"）。
     reason: str = Field(nullable=False)
 
-    enqueued_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    enqueued_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)
 
     # 削除ジョブが失敗するたびに +1。上限を超えたものは調査対象として残す。
     attempts: int = Field(default=0, nullable=False)
@@ -58,5 +61,5 @@ class PendingStorageDeletion(SQLModel, table=True):
     # この時刻を過ぎるまで削除ジョブは消さない。NULL は「すぐ消してよい」。
     # アカウント削除で、アップロード途中（pending）のキーを積むときにだけ使う
     # （PUT がまだ終わっていないかもしれないので、pending の期限を過ぎてから消す。Issue #71）。
-    delete_after: datetime | None = Field(default=None, nullable=True)
+    delete_after: datetime | None = Field(default=None, nullable=True, sa_type=UTC_DATETIME)
     last_error: str | None = Field(default=None, nullable=True)

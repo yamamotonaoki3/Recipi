@@ -62,6 +62,21 @@ def test_detects_a_model_column_without_a_migration():
         units._columns.remove(probe)
 
 
+def test_detects_a_model_type_without_a_matching_database_type():
+    """モデルの列型がDBとずれたら検査対象として報告する。"""
+    users = SQLModel.metadata.tables["users"]
+    email = users.c.email
+    original_type = email.type
+    from sqlalchemy import Integer
+
+    email.type = Integer()
+    try:
+        problems = check_model_drift()
+        assert any("users.email" in problem for problem in problems), problems
+    finally:
+        email.type = original_type
+
+
 def test_ignores_the_alembic_version_table():
     """`alembic_version` はモデルに無いが、差分として報告しない。"""
     assert not any("alembic_version" in p for p in check_model_drift())

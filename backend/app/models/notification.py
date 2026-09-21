@@ -41,6 +41,8 @@ from typing import Literal
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 # 通知の種別。DB 側は文字列 ＋ CHECK 制約で表現する（Upload.status と同じ方針。
 # Enum 型にすると値を増やすたびに ALTER TYPE が要る）。
 NotificationType = Literal[
@@ -134,6 +136,6 @@ class Notification(SQLModel, table=True):
     )
 
     # NULL = 未読。既読化した時刻を入れる。
-    read_at: datetime | None = Field(default=None, nullable=True)
+    read_at: datetime | None = Field(default=None, nullable=True, sa_type=UTC_DATETIME)
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

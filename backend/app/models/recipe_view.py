@@ -19,6 +19,8 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -53,4 +55,4 @@ class RecipeView(SQLModel, table=True):
 
     # timestamptz（タイムゾーン付き）で持つ。列の timezone=True 指定は
     # マイグレーション側で行う（既存モデルと同じ方針。data-model.md「DB を正とする」）。
-    viewed_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    viewed_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 
 def _utcnow() -> datetime:
     """タイムゾーン付き（UTC）の現在時刻。DB には常に UTC で保存する。"""
@@ -86,7 +88,9 @@ class User(SQLModel, table=True):
 
     # 退会は投稿レシピを残す論理削除とする。退会中は認証・プロフィール公開を
     # 禁止し、レシピの投稿者情報だけを匿名化して返す。再開時は NULL に戻す。
-    deleted_at: datetime | None = Field(default=None, nullable=True, index=True)
+    deleted_at: datetime | None = Field(
+        default=None, nullable=True, index=True, sa_type=UTC_DATETIME
+    )
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)
+    updated_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

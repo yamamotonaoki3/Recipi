@@ -35,6 +35,8 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -63,4 +65,4 @@ class Follow(SQLModel, table=True):
     )
 
     # timestamptz で持つ（列の timezone=True 指定はマイグレーション側。既存モデルと同じ方針）。
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

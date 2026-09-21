@@ -19,6 +19,8 @@ from datetime import UTC, datetime
 
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -38,4 +40,9 @@ class PasswordResetAttempt(SQLModel, table=True):
     # 同一クライアントからの大量試行そのものを頭打ちにする。
     ip_address: str = Field(nullable=False, index=True)
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False, index=True)
+    created_at: datetime = Field(
+        default_factory=_utcnow,
+        nullable=False,
+        index=True,
+        sa_type=UTC_DATETIME,
+    )
