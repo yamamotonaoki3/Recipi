@@ -119,7 +119,9 @@ def create_access_token(user_id: uuid.UUID, token_version: int) -> str:
         "sub": str(user_id),
         "token_version": token_version,
         "iat": now,
-        "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_TTL_MINUTES),
+        # 寿命の決め方（秒指定が分より優先される）は config.py の
+        # `access_token_ttl_seconds` にまとめてある。
+        "exp": now + timedelta(seconds=settings.access_token_ttl_seconds),
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
 
