@@ -176,7 +176,9 @@ APP_ENV=development python -m scripts.cleanup_perf --yes
 
 - k6 は単体のバイナリ（Windows は `winget install k6`）。バージョンは `k6 version` で確認する。
 - スモークが通るまでは、ほかのテストを実行しない（スクリプトやデータの誤りを負荷の問題と取り違えないため）。
-- 結果を残すときは `--summary-export <出力先>.json` を付ける（例: `k6 run --summary-export perf-average-load.json backend/perf/k6/average-load.js`）。出力はコミットしない。数値だけを下の「測定結果」に書き写す。
+- 結果を残すときは `--summary-export <出力先>.json` を付ける（例: `k6 run --summary-export perf-average-load.json backend/perf/k6/average-load.js`）。**出力はコミットせず、数値だけを下の「測定結果」に書き写す。**
+  - **理由: summary の JSON にはアクセストークンがそのまま入る**。`backend/perf/k6/lib/auth.js` の `loginAll()` が返したトークンの一覧が、k6 の `setup()` の戻り値として `setup_data.tokens` に載るため（#196 の結果 6 件には合計 262 個の JWT が入っていた）。失効済み・テスト用ユーザーのものであっても、グローバル CLAUDE.md「秘密情報の標準取り扱い要件」の「テスト用・開発用だから安全と判断しない」に従い、コミット対象のファイルには置かない。
+  - 書き写したあとの JSON は破棄する。リポジトリ外であっても、作業用の一時ディレクトリに置いたままにしない。
 
 ### 測定結果（ベースライン）
 
