@@ -31,16 +31,18 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy.exc import InvalidRequestError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlmodel import Session, select
 
 from app.audit import audit_event
 from app.db import ADVISORY_NS_REAUTH, advisory_xact_lock
-from app.errors import reauth_failed, too_many_requests, unauthorized
+from app.errors import conflict, reauth_failed, too_many_requests, unauthorized
 from app.models.reauth_attempt import ReauthAttempt
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
-from app.schemas.user import ChangeSecurityQuestionRequest
-from app.security import hash_security_answer, verify_password
+from app.schemas.user import ChangeEmailRequest, ChangeSecurityQuestionRequest
+from app.security import create_access_token, hash_security_answer, verify_password
+from app.services.session_tokens import issue_refresh_token
 
 # 直近この時間の試行回数を数える。閾値はパスワードリセット（app/api/auth.py）と同値。
 _REAUTH_WINDOW = timedelta(minutes=15)
@@ -51,6 +53,11 @@ _REAUTH_MAX_ATTEMPTS_PER_USER = 5
 _REAUTH_MAX_ATTEMPTS_PER_IP = 20
 
 _RATE_LIMIT_MESSAGE = "操作の試行回数が多すぎます。しばらくしてから再度お試しください"
+
+# `users.email` の一意性は UNIQUE 制約ではなく UNIQUE 索引で作られている
+# （alembic の初期マイグレーション）。違反時の `diag.constraint_name` には
+# この索引名が入る（実測で確認済み）。
+_USERS_EMAIL_UNIQUE_INDEX = "ix_users_email"
 
 
 def _utcnow() -> datetime:
@@ -132,6 +139,103 @@ def reauthenticate(
         audit_event("account.reauth", "failure", reason="invalid_password", user_id=user.id)
         # 401 にしない理由は app/errors.py の `reauth_failed` のコメント。
         raise reauth_failed()
+
+
+def change_email(
+    session: Session,
+    user: User,
+    body: ChangeEmailRequest,
+    *,
+    expected_token_version: int,
+) -> tuple[str, str]:
+    """メールアドレスを差し替え、全セッションを作り直す（features/auth.md）。
+
+    戻り値は `(新しいアクセストークン, 新しい生リフレッシュトークン)`。
+    **commit しない。** 呼び出し側（ルーター）が行う。
+
+    ## なぜ全セッションを作り直すのか
+
+    `token_version` を上げるだけでは**他端末はログアウトされない**。
+    `/auth/refresh` は `token_version` を見ずに、リフレッシュトークン行と
+    `deleted_at` だけで新しいアクセストークンを出すため、1 回 401 になっても
+    すぐ復帰できてしまう。画面では「他の端末がログアウトされます」と伝えるので、
+    パスワードリセットと同じく**リフレッシュトークンも失効させる**。
+
+    ## 同じアドレスへの変更も特別扱いしない
+
+    既存のリフレッシュトークンはハッシュしか保存していないため、「何もせずに
+    今のトークンを返す」ができない。応答の形を 1 つに保つため、同じアドレスでも
+    通常どおりセッションを作り直す。**そのため再試行は冪等にならない**
+    （応答だけ失われた場合、手元のトークンは既に失効しているので再送は 401 になり、
+    新しいアドレスでのログインが必要になる）。
+    """
+    reauthenticate(
+        session, user, body.current_password, expected_token_version=expected_token_version
+    )
+
+    # flush が失敗すると、その Session では ORM の属性読み込みも SQL 実行もできなく
+    # なる。監査ログや後続処理で使う値は、**flush の前に**取り出しておく。
+    user_id = user.id
+    new_email = str(body.email)
+
+    user.email = new_email
+    user.token_version += 1
+    user.updated_at = _utcnow()
+    session.add(user)
+
+    # UPDATE なので、代入した時点では例外にならない。ここで明示的に flush して
+    # UNIQUE 違反をこの場で受け取る（放っておくと後続 SELECT の autoflush や
+    # commit で出て、原因を追いにくい）。
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        orig = exc.orig
+        diag = getattr(orig, "diag", None)
+        is_email_taken = (
+            getattr(orig, "sqlstate", None) == "23505"
+            and getattr(diag, "constraint_name", None) == _USERS_EMAIL_UNIQUE_INDEX
+        )
+        if not is_email_taken:
+            # メール重複以外の不具合（新しいトークンの保存など）を 409 として
+            # 握りつぶさない。そのまま上へ投げる。
+            raise
+        # 失敗した Session は使えないので、監査ログを出す前に戻す。
+        session.rollback()
+        audit_event(
+            "account.email.change",
+            "failure",
+            reason="email_taken",
+            user_id=user_id,
+            email=new_email,
+        )
+        # 退会済みのユーザーが持っているアドレスでも同じ 409 にする。区別すると
+        # 「退会したアカウントがこのアドレスを使っている」と分かってしまう。
+        raise conflict("このメールアドレスは既に使われています") from exc
+
+    # 既存のセッションを全て失効させる（password_reset_confirm と同じ）。
+    now = _utcnow()
+    active_tokens = session.exec(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),  # type: ignore[union-attr]
+        )
+    ).all()
+    for token in active_tokens:
+        token.revoked_at = now
+        session.add(token)
+
+    # 新しいチェーンとして発行する。既存のチェーンを引き継ぐと、変更前の
+    # トークンが再提示されたときに refresh() のリユース検知が働き、
+    # **今作ったトークンまで失効**してしまう。
+    raw_refresh_token = issue_refresh_token(
+        session, user_id, chain_id=uuid.uuid4(), remember_me=body.remember_me
+    )
+
+    # アクセストークンは、行ロックを保持している**今**作る。commit の後に作ると、
+    # その隙に割り込んだ別の変更の世代を読んでしまう（app/api/auth.py の
+    # `_auth_response` のコメントと同じ理由）。
+    access_token = create_access_token(user_id, user.token_version)
+    return access_token, raw_refresh_token
 
 
 def change_security_question(

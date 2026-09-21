@@ -31,7 +31,7 @@ def reject_blank_security_answer(value: str) -> str:
     return value
 
 
-def _normalize_email(value: object) -> object:
+def normalize_email(value: object) -> object:
     """メールアドレスを前後の空白除去 + 小文字化して正規化する。
 
     `User@example.com` と `user@example.com` を別人として登録できて
@@ -56,7 +56,7 @@ class SignupRequest(CamelModel):
     security_question: str = Field(min_length=1, max_length=120)
     security_answer: str = Field(min_length=1, max_length=100)
 
-    _normalize_email = field_validator("email", mode="before")(_normalize_email)
+    _normalize_email = field_validator("email", mode="before")(normalize_email)
     _reject_blank_security_answer = field_validator("security_answer")(reject_blank_security_answer)
 
 
@@ -69,7 +69,7 @@ class LoginRequest(CamelModel):
     password: str = Field(max_length=PASSWORD_MAX_LENGTH)
     remember_me: bool = False
 
-    _normalize_email = field_validator("email", mode="before")(_normalize_email)
+    _normalize_email = field_validator("email", mode="before")(normalize_email)
 
 
 class ReactivateRequest(LoginRequest):
@@ -87,7 +87,7 @@ class LogoutRequest(CamelModel):
 class PasswordResetRequestRequest(CamelModel):
     email: EmailStr
 
-    _normalize_email = field_validator("email", mode="before")(_normalize_email)
+    _normalize_email = field_validator("email", mode="before")(normalize_email)
 
 
 class PasswordResetRequestResponse(CamelModel):
@@ -113,7 +113,7 @@ class PasswordResetConfirmRequest(CamelModel):
     # （new_password と同じ理由。上のコメント参照）。空白だけの回答は、
     # どのみち正規化後のハッシュと一致しないため、password_reset_confirm
     # 内の通常の「回答不一致」判定に自然に落ちる。
-    _normalize_email = field_validator("email", mode="before")(_normalize_email)
+    _normalize_email = field_validator("email", mode="before")(normalize_email)
 
 
 class UserPublic(CamelModel):

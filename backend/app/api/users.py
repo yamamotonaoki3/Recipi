@@ -16,15 +16,17 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from sqlmodel import Session
 
 from app.audit import audit_event
+from app.auth_transport import is_web_request, set_refresh_cookie
 from app.db import get_session, run_with_retry
 from app.dependencies import get_current_user
 from app.errors import ErrorEnvelope
 from app.models.user import User
 from app.request_utils import client_ip
+from app.schemas.auth import AuthTokenResponse, UserPublic
 from app.schemas.follow import (
     UserPublicProfileResponse,
     UserRowListResponse,
@@ -33,6 +35,7 @@ from app.schemas.follow import (
 from app.schemas.image import AvatarResponse
 from app.schemas.recipe import HistoryResponse
 from app.schemas.user import (
+    ChangeEmailRequest,
     ChangeSecurityQuestionRequest,
     UpdateMeRequest,
     UserMeResponse,
@@ -103,6 +106,54 @@ def change_my_security_question(
     # 成功の監査ログは commit のあと。commit に失敗したのに成功を記録しないため。
     audit_event("account.security_question.change", "success", user_id=user_id)
     return None
+
+
+@router.put("/me/email", responses=_error_responses(400, 401, 403, 409, 429))
+def change_my_email(
+    request: Request,
+    response: Response,
+    body: ChangeEmailRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> AuthTokenResponse:
+    """ログインに使うメールアドレスを変更する（features/auth.md。Issue #241）。
+
+    **再確認メールは送らない**（メール送信基盤を持たない設計）。代わりに現在の
+    パスワードで再認証し、打ち間違いはクライアントの確認入力欄で防ぐ。
+
+    成功すると**既存のセッションは全て失効**し、呼び出し元用に新しいトークン対を
+    発行して返す。`token_version` を上げるだけでは他端末をログアウトできない
+    （`/auth/refresh` が世代を見ないため）理由は `services/credentials.py` を参照。
+    """
+    # `session.refresh()` や commit より前に、トークンが持っていた世代を int で控える
+    # （`PUT /me/security-question` と同じ。commit 後に取ると、待機中に起きた世代更新を
+    # 取り込んでしまい、古いアクセストークンによる変更を検出できなくなる）。
+    expected_token_version = current_user.token_version
+    user_id = current_user.id
+    ip_address = client_ip(request)
+
+    # ① 枠の消費だけを先に確定する。
+    credentials_service.consume_reauth_quota(session, user_id=user_id, ip_address=ip_address)
+    session.commit()
+
+    # ② 再認証 → 書き換え → 全失効 → 新しいトークン発行。ここは commit を挟まない。
+    access_token, raw_refresh_token = credentials_service.change_email(
+        session, current_user, body, expected_token_version=expected_token_version
+    )
+    display_name = current_user.display_name
+    session.commit()
+
+    audit_event("account.email.change", "success", user_id=user_id)
+
+    # Web は生のリフレッシュトークンを本文に出さず HttpOnly Cookie に入れる（login と同じ）。
+    web = is_web_request(request)
+    if web:
+        set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
+    return AuthTokenResponse(
+        user=UserPublic(id=user_id, display_name=display_name),
+        access_token=access_token,
+        refresh_token=None if web else raw_refresh_token,
+    )
 
 
 @router.delete(

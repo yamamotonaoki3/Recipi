@@ -75,6 +75,32 @@
         "title": "Body_upload_image_api_v1_images_post",
         "type": "object"
       },
+      "ChangeEmailRequest": {
+        "description": "`PUT /users/me/email` の body（Issue #241）。\n\nログインに使うアドレスを差し替えるので、現在のパスワードによる再認証を求める。\n再確認メールは送らない（メール送信基盤を持たない設計。features/auth.md）。",
+        "properties": {
+          "currentPassword": {
+            "maxLength": 72,
+            "title": "Currentpassword",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "rememberMe": {
+            "title": "Rememberme",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "email",
+          "rememberMe"
+        ],
+        "title": "ChangeEmailRequest",
+        "type": "object"
+      },
       "ChangeSecurityQuestionRequest": {
         "description": "`PUT /users/me/security-question` の body（Issue #240）。\n\n文字数の上限は features/auth.md §6 の表（securityQuestion 1〜120 /\nsecurityAnswer 1〜100）にそろえる。空白だけの答えを弾く規則は、\nサインアップと**同じ関数**（`reject_blank_security_answer`）を共有する。",
         "properties": {
@@ -4011,6 +4037,93 @@
           }
         ],
         "summary": "Put My Avatar",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/email": {
+      "put": {
+        "description": "ログインに使うメールアドレスを変更する（features/auth.md。Issue #241）。\n\n**再確認メールは送らない**（メール送信基盤を持たない設計）。代わりに現在の\nパスワードで再認証し、打ち間違いはクライアントの確認入力欄で防ぐ。\n\n成功すると**既存のセッションは全て失効**し、呼び出し元用に新しいトークン対を\n発行して返す。`token_version` を上げるだけでは他端末をログアウトできない\n（`/auth/refresh` が世代を見ないため）理由は `services/credentials.py` を参照。",
+        "operationId": "change_my_email_api_v1_users_me_email_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change My Email",
         "tags": [
           "users"
         ]
