@@ -4,11 +4,8 @@
  * 編集モードは初期値をサーバーから取得する必要があるため、`useRecipe` で
  * ロードしてから `RecipeEditor` に渡す。他人のレシピ（403/404）はここで弾く。
  *
- * `RecipeEditor` はフォーム状態を初回マウント時に 1 回だけ作り、以後 recipe
- * prop の変化を無視する。通常の導線（詳細 → 編集）ではその直前に詳細画面が
- * 同じ `["recipe", id]` を新鮮化しているので初期値のズレは実質起きないが、
- * 「キャッシュが古い状態で編集を開き、開いた後に再取得で値が変わる」ケースの
- * 追随は将来対応（Codex #38 レビュー・P2。todo に記録）。
+ * `RecipeEditor` は編集画面表示後の recipe 再取得にも追随する。ただし、ユーザー
+ * が入力を始めた後は、その入力を最新レスポンスで上書きしない。
  */
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";

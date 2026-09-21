@@ -88,6 +88,32 @@ test("レシピ作成 → 一覧 → 詳細 → 編集 → 保存", async ({ pag
   await expect(detailTitle(page)).toHaveText("E2Eテストレシピ（改）", { timeout: 15_000 });
 });
 
+test("編集画面の再取得は未編集なら最新値へ反映する", async ({ page }) => {
+  const runId = makeRunId();
+  await signUp(page, `e2euser_refetch_${runId}@example.com`, "E2E Refetch User");
+  const recipeId = await createRecipe(page, `[E2E_TEST] 再取得 ${runId}`, "たまねぎ", {
+    isPublic: false,
+  });
+
+  let requestCount = 0;
+  await page.route(`**/api/v1/recipes/${recipeId}`, async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    requestCount += 1;
+    const response = await route.fetch();
+    const body = await response.json();
+    body.title = `[E2E_TEST] サーバー更新 ${runId}`;
+    await route.fulfill({ response, json: body });
+  });
+
+  await page.getByTestId("recipe-detail-edit").last().click();
+  const title = page.getByTestId("editor-title").last();
+  await expect(title).toHaveValue(`[E2E_TEST] 再取得 ${runId}`);
+  await page.reload();
+  await expect(title).toHaveValue(`[E2E_TEST] サーバー更新 ${runId}`);
+  expect(requestCount).toBeGreaterThanOrEqual(1);
+  await page.unroute(`**/api/v1/recipes/${recipeId}`);
+});
+
 /**
  * 画像アップロードのフルフロー（Issue #40）。
  *
