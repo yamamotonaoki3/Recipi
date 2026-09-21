@@ -107,6 +107,8 @@ test("編集画面の再取得は未編集なら最新値へ反映する", async
 
   await page.getByTestId("recipe-detail-edit").last().click();
   const title = page.getByTestId("editor-title").last();
+  await expect(title).toHaveValue(`[E2E_TEST] 再取得 ${runId}`);
+  await page.reload();
   await expect(title).toHaveValue(`[E2E_TEST] サーバー更新 ${runId}`);
   expect(requestCount).toBeGreaterThanOrEqual(1);
   await page.unroute(`**/api/v1/recipes/${recipeId}`);
