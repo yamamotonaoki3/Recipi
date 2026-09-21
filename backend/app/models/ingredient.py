@@ -32,6 +32,7 @@ class Ingredient(SQLModel, table=True):
             ondelete="CASCADE",
         ),
         sa.UniqueConstraint("group_id", "position", name="uq_ingredients_group_position"),
+        sa.Index("ix_ingredients_ref_recipe_id", "ref_recipe_id"),
         # 数量は「入力するなら 0 より大きい」（features/recipe.md バリデーション表）。
         sa.CheckConstraint(
             "quantity IS NULL OR quantity > 0", name="ck_ingredients_quantity_positive"

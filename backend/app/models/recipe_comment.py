@@ -24,6 +24,8 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 # 本文の長さ（features/comment.md §6）。API 層（前後の空白を除いてから）と DB の
 # CHECK 制約の両方で同じ値を使う。
 COMMENT_BODY_MAX_LENGTH = 1000
@@ -62,5 +64,5 @@ class RecipeComment(SQLModel, table=True):
     # 添付画像のオブジェクトキー（任意）。表示用 URL はキーから組み立てる派生値。
     image_key: str | None = Field(default=None, nullable=True)
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)
+    updated_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

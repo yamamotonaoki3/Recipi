@@ -13,7 +13,10 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
+
+from app.models._types import UTC_DATETIME
 
 
 def _utcnow() -> datetime:
@@ -22,6 +25,7 @@ def _utcnow() -> datetime:
 
 class Unit(SQLModel, table=True):
     __tablename__ = "units"
+    __table_args__ = (sa.Index("ix_units_normalized", "normalized", unique=True),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
 
@@ -31,10 +35,10 @@ class Unit(SQLModel, table=True):
     # 正規化キー（app/text_normalize.normalize_search_text で生成）。
     # "g" と全角 "ｇ"、"kg" と "Kg" はこのキーが一致するので 1 行にまとまる。
     # "g" と "グラム" のような別表記はキーが違うので別行として両方残る。
-    normalized: str = Field(unique=True, nullable=False)
+    normalized: str = Field(nullable=False)
 
     # "suffix"（既定）/ "prefix"。表示整形はクライアント側で行う（API は
     # quantity / unit / placement を別々に返す。features/unit.md §3.1）。
     placement: str = Field(default="suffix", nullable=False)
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

@@ -17,22 +17,11 @@
 SQLModel のモデルを変えたのにマイグレーションを書き忘れると、テスト DB は
 `alembic upgrade head` で作られるためモデル側の変更が反映されず、実行時に初めて壊れる。
 
-## なぜ `alembic check` をそのまま使わないか
+## 検査対象
 
-`alembic check` は**型・索引・制約の差分も全て**報告する。このリポジトリでは、それが
-**既存の 35 件の差分**に埋もれて使い物にならない（Issue #255 で計測）。内訳:
-
-- 26 件: DB は `TIMESTAMP(timezone=True)` だが、モデル側が `timezone=True` を宣言して
-  いないため `DateTime()` と見なされる。`datetime` 列を持つモデル 15 ファイルのうち、
-  宣言しているのは 2 箇所だけ。
-- 9 件: `Field(unique=True, index=True)` が作るメタデータと、手書きマイグレーションの
-  UniqueConstraint / 索引名の表現差。
-
-どちらも現時点で実害は無い（テーブルは必ず alembic 経由で作るため）。根本修正は別 Issue。
-そのためここでは **`add_table` / `remove_table` / `add_column` / `remove_column` だけ**を見る。
-「モデルを変えたのにマイグレーションを書き忘れた」という本命のミスはこれで捕まる。
-
-型・索引・制約の差分を検査対象に戻すのは、上記の根本修正が終わってから。
+モデルと既存 DB のテーブル・列だけでなく、型・索引・制約の差分も検査する。
+モデル側の日時列は `DateTime(timezone=True)`、一意性と索引は既存マイグレーションと
+同じ名前・形にそろえているため、`alembic check` は差分ゼロになる。
 """
 
 from __future__ import annotations
@@ -52,8 +41,20 @@ from sqlmodel import SQLModel  # noqa: E402
 import app.models  # noqa: F401,E402  モデルを metadata に登録する
 from app.db import engine  # noqa: E402
 
-# 「テーブル・列が有るか無いか」だけを見る。型・索引・制約の差分は上のコメントの理由で見ない。
-_WATCHED = frozenset({"add_table", "remove_table", "add_column", "remove_column"})
+# モデルと既存 DB の構造差分をすべて検査する。
+_WATCHED = frozenset(
+    {
+        "add_table",
+        "remove_table",
+        "add_column",
+        "remove_column",
+        "modify_type",
+        "add_index",
+        "remove_index",
+        "add_constraint",
+        "remove_constraint",
+    }
+)
 
 # alembic 自身が作る管理テーブル。モデルには存在しないので、差分として報告させない。
 _IGNORED_TABLES = frozenset({"alembic_version"})
@@ -67,6 +68,12 @@ def _table_name_of(diff: tuple[object, ...]) -> str | None:
     if kind in ("add_column", "remove_column"):
         # ("add_column", schema, table_name, Column)
         return str(diff[2])
+    if kind == "modify_type":
+        return str(diff[2])
+    if kind in ("add_index", "remove_index"):
+        return str(getattr(getattr(diff[1], "table", None), "name", ""))
+    if kind in ("add_constraint", "remove_constraint"):
+        return str(getattr(getattr(diff[1], "table", None), "name", ""))
     return None
 
 
@@ -90,8 +97,7 @@ def check_model_drift() -> list[str]:
     with engine.connect() as connection:
         context = MigrationContext.configure(
             connection,
-            # 型の差分は見ない（モジュール冒頭のコメントの理由）。
-            opts={"compare_type": False},
+            opts={"compare_type": True},
         )
         diffs = compare_metadata(context, SQLModel.metadata)
 
@@ -124,6 +130,14 @@ def check_model_drift() -> list[str]:
                 problems.append(
                     f"DB にある列 '{table}.{column}' に対応するモデルの定義がありません"
                 )
+            elif kind == "modify_type":
+                problems.append(f"列 '{table}.{entry[3]}' の型がモデルとDBで一致しません")
+            elif kind in {"add_index", "remove_index"}:
+                index = getattr(entry[1], "name", "?")
+                problems.append(f"索引 '{table}.{index}' がモデルとDBで一致しません")
+            elif kind in {"add_constraint", "remove_constraint"}:
+                constraint = getattr(entry[1], "name", "?")
+                problems.append(f"制約 '{table}.{constraint}' がモデルとDBで一致しません")
 
     if problems:
         problems.append(

@@ -36,6 +36,8 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -66,4 +68,4 @@ class ReauthAttempt(SQLModel, table=True):
     # IP 単位でも別途数えることで、同一クライアントからの総試行数を頭打ちにする。
     ip_address: str = Field(nullable=False)
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

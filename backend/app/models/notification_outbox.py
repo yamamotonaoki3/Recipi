@@ -25,6 +25,8 @@ from typing import Literal
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 OutboxEvent = Literal["followee_new_recipe"]
 
 
@@ -54,7 +56,7 @@ class NotificationOutbox(SQLModel, table=True):
 
     # レシピの作成時刻と同じ値を入れる。配った通知の `created_at` にもこれを使うので、
     # スイープで遅れて配っても通知は「投稿した時刻」に並ぶ。
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)
 
     # NULL = 未処理。
-    processed_at: datetime | None = Field(default=None, nullable=True)
+    processed_at: datetime | None = Field(default=None, nullable=True, sa_type=UTC_DATETIME)

@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -34,6 +36,7 @@ class RefreshToken(SQLModel, table=True):
         # 掃除ジョブが最初に「期限切れの行」だけに候補を絞るため（上は先頭が chain_id
         # なので、期限だけの条件には使えない）。
         sa.Index("ix_refresh_tokens_expires_at", "expires_at"),
+        sa.Index("ix_refresh_tokens_token_hash", "token_hash", unique=True),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -48,18 +51,18 @@ class RefreshToken(SQLModel, table=True):
     # 生のリフレッシュトークン文字列は絶対に保存しない。DB が漏れても
     # トークンを復元できないよう、ハッシュ値（SHA-256）だけを保存する
     # （security.py の hash_refresh_token を参照）。
-    token_hash: str = Field(unique=True, nullable=False)
+    token_hash: str = Field(nullable=False)
 
     # ローテーションの連鎖を識別する ID（同じログインセッション由来の
     # トークンはすべて同じ chain_id を持つ）。
     chain_id: uuid.UUID = Field(nullable=False)
 
-    expires_at: datetime = Field(nullable=False)
+    expires_at: datetime = Field(nullable=False, sa_type=UTC_DATETIME)
 
     # 失効した日時。null なら「まだ有効」。ローテーションで使い捨てられた
     # とき／ログアウトしたとき／reuse 検知でチェーン全体を失効させたときに
     # ここに現在時刻を入れる。
-    revoked_at: datetime | None = Field(default=None, nullable=True)
+    revoked_at: datetime | None = Field(default=None, nullable=True, sa_type=UTC_DATETIME)
 
     # ログイン時の「ログインを保持」チェックの値
     # （processing-model.md §6: 「login: refresh_tokens INSERT（rememberMe
@@ -69,4 +72,4 @@ class RefreshToken(SQLModel, table=True):
     # 続けてログイン状態になるのが自然なため）。
     remember_me: bool = Field(default=True, nullable=False)
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

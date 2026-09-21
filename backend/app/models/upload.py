@@ -37,6 +37,8 @@ from typing import Literal
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 # 状態の型。DB 側は文字列 ＋ CHECK 制約で表現する（Enum 型を作ると
 # 値を増やすたびに ALTER TYPE が要るため、この規模では文字列で十分）。
 UploadStatus = Literal["pending", "stored", "consumed"]
@@ -56,6 +58,7 @@ class Upload(SQLModel, table=True):
             name="ck_uploads_status",
         ),
         sa.CheckConstraint("size_bytes >= 0", name="ck_uploads_size_bytes_non_negative"),
+        sa.UniqueConstraint("key", name="uq_uploads_key"),
         # GC の OR 条件は、pending では expires_at、stored では created_at と
         # 比較する。各枝が別の列を使うため、1 本の索引で両方を効率よく引く
         # ことはできず、それぞれに status から始まる複合索引が必要になる。
@@ -76,7 +79,7 @@ class Upload(SQLModel, table=True):
 
     # オブジェクトストレージ上のキー（例: "uploads/1f0c….jpg"）。
     # 公開バケット運用なので、推測できないランダム値であることが重要。
-    key: str = Field(nullable=False, unique=True, index=True)
+    key: str = Field(nullable=False, index=True)
 
     # `sa_type` を明示するのは、SQLModel が `Literal[...]` から SQL の型を
     # 自動判定できないため（Enum かどうかを調べる処理で例外になる）。
@@ -88,6 +91,6 @@ class Upload(SQLModel, table=True):
     size_bytes: int = Field(default=0, nullable=False)
 
     # `pending` のまま放置された行を GC が回収するための期限。
-    expires_at: datetime = Field(nullable=False)
+    expires_at: datetime = Field(nullable=False, sa_type=UTC_DATETIME)
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)

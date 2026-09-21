@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models._types import UTC_DATETIME
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -59,5 +61,5 @@ class Recipe(SQLModel, table=True):
     favorite_count: int = Field(default=0, nullable=False)
     comment_count: int = Field(default=0, nullable=False)
 
-    created_at: datetime = Field(default_factory=_utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=_utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)
+    updated_at: datetime = Field(default_factory=_utcnow, nullable=False, sa_type=UTC_DATETIME)
