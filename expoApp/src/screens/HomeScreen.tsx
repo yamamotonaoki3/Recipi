@@ -12,9 +12,18 @@
  * ナビゲーションスタックを保持する」）。
  */
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Heart, X } from "lucide-react-native";
-import { FlatList, Platform, Pressable, RefreshControl, Text, TextInput, View } from "react-native";
+import {
+  FlatList,
+  PanResponder,
+  Platform,
+  Pressable,
+  RefreshControl,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FeedRecipeCard } from "@/components/FeedRecipeCard";
@@ -24,6 +33,7 @@ import { RecipeCardSkeletonList } from "@/components/Skeleton";
 import type { FeedKind } from "@/features/feed/api";
 import { getListStatus } from "@/features/list/useListStatus";
 import { useFeed } from "@/features/feed/hooks";
+import { isHorizontalSwipe, shiftIndex, swipeDirection } from "@/features/home/tabSwipe";
 import { useRetap } from "@/features/navigation/retap";
 import { validateSearchQuery } from "@/features/search/validateQuery";
 
@@ -83,12 +93,35 @@ export function HomeScreen({ basePath }: { basePath: string }) {
    */
   const [visitedTabs, setVisitedTabs] = useState<SubTabKey[]>(["all"]);
 
-  const selectTab = (key: SubTabKey) => {
+  const selectTab = useCallback((key: SubTabKey) => {
     setActiveTab(key);
     setVisitedTabs((prev) => (prev.includes(key) ? prev : [...prev, key]));
-  };
+  }, []);
 
   const hasQuery = submittedQuery !== "";
+
+  /**
+   * 一覧の上での横スワイプでサブタブを切り替える（Issue #250）。モバイルだけ。
+   *
+   * - 縦スクロールとは、横が縦の 2 倍以上優勢な動きだけを**捕捉**して分ける（斜めは一覧に任せる）
+   * - 端のタブで外側へスワイプしても何も起きない
+   * - タップ切替と同じ `selectTab` を通すので、選択状態・取得の挙動は一致する
+   * - Web はマウスのドラッグが文字選択・スクロールバー操作と紛らわしいので、タップだけにする
+   */
+  const swipeHandlers = useMemo(() => {
+    if (Platform.OS === "web") return {};
+    return PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) => isHorizontalSwipe(g.dx, g.dy),
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: (_, g) => {
+        const direction = swipeDirection(g.dx, g.dy);
+        if (direction === 0) return;
+        const current = SUB_TABS.findIndex((t) => t.key === activeTab);
+        const next = shiftIndex(current, direction, SUB_TABS.length);
+        if (next !== current) selectTab(SUB_TABS[next].key);
+      },
+    }).panHandlers;
+  }, [activeTab, selectTab]);
 
   const clearSearch = () => {
     setInput("");
@@ -264,18 +297,20 @@ export function HomeScreen({ basePath }: { basePath: string }) {
       )}
 
       {/* 一度開いたタブの一覧は、隠すだけで残す（スクロール位置を保つため）。 */}
-      {SUB_TABS.map((tab) =>
-        visitedTabs.includes(tab.key) ? (
-          <FeedList
-            key={tab.key}
-            feed={tab.feed}
-            query={submittedQuery}
-            emptyText={tab.empty}
-            visible={tab.key === activeTab}
-            basePath={basePath}
-          />
-        ) : null,
-      )}
+      <View className="flex-1" {...swipeHandlers}>
+        {SUB_TABS.map((tab) =>
+          visitedTabs.includes(tab.key) ? (
+            <FeedList
+              key={tab.key}
+              feed={tab.feed}
+              query={submittedQuery}
+              emptyText={tab.empty}
+              visible={tab.key === activeTab}
+              basePath={basePath}
+            />
+          ) : null,
+        )}
+      </View>
     </View>
   );
 }
