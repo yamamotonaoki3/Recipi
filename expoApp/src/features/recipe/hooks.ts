@@ -108,6 +108,11 @@ export function useDeleteRecipe() {
   return useMutation({
     mutationFn: (recipeId: string) => deleteRecipe(recipeId),
     onSuccess: (_data, recipeId) => {
+      // 削除済みレシピの感想一覧を、画面に残った observer やページングの
+      // 再取得で取り直さないようにする（Issue #269）。comment/hooks.ts
+      // との循環 import を避けるため、既存の query key 契約をここで直接指定する。
+      void queryClient.cancelQueries({ queryKey: ["comments", recipeId] });
+      void queryClient.removeQueries({ queryKey: ["comments", recipeId] });
       void queryClient.invalidateQueries({ queryKey: ["my-recipes"] });
       void queryClient.removeQueries({ queryKey: recipeKeys.detail(recipeId) });
       // 削除したレシピがフィード / 履歴に残らないようにする（Codex #42 指摘）。
