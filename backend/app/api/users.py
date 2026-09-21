@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 from sqlmodel import Session
 
 from app.audit import audit_event
@@ -24,6 +24,7 @@ from app.db import get_session, run_with_retry
 from app.dependencies import get_current_user
 from app.errors import ErrorEnvelope
 from app.models.user import User
+from app.request_utils import client_ip
 from app.schemas.follow import (
     UserPublicProfileResponse,
     UserRowListResponse,
@@ -31,8 +32,13 @@ from app.schemas.follow import (
 )
 from app.schemas.image import AvatarResponse
 from app.schemas.recipe import HistoryResponse
-from app.schemas.user import UpdateMeRequest, UserMeResponse
+from app.schemas.user import (
+    ChangeSecurityQuestionRequest,
+    UpdateMeRequest,
+    UserMeResponse,
+)
 from app.services import account as account_service
+from app.services import credentials as credentials_service
 from app.services import follow as follow_service
 from app.services import history as history_service
 from app.services import user as user_service
@@ -56,6 +62,47 @@ def update_me(
     # 応答を返す前に commit する（ファイル冒頭のコメント）。
     session.commit()
     return user_service.me_response(current_user)
+
+
+@router.put(
+    "/me/security-question",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_error_responses(400, 401, 403, 429),
+)
+def change_my_security_question(
+    request: Request,
+    body: ChangeSecurityQuestionRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """秘密の質問・答えを変更する（features/auth.md。Issue #240）。
+
+    パスワードリセットの本人確認に使う情報なので、現在のパスワードによる
+    再認証を求める。失敗は 401 ではなく **403 `REAUTH_FAILED`** を返す
+    （理由は `app/errors.py` の `reauth_failed` のコメント）。
+
+    commit が 2 回に分かれているのは、トランザクションの区切りを見えるように
+    するため。詳しくは `app/services/credentials.py` の冒頭コメント。
+    """
+    # `session.refresh()` より前に、トークンが持っていた世代を int で控える。
+    # commit するとインスタンスが expire され、以後は DB の新しい値が読まれてしまう。
+    expected_token_version = current_user.token_version
+    user_id = current_user.id
+    ip_address = client_ip(request)
+
+    # ① 枠の消費だけを先に確定する。ここで commit しないとレート制限が効かない。
+    credentials_service.consume_reauth_quota(session, user_id=user_id, ip_address=ip_address)
+    session.commit()
+
+    # ② 再認証 → 書き換え。ユーザー行のロックを保持したまま最後まで進む。
+    credentials_service.change_security_question(
+        session, current_user, body, expected_token_version=expected_token_version
+    )
+    session.commit()
+
+    # 成功の監査ログは commit のあと。commit に失敗したのに成功を記録しないため。
+    audit_event("account.security_question.change", "success", user_id=user_id)
+    return None
 
 
 @router.delete(

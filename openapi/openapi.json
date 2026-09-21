@@ -75,6 +75,35 @@
         "title": "Body_upload_image_api_v1_images_post",
         "type": "object"
       },
+      "ChangeSecurityQuestionRequest": {
+        "description": "`PUT /users/me/security-question` の body（Issue #240）。\n\n文字数の上限は features/auth.md §6 の表（securityQuestion 1〜120 /\nsecurityAnswer 1〜100）にそろえる。空白だけの答えを弾く規則は、\nサインアップと**同じ関数**（`reject_blank_security_answer`）を共有する。",
+        "properties": {
+          "currentPassword": {
+            "maxLength": 72,
+            "title": "Currentpassword",
+            "type": "string"
+          },
+          "securityAnswer": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Securityanswer",
+            "type": "string"
+          },
+          "securityQuestion": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Securityquestion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "securityQuestion",
+          "securityAnswer"
+        ],
+        "title": "ChangeSecurityQuestionRequest",
+        "type": "object"
+      },
       "ClientConfigResponse": {
         "description": "クライアントのローカル処理に必要な、安全な設定だけを返す。",
         "properties": {
@@ -4428,6 +4457,76 @@
         "summary": "List My Recipes",
         "tags": [
           "recipes"
+        ]
+      }
+    },
+    "/api/v1/users/me/security-question": {
+      "put": {
+        "description": "秘密の質問・答えを変更する（features/auth.md。Issue #240）。\n\nパスワードリセットの本人確認に使う情報なので、現在のパスワードによる\n再認証を求める。失敗は 401 ではなく **403 `REAUTH_FAILED`** を返す\n（理由は `app/errors.py` の `reauth_failed` のコメント）。\n\ncommit が 2 回に分かれているのは、トランザクションの区切りを見えるように\nするため。詳しくは `app/services/credentials.py` の冒頭コメント。",
+        "operationId": "change_my_security_question_api_v1_users_me_security_question_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSecurityQuestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "リクエストの内容が不正です"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change My Security Question",
+        "tags": [
+          "users"
         ]
       }
     },

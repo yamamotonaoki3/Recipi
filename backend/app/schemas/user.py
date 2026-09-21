@@ -8,6 +8,7 @@ from typing import Self
 
 from pydantic import Field, field_validator, model_validator
 
+from app.schemas.auth import PASSWORD_MAX_LENGTH, reject_blank_security_answer
 from app.schemas.base import CamelModel
 
 # 表示名・自己紹介文・URL の上限（features/profile.md §6）。URL の上限は DB の列長
@@ -109,6 +110,25 @@ class UpdateMeRequest(CamelModel):
             if name in self.model_fields_set and getattr(self, name) is None:
                 raise ValueError(f"{name} に null は指定できません")
         return self
+
+
+class ChangeSecurityQuestionRequest(CamelModel):
+    """`PUT /users/me/security-question` の body（Issue #240）。
+
+    文字数の上限は features/auth.md §6 の表（securityQuestion 1〜120 /
+    securityAnswer 1〜100）にそろえる。空白だけの答えを弾く規則は、
+    サインアップと**同じ関数**（`reject_blank_security_answer`）を共有する。
+    """
+
+    # `min_length` は付けない。`LoginRequest` と同じ理由で、照合に渡すだけの
+    # 値に下限を課しても「短いパスワードのアカウント」の存在を推測させるだけで、
+    # どのみち一致しない。上限は、巨大な文字列を Argon2 に処理させて CPU を
+    # 浪費させられるのを防ぐために付ける。
+    current_password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    security_question: str = Field(min_length=1, max_length=120)
+    security_answer: str = Field(min_length=1, max_length=100)
+
+    _reject_blank_security_answer = field_validator("security_answer")(reject_blank_security_answer)
 
 
 class UserMeResponse(CamelModel):

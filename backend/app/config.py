@@ -199,6 +199,9 @@ class Settings(BaseSettings):
     # パスワード再設定の試行記録（メール・IP を含む）を、作られてからこの日数で消す（Issue #85）。
     # レート制限が数えるのは直近 15 分だけなので、1 日あれば判定に必要な記録は残る。
     PASSWORD_RESET_ATTEMPT_RETENTION_DAYS: int = Field(default=1, ge=1)
+    # 再認証（現パスワードの確認）の試行記録を、作られてからこの日数で消す（Issue #240）。
+    # 理由は上と同じ。レート制限が見るのは直近 15 分だけ。
+    REAUTH_ATTEMPT_RETENTION_DAYS: int = Field(default=1, ge=1)
 
     # --- CORS（フロントからのブラウザ / デスクトップ経由の呼び出しを許可） -
     # Web（Expo）や Tauri はページのオリジン（例 http://localhost:8081）と

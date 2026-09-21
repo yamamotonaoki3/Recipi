@@ -126,6 +126,11 @@ locals {
       expression = "cron(30 17 * * ? *)" # 日本時間 2:30
       note       = "パスワード再設定の試行記録（メール・IP）を消す"
     }
+    "cleanup-reauth-attempts" = {
+      module     = "cleanup_reauth_attempts"
+      expression = "cron(35 17 * * ? *)" # 日本時間 2:35
+      note       = "再認証（現パスワード確認）の試行記録（IP）を消す"
+    }
     "trim-recipe-views" = {
       module     = "trim_recipe_views"
       expression = "cron(40 17 * * ? *)" # 日本時間 2:40
