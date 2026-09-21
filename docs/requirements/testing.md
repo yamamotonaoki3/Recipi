@@ -140,10 +140,10 @@
 
 非機能要件「レシピ一覧 / フィード API は通常時 300ms 以内（ローカル環境目安）」（[non-functional.md](non-functional.md) §パフォーマンス）を確かめる。
 
-- **対象**: 閲覧の流れ（ホーム「全体」フィードを 3 ページ → 材料名で検索 → レシピ詳細）。ログインは最初にまとめて行い、測定の対象にしない（Argon2id がわざと重いため）。書き込み・通知の fan-out は対象外（[todo.md](todo.md) #18）。
+- **対象**: 閲覧の流れ（ホーム「全体」フィードを 3 ページ → 材料名で検索 → レシピ詳細）と、公開レシピ作成後の通知 fan-out の探索的測定（Issue #248）。ログインは最初にまとめて行い、測定の対象にしない（Argon2id がわざと重いため）。
 - **環境**: ローカルの Docker Compose（api + postgres + minio）、`APP_ENV=development`。**CI には入れない**（共有ランナーは性能が安定せず、300ms の判定がぶれるため）。手元で手動実行する。
-- **テストデータ**: `seed_perf.py` がユーザー 200 人・公開レシピ 3,000 件・フォロー・お気に入りを入れる（`perfuser_…@example.com` / `[PERF_TEST]`）。料理名・材料名は `backend/perf/data/vocabulary.json` を k6 と共有し、検索が必ずヒットするようにしている。終わったら `cleanup_perf.py` で残数 0 を確かめる（§4）。
-- **スクリプト**: `backend/perf/k6/`。共通部品は `lib/`（設定・ログイン・閲覧シナリオ）。リクエストには `name` タグ（`feed` / `search` / `detail` / `login`）を付け、閾値を API ごとに判定する。
+- **テストデータ**: 閲覧系は `seed_perf.py` の既定（ユーザー 200 人・公開レシピ 3,000 件）。fan-out は `--users 1001 --hub-followers 0|10|100|1000` とし、投稿者 `perfuser_001` の実フォロワー数だけを水準ごとに変える。いずれも `perfuser_…@example.com` / `[PERF_TEST]` を使い、終了後は `cleanup_perf.py` で残数 0 を確かめる（§4）。
+- **スクリプト**: `backend/perf/k6/`。共通部品は `lib/`（設定・ログイン・閲覧シナリオ）。閲覧リクエストには `name` タグ（`feed` / `search` / `detail` / `login`）、fan-out投稿には `fanout-post` を付ける。fan-out のDB確認は、k6ログの `recipe_id` を `python -m scripts.verify_fanout` に渡して別トランザクションで行う。
 - **トークン**: アクセストークンは 15 分で切れるので、発行から 10 分たったら VU がログインし直す（15 分を超えるテストでも 401 にならない）。
 
 | テスト     | スクリプト        | 負荷                  | 合否の基準                                        | Issue |
@@ -152,6 +152,7 @@
 | 平均負荷   | `average-load.js` | 15 VU（平常＝100%）。1 分で上げ → 5 分保つ → 1 分で下げる | feed / search の p95 < 300ms・失敗率 < 1%・check 99% 超 | #146  |
 | ストレス   | `stress.js`       | 30 VU（200%）→ 45 VU（300%）。各 5 分保つ（合計 16 分） | feed / search の p95 < 600ms・失敗率 < 1%・5xx（`server_errors`）0 件 | #147  |
 | スパイク   | `spike.js`        | 15 VU → 10 秒で 100 VU（約 670%）→ 1 分保つ → 15 VU に戻して 2 分 | 全体の失敗率 < 5%・回復区間（`phase:recovery`）の feed / search の p95 < 300ms | #148  |
+| fan-out探索 | `fanout.js` | 1 VU・3回。フォロワー数 0 / 10 / 100 / 1,000 を別実行 | 投稿201・outbox処理済み・通知件数が指定数と一致。p95や移行閾値は判定しない | #248 |
 
 - **スパイクで見ること**: 急に増えてもプロセスが落ちないか、平常に戻った後に自力で元の速さへ戻れるか。k6 の `scenarios` を 2 つ（`spike` → `recovery`）に分け、回復区間のリクエストだけに `phase:recovery` タグを付けて判定する。急増中のエラーの内訳（タイムアウト / 5xx / 接続拒否）と、回復までにかかった時間を下の測定結果に書く。終わった後に `GET /healthz` が応答することも確かめる。
 
@@ -174,6 +175,21 @@ cd backend
 APP_ENV=development python -m scripts.cleanup_perf --yes
 ```
 
+fan-outを探索的に測る場合は、各フォロワー数を別々に投入・測定・検証する。
+
+```bash
+cd backend
+APP_ENV=development python -m scripts.seed_perf --users 1001 --recipes 1 --hub-followers 1000 --yes
+cd ..
+k6 run -e PERF_USERS=1001 -e FANOUT_ITERATIONS=3 backend/perf/k6/fanout.js
+# k6のログに出た各 recipe_id を、expected-followers と合わせて確認する
+cd backend
+APP_ENV=development python -m scripts.verify_fanout <recipe_id> --expected-followers 1000
+APP_ENV=development python -m scripts.cleanup_perf --yes
+```
+
+0 / 10 / 100 / 1,000 の各水準で同じ手順を繰り返す。fan-out探索の値は単一マシン・少数回・ローカルDBの結果であり、p95や専用ジョブキューへの移行閾値の根拠にはしない。厳密な測定と移行開始条件は Issue #260 で扱う。
+
 - k6 は単体のバイナリ（Windows は `winget install k6`）。バージョンは `k6 version` で確認する。
 - スモークが通るまでは、ほかのテストを実行しない（スクリプトやデータの誤りを負荷の問題と取り違えないため）。
 - 結果を残すときは `--summary-export <出力先>.json` を付ける（例: `k6 run --summary-export perf-average-load.json backend/perf/k6/average-load.js`）。**出力はコミットせず、数値だけを下の「測定結果」に書き写す。**
@@ -183,6 +199,19 @@ APP_ENV=development python -m scripts.cleanup_perf --yes
 ### 測定結果（ベースライン）
 
 今後の変更で遅くなっていないかを比べる基準。**ローカルの Docker 環境での値で、本番の応答時間を保証するものではない**。
+
+#### 通知 fan-out 探索（Issue #248）
+
+2026-09-21、Windows 11 の開発機、ローカルDockerのPostgreSQL 18・API 1コンテナ、k6 v2.1.0で測定した。各水準は1 VU・3回、`--users 1001` とし、投稿者 `perfuser_001` のフォロワー数だけを変更した。投稿APIの値は `fanout-post` の観測値、outboxは `verify_fanout.py` で対象recipe_idを別トランザクションから確認した値である。
+
+| フォロワー数 | 投稿API avg / min / max (ms) | outbox完了 avg / min / max (秒) | 通知件数 | 成立 |
+| ------------ | ----------------------------: | -------------------------------: | -------: | ---- |
+| 0            | 36.97 / 20.30 / 66.47         | 0.036 / 0.021 / 0.064             | 0 / 0 / 0 | 3/3 |
+| 10           | 19.50 / 17.76 / 22.48         | 0.021 / 0.018 / 0.023             | 10 / 10 / 10 | 3/3 |
+| 100          | 20.31 / 18.72 / 21.70         | 0.021 / 0.021 / 0.022             | 100 / 100 / 100 | 3/3 |
+| 1,000        | 20.91 / 20.09 / 21.95         | 0.035 / 0.034 / 0.036             | 1,000 / 1,000 / 1,000 | 3/3 |
+
+これはフォロワー数の桁を把握するための探索結果であり、サンプル数が少ないため p95 や移行閾値は名乗らない。単一マシン・API 1コンテナ・専用DBではないローカル環境で、他の処理やDocker状態の影響も受ける。厳密な測定、スイープ能力、専用ジョブキュー移行開始条件は Issue #260 の対象とする。測定後は `cleanup_perf.py --yes` を実行し、性能ユーザー1001件・作成レシピ4件・未処理outbox 0件を確認した。
 
 | 項目 | 平均負荷（#146） | ストレス（#147） | スパイク（#148） |
 | ---- | ---------------- | ---------------- | ---------------- |
