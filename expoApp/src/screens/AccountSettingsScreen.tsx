@@ -13,7 +13,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BackLabel } from "@/components/BackLabel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PasswordField } from "@/components/PasswordField";
-import { useChangeEmail, useChangeSecurityQuestion } from "@/features/account/hooks";
+import {
+  EmailChangeUncertainError,
+  useChangeEmail,
+  useChangeSecurityQuestion,
+} from "@/features/account/hooks";
 import {
   type EmailChangeFieldErrors,
   type SecurityQuestionFieldErrors,
@@ -104,6 +108,13 @@ function EmailChangeSection() {
             setErrorMessage("試行回数が上限に達しました。しばらくしてからお試しください");
           } else if (error instanceof ApiError && error.status === 400) {
             setErrorMessage("入力内容を確認してください");
+          } else if (error instanceof EmailChangeUncertainError) {
+            // サーバー側だけ変更済みのことがある（全セッション失効）。再送を促さず再ログインを案内する。
+            setErrorMessage(
+              error.kind === "committed"
+                ? "メールアドレスは変更されましたが、この端末に結果を保存できませんでした。新しいメールアドレスで再ログインしてください"
+                : "通信が途切れ、変更が完了したか確認できませんでした。変更されている可能性があるため、もう一度送信せず、新しいメールアドレスでログインし直してください（入れない場合は元のメールアドレスをお試しください）",
+            );
           } else {
             setErrorMessage("通信エラー。もう一度お試しください");
           }

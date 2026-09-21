@@ -105,3 +105,51 @@ test("保持しないでログイン → 再読み込み → メール変更し�
   expect(setCookie).toContain("recipi_refresh_token=");
   expect(setCookie).not.toMatch(/max-age|expires/i);
 });
+
+test("応答が届かなかったときは変更の可能性と再ログインを案内し、実際に新しいアドレスで入れる（Issue #276）", async ({
+  page,
+  consoleGuard,
+}) => {
+  consoleGuard.allow({
+    kind: "console",
+    message: /Failed to load resource: net::ERR_FAILED/,
+    url: /\/api\/v1\/users\/me\/email$/,
+    reason: "応答を意図的に捨てて『サーバーだけ変更済み』の状況を作っている",
+  });
+
+  const oldEmail = `e2euser_email_lost_${makeRunId()}@example.com`;
+  const newEmail = `e2euser_email_lost_new_${makeRunId()}@example.com`;
+  await signUp(page, oldEmail, "E2E Lost Response");
+
+  // サーバーには届いて処理されるが、ブラウザは応答を受け取れない。
+  let calls = 0;
+  await page.route(`**${EMAIL_PATH}`, async (route) => {
+    calls += 1;
+    await route.fetch();
+    await route.abort("failed");
+  });
+
+  await page.getByTestId("nav-my-page").last().click();
+  await page.getByTestId("my-page-account-settings").last().click();
+  const field = (id: string) => page.getByTestId(`account-settings-${id}`).last();
+  await expect(field("email-current-password")).toBeVisible({ timeout: 15_000 });
+  await field("email-current-password").fill(PASSWORD);
+  await field("email").fill(newEmail);
+  await field("email-confirm").fill(newEmail);
+  await field("email-submit").click();
+  await page.getByTestId("account-settings-email-dialog-confirm").last().click();
+
+  await expect(page.getByText(/変更されている可能性/).last()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/新しいメールアドレスでログインし直して/).last()).toBeVisible();
+  await expect(page.getByText("通信エラー。もう一度お試しください")).toHaveCount(0);
+  expect(calls).toBe(1); // 自動で再送していない
+
+  // 案内どおり、サーバー側では変更済み: 新しいアドレスでログインできる。
+  await page.unroute(`**${EMAIL_PATH}`);
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await page.getByTestId("login-email").fill(newEmail);
+  await page.getByTestId("login-password").fill(PASSWORD);
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByTestId("home-logo").last()).toBeVisible({ timeout: 15_000 });
+});
