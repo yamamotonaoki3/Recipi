@@ -13,6 +13,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   type InfiniteData,
   type QueryClient,
@@ -50,16 +51,21 @@ function useSessionReady(): boolean {
 /** あるレシピの感想一覧（新しい順・無限スクロール）。 */
 export function useComments(recipeId: string | undefined) {
   const ready = useSessionReady();
-  const queryClient = useQueryClient();
-  const deleted =
-    recipeId != null && queryClient.getQueryData<boolean>(["deleted-recipe", recipeId]) === true;
+  // 削除 mutation が書き込むローカル marker を observer として購読する。
+  // getQueryData だけでは、画面が hidden stack に残ったままでも enabled が
+  // 更新されず、ログイン切替時に削除済みレシピを再取得してしまう（Issue #269）。
+  const deleted = useQuery({
+    queryKey: ["deleted-recipe", recipeId ?? ""],
+    queryFn: async () => false,
+    enabled: false,
+  }).data;
   return useInfiniteQuery({
     queryKey: commentKeys.list(recipeId ?? ""),
     queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
       listComments(recipeId as string, { cursor: pageParam, limit: PAGE_SIZE }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-    enabled: ready && Boolean(recipeId) && !deleted,
+    enabled: ready && Boolean(recipeId) && deleted !== true,
   });
 }
 
