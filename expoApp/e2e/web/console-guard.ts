@@ -80,15 +80,7 @@ export const BUILTIN_ALLOWANCES: readonly Allowance[] = [
 ];
 
 /** 追跡 Issue 付きの一時許可（本物の不具合）。直したら該当の行を消すこと。 */
-export const KNOWN_ISSUES: readonly KnownIssue[] = [
-  {
-    kind: "pageerror",
-    message: /Minified React error #418/,
-    reason: "Web の初回表示のハイドレーション不一致",
-    issue: 267,
-    removeWhen: "#267 で原因を直し、#418 が出なくなったとき",
-  },
-];
+export const KNOWN_ISSUES: readonly KnownIssue[] = [];
 
 export class ConsoleGuard {
   private readonly problems: CapturedProblem[] = [];

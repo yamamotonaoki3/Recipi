@@ -81,6 +81,7 @@ Web の spec は `@playwright/test` ではなく `./console-guard` の `test` / 
 
 ### E2E実行環境の事前確認
 
+- 静的サーバーに `-s`（SPA フォールバック）を付けない。全ルートに `index.html` が返り、事前描画した HTML と URL が食い違って React #418 が出る（Issue #267）。`npx serve dist -l 8081 -c ../e2e/serve.json` を使う。
 - 静的サーバーが指定ポートを実際に確保したかを、`serve` のログ（`Accepting connections at ...`）で確認する。`npx serve -l 8081` はポートが使用中でも別ポートへフォールバックし、終了コードは正常のままになる。`curl` が200を返しても、応答元が別サーバーである場合がある。
 - 配信中のHTMLが静的バンドル（`/_expo/static/js/web/entry-*.js`）を参照しているか確認する。`node_modules/expo-router/entry.bundle?...dev=true` を参照している場合はExpo開発サーバーを掴んでおり、リクエストが完了せず `load` に到達しない。
 - Webビルド時に `EXPO_PUBLIC_API_BASE_URL` を指定する。

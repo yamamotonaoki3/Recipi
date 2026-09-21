@@ -1,0 +1,21 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/:tab/recipes/:id",
+      "destination": "/:tab/recipes/[id].html"
+    },
+    {
+      "source": "/:tab/users/:id/connections",
+      "destination": "/:tab/users/[id]/connections.html"
+    },
+    {
+      "source": "/:tab/users/:id",
+      "destination": "/:tab/users/[id].html"
+    },
+    {
+      "source": "/recipes/:id/edit",
+      "destination": "/recipes/[id]/edit.html"
+    }
+  ]
+}
