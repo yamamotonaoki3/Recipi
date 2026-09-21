@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -23,6 +23,7 @@ from sqlmodel import Session
 
 from app import storage
 from app.db import engine
+from app.models.ai_usage import AIUsage
 from scripts import cleanup_e2e
 from scripts.cleanup_e2e import CleanupError, assert_cleanup_target, cleanup, email_pattern
 from tests.helpers import recipe_payload, upload_image
@@ -206,6 +207,38 @@ def test_deletes_only_the_target_run_and_queues_images(client: TestClient, keys:
         r=cleanup_e2e.DELETION_REASON,
     )
     assert queued == 3
+
+
+@pytest.mark.integration
+def test_deletes_ai_usage_of_the_target_run(client: TestClient) -> None:
+    """AI校正を使ったE2Eユーザーも、後始末で外部キー違反にならず削除できる（Issue #253）。"""
+    run_id = _run_id()
+    e2e = _e2e(client, run_id)
+    plain = _plain(client)
+    with Session(engine) as session:
+        session.add(
+            AIUsage(
+                user_id=e2e.id,
+                window_kind="day",
+                window_start=datetime.now(UTC),
+                count=1,
+            )
+        )
+        session.add(
+            AIUsage(
+                user_id=plain.id,
+                window_kind="day",
+                window_start=datetime.now(UTC),
+                count=1,
+            )
+        )
+        session.commit()
+
+    report = _run(email_pattern(run_id, all_users=False))
+
+    assert report.deleted
+    assert _count("SELECT count(*) FROM ai_usage WHERE user_id = :id", id=e2e.id) == 0
+    assert _count("SELECT count(*) FROM ai_usage WHERE user_id = :id", id=plain.id) == 1
 
 
 @pytest.mark.integration
