@@ -24,6 +24,7 @@ import { RecipeCardSkeletonList } from "@/components/Skeleton";
 import type { FeedKind } from "@/features/feed/api";
 import { getListStatus } from "@/features/list/useListStatus";
 import { useFeed } from "@/features/feed/hooks";
+import { useRetap } from "@/features/navigation/retap";
 import { validateSearchQuery } from "@/features/search/validateQuery";
 
 /**
@@ -94,6 +95,9 @@ export function HomeScreen({ basePath }: { basePath: string }) {
     setSubmittedQuery("");
     setSearchError(null);
   };
+
+  // 選択中の「ホーム」を再タップしたら検索窓もクリアする（一覧の最上部への移動は FeedList 側。Issue #249）。
+  useRetap(basePath, clearSearch);
 
   /**
    * 検索を確定する。検索ボタンと、キーボードの確定キー（`onSubmitEditing`）の
@@ -301,6 +305,11 @@ function FeedList({
   basePath: string;
 }) {
   const router = useRouter();
+  const listRef = useRef<FlatList>(null);
+  // 再タップで最上部へ。隠れているサブタブは動かさない（Issue #249）。
+  useRetap(basePath, () => {
+    if (visible) listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  });
   const result = useFeed(feed, query, { enabled: visible });
   const items = result.data?.pages.flatMap((p) => p.items) ?? [];
   const suffix = feed === "all" ? "" : `-${feed}`;
@@ -327,6 +336,7 @@ function FeedList({
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           testID={`home-feed-list${suffix}`}
           data={items}
           keyExtractor={(r) => r.id}

@@ -1,11 +1,13 @@
 /** 通知一覧（screens/notifications.md、Issue #117）。 */
 import { useRouter } from "expo-router";
+import { useRef } from "react";
 import { FlatList, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { NotificationItem } from "@/components/NotificationItem";
 import { getListStatus } from "@/features/list/useListStatus";
+import { useRetap } from "@/features/navigation/retap";
 import type { NotificationItem as NotificationItemData } from "@/features/notification/api";
 import {
   useMarkNotificationsRead,
@@ -18,6 +20,9 @@ export function NotificationsScreen({ basePath = "/notifications" }: { basePath?
   const insets = useSafeAreaInsets();
   const notifications = useNotifications();
   const markRead = useMarkNotificationsRead();
+  const listRef = useRef<FlatList>(null);
+  // 選択中の「通知」を再タップしたら最上部へ（Issue #249）。
+  useRetap(basePath, () => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
   const items = notifications.data?.pages.flatMap((page) => page.items) ?? [];
   const unreadCount = notifications.data?.pages[0]?.unreadCount;
   useSyncUnreadCount(unreadCount);
@@ -93,6 +98,7 @@ export function NotificationsScreen({ basePath = "/notifications" }: { basePath?
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           testID="notifications-list"
           data={items}
           keyExtractor={(item) => item.id}

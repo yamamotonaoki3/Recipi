@@ -1,7 +1,9 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
+import { FlatList } from "react-native";
 
 import { NotificationsScreen } from "../NotificationsScreen";
 import type { NotificationItem } from "@/features/notification/api";
+import { notifyRetap } from "@/features/navigation/retap";
 
 const mockPush = jest.fn();
 const mockRefetch = jest.fn();
@@ -86,6 +88,20 @@ describe("NotificationsScreen", () => {
     await fireEvent.press(getByTestId("notification-n2"));
     expect(mockPush).toHaveBeenCalledWith("/notifications/recipes/r1");
     expect(mockMarkRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("選択中の通知 destination を再タップすると一覧を最上部へ戻す（Issue #249）", async () => {
+    ready([followed, favorited], 1);
+    const scrollTo = jest.spyOn(FlatList.prototype, "scrollToOffset").mockImplementation(() => {});
+    await render(<NotificationsScreen />);
+
+    await act(async () => notifyRetap("/notifications"));
+    expect(scrollTo).toHaveBeenCalledWith({ offset: 0, animated: true });
+
+    scrollTo.mockClear();
+    await act(async () => notifyRetap("/home"));
+    expect(scrollTo).not.toHaveBeenCalled();
+    scrollTo.mockRestore();
   });
 
   it("すべて既読を実行できる", async () => {
