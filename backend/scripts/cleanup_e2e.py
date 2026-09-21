@@ -126,6 +126,7 @@ RESIDUAL_CHECKS: dict[str, str] = {
     ),
     "uploads": f"SELECT count(*) FROM uploads WHERE user_id = {_U}",
     "refresh_tokens": f"SELECT count(*) FROM refresh_tokens WHERE user_id = {_U}",
+    "ai_usage": f"SELECT count(*) FROM ai_usage WHERE user_id = {_U}",
 }
 
 # 対象ユーザーの持ち物が参照している画像キー。
@@ -285,6 +286,9 @@ def cleanup(
     # 消えない。同じトランザクションで、ユーザーを消す前に対象メールの分を消す。
     # 未登録メールで試した記録も同じメールのパターンに入るので、ここで一緒に消える。
     session.execute(text("DELETE FROM password_reset_attempts WHERE email LIKE :p"), {"p": pattern})
+    # AI利用履歴は users に CASCADE しない方針のため、E2E対象ユーザー分だけ先に消す。
+    # 利用履歴を保持する本番のアカウント削除とは異なり、ここではテストデータを完全に除去する。
+    session.execute(text(f"DELETE FROM ai_usage WHERE user_id = {_U}"), params)
     session.execute(text(f"DELETE FROM users WHERE id = {_U}"), params)
     session.commit()
     report.deleted = True
