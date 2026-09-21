@@ -28,6 +28,7 @@ import functools
 import json
 import logging
 from typing import Any
+from urllib.parse import urlsplit
 
 import boto3
 from botocore.config import Config
@@ -41,7 +42,25 @@ logger = logging.getLogger(__name__)
 # boto3 は型スタブを同梱していないため、クライアントの型は `Any` になる
 # （厳密な型が欲しければ `boto3-stubs[s3]` を入れる手もあるが、依存を
 # 増やしてまで得るものは少ないと判断してこの層だけ Any を許容する）。
-def _client_kwargs(s: Settings) -> dict[str, Any]:
+def _presign_endpoint(s: Settings) -> str | None:
+    """署名付き URL を作る側が使うエンドポイント（Issue #268）。
+
+    署名にはホスト名が含まれるので、**ブラウザが実際に読みに行くホストで署名する**必要がある。
+    ローカルの Docker 構成では API の接続先は `http://minio:9000`（コンテナ間の名前）だが、
+    ブラウザからは引けない。ブラウザ向けの `S3_PUBLIC_URL_BASE` の origin
+    （`http://localhost:9000` 等）で署名すれば、URL を後から置換せずに済む。
+    エンドポイント未指定（本番の AWS）では接続先とブラウザ向けが同じなので何もしない。
+    """
+    endpoint = s.S3_ENDPOINT_URL.strip()
+    if not endpoint:
+        return None
+    parts = urlsplit(s.S3_PUBLIC_URL_BASE.strip())
+    if not parts.scheme or not parts.netloc:
+        return endpoint
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _client_kwargs(s: Settings, *, for_presign: bool = False) -> dict[str, Any]:
     """設定から `boto3.client("s3", ...)` に渡す引数を組み立てる（純粋関数。Issue #166）。
 
     ローカル（MinIO）と本番（AWS の S3）で変わるのは次の 3 点:
@@ -57,7 +76,7 @@ def _client_kwargs(s: Settings) -> dict[str, Any]:
       指定したときだけ `path` 形式（`http://localhost:9000/<バケット名>/<キー>`）にする。
       AWS の S3 では path 形式は非推奨なので、既定の形式に任せる。
     """
-    endpoint = s.S3_ENDPOINT_URL.strip() or None
+    endpoint = (_presign_endpoint(s) if for_presign else s.S3_ENDPOINT_URL.strip()) or None
     key_id = s.S3_ACCESS_KEY_ID.strip()
     secret = s.S3_SECRET_ACCESS_KEY.strip()
     if bool(key_id) != bool(secret):
@@ -91,6 +110,15 @@ def get_s3_client() -> Any:
     引数の組み立て（ローカルと本番の違い）は `_client_kwargs` を参照。
     """
     return boto3.client("s3", **_client_kwargs(settings))
+
+
+@functools.lru_cache(maxsize=1)
+def get_presign_client() -> Any:
+    """署名付き URL の生成専用クライアント（通信はしない。Issue #268）。
+
+    接続用と違うのは endpoint だけ（path 形式・リージョン・認証情報は `_client_kwargs` で揃う）。
+    """
+    return boto3.client("s3", **_client_kwargs(settings, for_presign=True))
 
 
 # 画像を置くキーの接頭辞。**どちらに置くかで配信の経路が決まる**（Issue #185）。
@@ -211,11 +239,11 @@ def presigned_url(key: str, expires_in: int) -> str:
     無効になる**。本番は ECS のタスクロール（一時認証情報）で署名するため、
     `IMAGE_URL_TTL_SECONDS` は保守的な値にしてある（app/config.py）。
 
-    クライアントは `get_s3_client()` と同じものを使う。MinIO ではバケット名を
-    パスに含める形（path 形式）で署名する必要があり、別のクライアントを作ると
-    設定がずれて署名が合わなくなるため。
+    署名専用の `get_presign_client()` を使う。endpoint 以外（path 形式・リージョン・
+    認証情報）は接続用と同じ `_client_kwargs` で作るので設定はずれない。endpoint だけは
+    ブラウザから届くホスト（`S3_PUBLIC_URL_BASE` の origin）にする（Issue #268）。
     """
-    url = get_s3_client().generate_presigned_url(
+    url = get_presign_client().generate_presigned_url(
         "get_object",
         Params={"Bucket": settings.S3_BUCKET, "Key": key},
         ExpiresIn=expires_in,

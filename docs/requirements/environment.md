@@ -46,7 +46,7 @@
 | `S3_BUCKET` | バケット名 | per-env | `recipi-images` | |
 | `S3_ACCESS_KEY_ID` | ストレージのアクセスキー | secret | `changeme` | dev/test は MinIO のルート資格情報と一致 |
 | `S3_SECRET_ACCESS_KEY` | ストレージのシークレットキー | secret | `changeme` | |
-| `S3_PUBLIC_URL_BASE` | 表示用 URL の基底（`<基底>/<キー>` が画像の URL になる） | per-env | `http://localhost:9000/recipi-images` | dev/test は MinIO の公開バケット。本番は CloudFront のドメイン（`https://` 必須。バケットは非公開。[features/image.md](features/image.md)） |
+| `S3_PUBLIC_URL_BASE` | 表示用 URL の基底（`<基底>/<キー>` が画像の URL になる） | per-env | `http://localhost:9000/recipi-images` | dev/test は MinIO の公開バケット。本番は CloudFront のドメイン（`https://` 必須。バケットは非公開。[features/image.md](features/image.md)） 非公開画像の署名付き URL は、`S3_ENDPOINT_URL` を指定しているとき（MinIO）に**この URL の origin で署名**する（コンテナ間の宛先 `minio:9000` ではブラウザが引けないため。Issue #268）。 |
 | （本番の S3） | `S3_ENDPOINT_URL`・`S3_ACCESS_KEY_ID`・`S3_SECRET_ACCESS_KEY` は**空**にする | per-env | — | 空なら AWS の標準エンドポイントと ECS のタスクロールの認証情報を使う。キーは「両方空」か「両方あり」。本番は `S3_REGION`・`S3_BUCKET`・`S3_PUBLIC_URL_BASE` が空だと起動しない。Issue #166 |
 | `IMAGE_MAX_DIMENSION` | 保存・クライアント縮小時の画像長辺上限（px） | fixed（目安） | `2048` | 1以上の整数。APIの `GET /api/v1/client-config` が同じ値を公開し、クライアントは画像選択時に5分キャッシュして使う。設定取得失敗時だけ2048へフォールバックする。Issue #230 |
 | `IMAGE_URL_TTL_SECONDS` | `private/`（レシピのサムネ・手順画像・感想画像）の署名付き URL の有効期限（秒） | fixed | `3600`（1 時間） | **暫定値**。フロントのキャッシュ（TanStack Query の `staleTime` は最大 10 分）より十分長く、かつ署名に使う一時認証情報の寿命に収まる必要がある。本番での認証情報の寿命は Issue #184 で確認して調整する。期限切れ時にフロントが取り直す仕組みは Issue #186。Issue #185 |

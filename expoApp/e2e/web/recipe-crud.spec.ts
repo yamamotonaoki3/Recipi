@@ -41,6 +41,22 @@ async function pickImage(page: Page, pickTestId: string) {
   await chooser.setFiles(FIXTURE_IMAGE);
 }
 
+/** testID の要素の中の `<img>` が実際に読み込めた（naturalWidth > 0）ことを確かめる。 */
+async function expectImageLoaded(page: Page, testId: string) {
+  await expect
+    .poll(
+      () =>
+        page
+          .getByTestId(testId)
+          .last()
+          .locator("img")
+          .first()
+          .evaluate((img: HTMLImageElement) => img.naturalWidth),
+      { timeout: 15_000, message: `${testId} の画像が読み込めていない` },
+    )
+    .toBeGreaterThan(0);
+}
+
 test("レシピ作成 → 一覧 → 詳細 → 編集 → 保存", async ({ page }) => {
   const email = `e2euser_recipe_${Date.now()}@example.com`;
   // --- サインアップして自動ログイン ---
@@ -164,6 +180,10 @@ test("サムネイルと手順画像を付けて保存 → 詳細に表示され
   await expect(page.getByTestId("recipe-detail-thumbnail").last()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("recipe-detail-thumbnail-placeholder")).toHaveCount(0);
   await expect(page.getByTestId("detail-step-0-image").last()).toBeVisible();
+  // `toBeVisible()` は要素があるかしか見ない。非公開画像の署名付き URL が読めないと
+  // 壊れた画像でも通ってしまう（Issue #268）ので、実際に読み込めたかを確かめる。
+  await expectImageLoaded(page, "recipe-detail-thumbnail");
+  await expectImageLoaded(page, "detail-step-0-image");
 
   // --- 編集でサムネイルを削除 → 詳細でプレースホルダに戻る ---
   await page.getByTestId("recipe-detail-edit").last().click();
