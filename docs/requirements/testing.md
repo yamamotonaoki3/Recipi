@@ -153,6 +153,7 @@
 | ストレス   | `stress.js`       | 30 VU（200%）→ 45 VU（300%）。各 5 分保つ（合計 16 分） | feed / search の p95 < 600ms・失敗率 < 1%・5xx（`server_errors`）0 件 | #147  |
 | スパイク   | `spike.js`        | 15 VU → 10 秒で 100 VU（約 670%）→ 1 分保つ → 15 VU に戻して 2 分 | 全体の失敗率 < 5%・回復区間（`phase:recovery`）の feed / search の p95 < 300ms | #148  |
 | fan-out探索 | `fanout.js` | 1 VU・3回。フォロワー数 0 / 10 / 100 / 1,000 を別実行 | 投稿201・outbox処理済み・通知件数が指定数と一致。p95や移行閾値は判定しない | #248 |
+| fan-out厳密測定 | `fanout-strict.js` | 固定到着率（既定1 req/s）・5分。0フォロワーを対照にして各水準を専用DBで別実行 | `dropped_iterations=0`・投稿失敗0・DB検証でoutbox処理済み、通知件数・受信者集合一致。API 201だけでは成立としない | #260 |
 
 - **スパイクで見ること**: 急に増えてもプロセスが落ちないか、平常に戻った後に自力で元の速さへ戻れるか。k6 の `scenarios` を 2 つ（`spike` → `recovery`）に分け、回復区間のリクエストだけに `phase:recovery` タグを付けて判定する。急増中のエラーの内訳（タイムアウト / 5xx / 接続拒否）と、回復までにかかった時間を下の測定結果に書く。終わった後に `GET /healthz` が応答することも確かめる。
 
@@ -189,6 +190,20 @@ APP_ENV=development python -m scripts.cleanup_perf --yes
 ```
 
 0 / 10 / 100 / 1,000 の各水準で同じ手順を繰り返す。fan-out探索の値は単一マシン・少数回・ローカルDBの結果であり、p95や専用ジョブキューへの移行閾値の根拠にはしない。厳密な測定と移行開始条件は Issue #260 で扱う。
+
+厳密測定では、他の定期処理を止めた専用DBを用意し、0フォロワーを対照としてから、固定到着率で水準ごとに実行する。
+`dropped_iterations` が1件でもあれば投入量未達として測定不成立とする。k6ログに出た全ての
+`recipe_id` を `verify_fanout.py` で確認し、処理済み outbox、通知件数、実際の受信者集合が
+期待値と一致した場合だけ成立とする。測定終了後は未処理件数、最古未処理行の年齢、排出時間を
+別トランザクションで記録し、`cleanup_perf.py --yes` で残数0を確認する。
+
+```bash
+# 専用DB・固定データを用意した環境で、1 req/s・5分を実行する例
+k6 run -e PERF_USERS=1001 -e FANOUT_RATE=1 -e FANOUT_DURATION=5m backend/perf/k6/fanout-strict.js
+# 出力された全 recipe_id を expected-followers とともに検証する
+cd backend
+APP_ENV=development python -m scripts.verify_fanout <recipe_id> --expected-followers 1000
+```
 
 - k6 は単体のバイナリ（Windows は `winget install k6`）。バージョンは `k6 version` で確認する。
 - スモークが通るまでは、ほかのテストを実行しない（スクリプトやデータの誤りを負荷の問題と取り違えないため）。
