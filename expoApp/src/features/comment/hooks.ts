@@ -64,7 +64,7 @@ export function useComments(recipeId: string | undefined) {
   const recipeDeleted = isRecipeDeleted(recipeId) || deleted === true;
   return useInfiniteQuery({
     queryKey: commentKeys.list(recipeId ?? ""),
-    queryFn: ({ pageParam }: { pageParam: string | undefined }) => {
+    queryFn: ({ pageParam, signal }: { pageParam: string | undefined; signal: AbortSignal }) => {
       // 画面が hidden stack に残ったまま再取得される競合にも備え、削除 marker
       // を queryFn 内でも確認して API リクエスト自体を止める（Issue #269）。
       if (
@@ -73,7 +73,7 @@ export function useComments(recipeId: string | undefined) {
       ) {
         return { items: [], nextCursor: null };
       }
-      return listComments(recipeId as string, { cursor: pageParam, limit: PAGE_SIZE });
+      return listComments(recipeId as string, { cursor: pageParam, limit: PAGE_SIZE }, signal);
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,

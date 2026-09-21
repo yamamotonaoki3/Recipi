@@ -165,9 +165,12 @@ describe("感想の hooks", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(mockGet).toHaveBeenCalledWith("/api/v1/recipes/{recipe_id}/comments", {
-      params: { path: { recipe_id: "r1" }, query: { cursor: undefined, limit: 20 } },
-    });
+    expect(mockGet).toHaveBeenCalledWith(
+      "/api/v1/recipes/{recipe_id}/comments",
+      expect.objectContaining({
+        params: { path: { recipe_id: "r1" }, query: { cursor: undefined, limit: 20 } },
+      }),
+    );
     expect(result.current.data?.pages[0].items).toHaveLength(1);
   });
 

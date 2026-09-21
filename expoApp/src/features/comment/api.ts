@@ -26,9 +26,11 @@ export type CommentUpdate = components["schemas"]["CommentUpdateRequest"];
 export async function listComments(
   recipeId: string,
   params: { cursor?: string; limit?: number } = {},
+  signal?: AbortSignal,
 ): Promise<CommentList> {
   const { data, error, response } = await api.GET("/api/v1/recipes/{recipe_id}/comments", {
     params: { path: { recipe_id: recipeId }, query: params },
+    signal,
   });
   if (error || !response.ok || !data) {
     throw apiErrorFromResponse(error, response, "感想を読み込めませんでした");
