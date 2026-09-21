@@ -12,10 +12,17 @@ import { Pressable, Text, TextInput, View, type TextInputProps } from "react-nat
 
 type PasswordFieldProps = Omit<TextInputProps, "secureTextEntry"> & {
   errorMessage?: string;
+  /**
+   * 表示トグルの読み上げで使う、この欄が何かを表す語（既定「パスワード」）。
+   * 秘密の質問の答えのように、パスワード以外を伏せる欄で使うときに差し替える
+   * （「パスワードを表示する」と読み上げると、何の欄か分からなくなるため。Issue #242）。
+   */
+  toggleSubject?: string;
 };
 
 export function PasswordField({
   errorMessage,
+  toggleSubject = "パスワード",
   className,
   testID,
   ...textInputProps
@@ -37,7 +44,9 @@ export function PasswordField({
         <Pressable
           onPress={() => setIsVisible((v) => !v)}
           accessibilityRole="button"
-          accessibilityLabel={isVisible ? "パスワードを非表示にする" : "パスワードを表示する"}
+          accessibilityLabel={
+            isVisible ? `${toggleSubject}を非表示にする` : `${toggleSubject}を表示する`
+          }
           testID={testID ? `${testID}-toggle` : undefined}
           hitSlop={8}
         >

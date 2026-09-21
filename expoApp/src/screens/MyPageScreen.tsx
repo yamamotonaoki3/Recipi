@@ -140,6 +140,15 @@ export function MyPageScreen({ basePath }: { basePath: string }) {
         </Pressable>
 
         <Pressable
+          testID="my-page-account-settings"
+          onPress={() => router.push(`${basePath}/account-settings` as never)}
+          accessibilityRole="button"
+          className="border-b border-neutral-200 px-4 py-4"
+        >
+          <Text className="text-base text-neutral-800">アカウント設定</Text>
+        </Pressable>
+
+        <Pressable
           testID="my-page-logout"
           onPress={() => logout.mutate()}
           disabled={logout.isPending}
