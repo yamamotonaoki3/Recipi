@@ -88,14 +88,6 @@ export const KNOWN_ISSUES: readonly KnownIssue[] = [
     issue: 267,
     removeWhen: "#267 で原因を直し、#418 が出なくなったとき",
   },
-  {
-    kind: "console",
-    message: /ERR_NAME_NOT_RESOLVED/,
-    url: /^http:\/\/minio:9000\//,
-    reason: "ローカルの Docker 構成で、非公開画像の署名付き URL が minio:9000 を指す",
-    issue: 268,
-    removeWhen: "#268 で署名付き URL をブラウザから読めるホストで作るようにしたとき",
-  },
 ];
 
 export class ConsoleGuard {

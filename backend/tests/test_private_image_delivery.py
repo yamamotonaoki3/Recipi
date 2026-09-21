@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 import time
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -83,9 +84,13 @@ def test_署名付きURLはpath形式のエンドポイントを指す(client: T
     headers = auth_headers(client)
     body = upload_image(client, headers)
 
-    endpoint = settings.S3_ENDPOINT_URL.rstrip("/")
-    assert endpoint, "このテストは MinIO（S3_ENDPOINT_URL あり）を前提にしている"
-    assert body["url"].startswith(f"{endpoint}/{settings.S3_BUCKET}/"), body["url"]
+    assert settings.S3_ENDPOINT_URL.strip(), (
+        "このテストは MinIO（S3_ENDPOINT_URL あり）を前提にしている"
+    )
+    # 署名はブラウザから届くホスト（S3_PUBLIC_URL_BASE の origin）で行う（Issue #268）。
+    parts = urlsplit(settings.S3_PUBLIC_URL_BASE)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    assert body["url"].startswith(f"{origin}/{settings.S3_BUCKET}/"), body["url"]
     assert body["key"] in body["url"]
 
 
