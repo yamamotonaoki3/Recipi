@@ -93,10 +93,14 @@ def test_can_log_in_with_the_new_email_but_not_the_old_one(client: TestClient):
         client.put(CHANGE_URL, headers=_headers(signed["accessToken"]), json=_body(new_email))
     ).status_code == 200
 
-    ok = client.post(LOGIN_URL, json={"email": new_email, "password": PASSWORD, "rememberMe": False})
+    ok = client.post(
+        LOGIN_URL, json={"email": new_email, "password": PASSWORD, "rememberMe": False}
+    )
     assert ok.status_code == 200, ok.text
 
-    ng = client.post(LOGIN_URL, json={"email": old_email, "password": PASSWORD, "rememberMe": False})
+    ng = client.post(
+        LOGIN_URL, json={"email": old_email, "password": PASSWORD, "rememberMe": False}
+    )
     assert ng.status_code == 401, ng.text
 
 
@@ -128,7 +132,9 @@ def test_taken_email_returns_409(client: TestClient):
 def test_deactivated_users_email_returns_the_same_409(client: TestClient):
     """退会済みが持つアドレスも同じ 409。区別すると退会の事実が漏れる。"""
     gone_email, gone = _new_user(client)
-    assert client.delete("/api/v1/users/me", headers=_headers(gone["accessToken"])).status_code == 204
+    assert (
+        client.delete("/api/v1/users/me", headers=_headers(gone["accessToken"])).status_code == 204
+    )
 
     _mine_email, mine = _new_user(client)
     res = client.put(CHANGE_URL, headers=_headers(mine["accessToken"]), json=_body(gone_email))
@@ -180,9 +186,7 @@ def test_other_devices_lose_both_access_and_refresh_tokens(client: TestClient):
         LOGIN_URL, json={"email": email, "password": PASSWORD, "rememberMe": True}
     ).json()
 
-    changed = client.put(
-        CHANGE_URL, headers=_headers(first["accessToken"]), json=_body(_email())
-    )
+    changed = client.put(CHANGE_URL, headers=_headers(first["accessToken"]), json=_body(_email()))
     assert changed.status_code == 200, changed.text
 
     # 2 台目のアクセストークンは失効。
@@ -211,9 +215,13 @@ def test_old_refresh_token_does_not_kill_the_new_chain(client: TestClient):
     ).json()
 
     # 失効済みの旧トークンを提示（リユース検知が走る）。
-    assert client.post(REFRESH_URL, json={"refreshToken": signed["refreshToken"]}).status_code == 401
+    assert (
+        client.post(REFRESH_URL, json={"refreshToken": signed["refreshToken"]}).status_code == 401
+    )
     # それでも新しいチェーンは生きている。
-    assert client.post(REFRESH_URL, json={"refreshToken": changed["refreshToken"]}).status_code == 200
+    assert (
+        client.post(REFRESH_URL, json={"refreshToken": changed["refreshToken"]}).status_code == 200
+    )
 
 
 @pytest.mark.parametrize("remember_me", [True, False])
@@ -231,9 +239,11 @@ def test_remember_me_controls_the_new_token_lifetime(
     assert res.status_code == 200, res.text
 
     user = db_session.exec(select(User).where(User.email == new_email)).one()
+    # `revoked_at` は `datetime | None` なので、mypy は SQLAlchemy の `is_` を
+    # 認識できない（app/services/credentials.py の同じ書き方と揃えている）。
+    not_revoked = RefreshToken.revoked_at.is_(None)  # type: ignore[union-attr]
     token = db_session.exec(
-        select(RefreshToken)
-        .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))  # type: ignore[union-attr]
+        select(RefreshToken).where(RefreshToken.user_id == user.id, not_revoked)
     ).one()
     assert token.remember_me is remember_me
     days = (token.expires_at.replace(tzinfo=UTC) - datetime.now(UTC)).days
@@ -264,7 +274,10 @@ def test_unauthenticated_returns_401(client: TestClient):
 
 def test_deactivated_user_returns_401(client: TestClient):
     _email_old, signed = _new_user(client)
-    assert client.delete("/api/v1/users/me", headers=_headers(signed["accessToken"])).status_code == 204
+    assert (
+        client.delete("/api/v1/users/me", headers=_headers(signed["accessToken"])).status_code
+        == 204
+    )
 
     res = client.put(CHANGE_URL, headers=_headers(signed["accessToken"]), json=_body(_email()))
     assert res.status_code == 401, res.text
@@ -343,8 +356,6 @@ def test_conflict_is_audited(client: TestClient, json_logs: Any):
         client.put(CHANGE_URL, headers=_headers(mine["accessToken"]), json=_body(other_email))
     ).status_code == 409
 
-    failures = [
-        r for r in json_logs.audit("account.email.change") if r.get("outcome") == "failure"
-    ]
+    failures = [r for r in json_logs.audit("account.email.change") if r.get("outcome") == "failure"]
     assert failures, "重複の監査ログが出ていない"
     assert other_email not in json_logs.raw()
