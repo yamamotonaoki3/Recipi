@@ -69,13 +69,16 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def _reset_password_reset_attempts(request: pytest.FixtureRequest):
-    """結合テストの前に `password_reset_attempts` を空にする。
+def _reset_rate_limit_tables(request: pytest.FixtureRequest):
+    """結合テストの前に、レート制限が数えるテーブルを空にする。
+
+    対象は `password_reset_attempts`（app/api/auth.py）と `reauth_attempts`
+    （app/services/credentials.py）。
 
     `TestClient` はどのテストでも同じダミー IP（"testclient"）を使うため、
-    このテーブルの行を残したままにすると、IP 単位のレート制限（app/api/auth.py
-    の `_IP_LOCKOUT_MAX_ATTEMPTS`）が別々のテスト実行をまたいで蓄積し、
-    本来レート制限を意図していないテストまで 429 になってしまう。
+    これらの行を残したままにすると、IP 単位のレート制限が別々のテスト実行を
+    またいで蓄積し、本来レート制限を意図していないテストまで 429 になってしまう。
+    ユーザーを毎回作り直しても IP は共通なので、テーブルごと空にする必要がある。
 
     `@pytest.mark.integration` が付いたテストだけに絞る: DB / マイグレーション
     を必要としない単体テスト（test_config.py 等）は、Docker が無い環境でも
@@ -90,9 +93,11 @@ def _reset_password_reset_attempts(request: pytest.FixtureRequest):
 
     from app.db import engine
     from app.models.password_reset_attempt import PasswordResetAttempt
+    from app.models.reauth_attempt import ReauthAttempt
 
     with Session(engine) as session:
         session.exec(delete(PasswordResetAttempt))
+        session.exec(delete(ReauthAttempt))
         session.commit()
     yield
 
@@ -106,7 +111,7 @@ def _ensure_storage_bucket(request: pytest.FixtureRequest) -> None:
     行うので、毎回呼んでも安全（`.env.test` の `S3_BUCKET` は開発用とは
     別の `recipi-images-test` を指しているので、開発データは汚さない）。
 
-    `_reset_password_reset_attempts` と同じ理由で `integration` マーカーが
+    `_reset_rate_limit_tables` と同じ理由で `integration` マーカーが
     付いたテストだけに絞る。ストレージを使わない単体テストは、MinIO が
     起動していない環境でも `pytest -m 'not integration'` で動く必要がある。
     """

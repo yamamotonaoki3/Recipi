@@ -6,7 +6,7 @@ WB（実装ベース）: BATCH_SIZE を超える件数での複数バッチ、�
 
 ## 共有 DB での注意
 
-`tests/conftest.py` の自動 fixture `_reset_password_reset_attempts` が、integration テストの
+`tests/conftest.py` の自動 fixture `_reset_rate_limit_tables` が、integration テストの
 **前に毎回** `password_reset_attempts` を全件消す（TestClient の IP が全テストで同じため）。
 なので、ここで数える記録はこのテストが作ったものだけになる。テストは直列に動かす前提
 （pytest-xdist を使うなら、この fixture の全件削除を見直すこと）。

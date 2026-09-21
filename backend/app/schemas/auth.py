@@ -18,7 +18,7 @@ PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 72
 
 
-def _reject_blank_security_answer(value: str) -> str:
+def reject_blank_security_answer(value: str) -> str:
     """正規化（前後空白除去）すると空になる回答（空白だけの入力など）を拒否する。
 
     `min_length=1` だけだと " "（半角スペース1文字）のような入力を通してしまい、
@@ -57,9 +57,7 @@ class SignupRequest(CamelModel):
     security_answer: str = Field(min_length=1, max_length=100)
 
     _normalize_email = field_validator("email", mode="before")(_normalize_email)
-    _reject_blank_security_answer = field_validator("security_answer")(
-        _reject_blank_security_answer
-    )
+    _reject_blank_security_answer = field_validator("security_answer")(reject_blank_security_answer)
 
 
 class LoginRequest(CamelModel):

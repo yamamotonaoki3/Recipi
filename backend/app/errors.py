@@ -72,6 +72,21 @@ def forbidden(message: str = "この操作を行う権限がありません") ->
     return AppError(403, "FORBIDDEN", message)
 
 
+def reauth_failed(message: str = "現在のパスワードが正しくありません") -> AppError:
+    """認証情報を変更する操作で、現パスワードによる再認証に失敗したとき。
+
+    **401 にしてはいけない**。`expoApp/src/api/client.ts` は 401 を
+    「アクセストークンが切れた」と解釈してリフレッシュ → 同じリクエストを再送し、
+    それでも 401 ならセッションを破棄する。現パスワードの打ち間違いで 401 を
+    返すと、利用者が 1 文字間違えただけでログアウトさせられてしまう。
+    クライアントはステータスコードで分岐するため、メッセージだけ変えても直らない。
+
+    「認証は済んでいるが、この操作に必要な追加の証明に失敗した」という意味で
+    403 を使い、権限不足の `FORBIDDEN` とはコードで区別する。
+    """
+    return AppError(403, "REAUTH_FAILED", message)
+
+
 def not_found(message: str = "対象が見つかりません") -> AppError:
     return AppError(404, "NOT_FOUND", message)
 

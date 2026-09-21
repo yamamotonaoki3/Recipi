@@ -23,13 +23,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlmodel import Session, select
 
 from app.audit import audit_event
 from app.config import settings
-from app.db import get_session
+from app.db import advisory_xact_lock, get_session
 from app.dependencies import get_current_user
 from app.errors import (
     ErrorEnvelope,
@@ -452,14 +451,11 @@ def logout(
 def _lock_reset_key(session: Session, key: str) -> None:
     """パスワードリセット関連リクエストを、指定したキー単位で直列化する。
 
-    これが無いと、複数リクエストが同時に来た場合「まだ閾値未満だ」と
-    全員が同時に判定してしまい、実質無制限にリクエストを許してしまう
-    （`pg_advisory_xact_lock` はこのトランザクションが終わるまでロックを
-    保持するので、明示的な unlock は不要）。呼び出し順序（email → ip の
-    順に固定）を全エンドポイントで揃えることで、ロックの取り合いによる
-    デッドロックを避けている。
+    仕組みは `app/db.py` の `advisory_xact_lock`（1 引数形式）。呼び出し順序
+    （email → ip の順に固定）を全エンドポイントで揃えることで、ロックの
+    取り合いによるデッドロックを避けている。
     """
-    session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
+    advisory_xact_lock(session, key)
 
 
 def _count_recent_attempts(

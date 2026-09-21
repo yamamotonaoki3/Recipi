@@ -97,6 +97,32 @@ _RETRYABLE_SQLSTATES = frozenset({"40001", "40P01"})
 MAX_RETRIES = 3
 
 
+# `advisory_xact_lock` の `namespace` に渡す定数。2 引数形式の advisory ロックは
+# 1 引数形式とキー空間が分かれているため、用途ごとに namespace を変えておけば
+# `hashtext()` がたまたま同じ値を返しても別のロックとして扱われる。
+ADVISORY_NS_REAUTH = 1
+
+
+def advisory_xact_lock(session: Session, key: str, *, namespace: int | None = None) -> None:
+    """`key` 単位でこのトランザクションを直列化する（PostgreSQL の advisory lock）。
+
+    これが無いと、同時に来た複数リクエストが揃って「まだ閾値未満だ」と判定し、
+    レート制限が実質無効になる。`pg_advisory_xact_lock` はトランザクションが
+    終わる（commit / rollback する）まで保持されるので、明示的な unlock は要らない。
+
+    `namespace` を渡すと 2 引数形式（`pg_advisory_xact_lock(int4, int4)`）を使う。
+    1 引数形式とはキー空間が分かれているため、`hashtext()` の値が別用途の
+    キーと衝突しても、互いのロックを奪い合わない。
+    """
+    if namespace is None:
+        session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
+    else:
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(:ns, hashtext(:key))"),
+            {"ns": namespace, "key": key},
+        )
+
+
 def _sqlstate_of(exc: DBAPIError) -> str | None:
     """DB ドライバの例外から SQLSTATE（5 文字のエラーコード）を取り出す。"""
     # psycopg 3 の例外は `sqlstate` 属性を持つ。ドライバを差し替えても

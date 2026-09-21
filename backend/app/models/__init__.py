@@ -17,6 +17,7 @@ from app.models.notification import Notification
 from app.models.notification_outbox import NotificationOutbox
 from app.models.password_reset_attempt import PasswordResetAttempt
 from app.models.pending_storage_deletion import PendingStorageDeletion
+from app.models.reauth_attempt import ReauthAttempt
 from app.models.recipe import Recipe
 from app.models.recipe_comment import RecipeComment
 from app.models.recipe_view import RecipeView
@@ -36,6 +37,7 @@ __all__ = [
     "NotificationOutbox",
     "PasswordResetAttempt",
     "PendingStorageDeletion",
+    "ReauthAttempt",
     "Recipe",
     "RecipeComment",
     "RecipeView",

@@ -587,6 +587,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/me/security-question": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change My Security Question
+         * @description 秘密の質問・答えを変更する（features/auth.md。Issue #240）。
+         *
+         *     パスワードリセットの本人確認に使う情報なので、現在のパスワードによる
+         *     再認証を求める。失敗は 401 ではなく **403 `REAUTH_FAILED`** を返す
+         *     （理由は `app/errors.py` の `reauth_failed` のコメント）。
+         *
+         *     commit が 2 回に分かれているのは、トランザクションの区切りを見えるように
+         *     するため。詳しくは `app/services/credentials.py` の冒頭コメント。
+         */
+        put: operations["change_my_security_question_api_v1_users_me_security_question_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{user_id}": {
         parameters: {
             query?: never;
@@ -782,6 +809,22 @@ export interface components {
              * @description JPEG / PNG / WebP の画像 1 枚
              */
             file: string;
+        };
+        /**
+         * ChangeSecurityQuestionRequest
+         * @description `PUT /users/me/security-question` の body（Issue #240）。
+         *
+         *     文字数の上限は features/auth.md §6 の表（securityQuestion 1〜120 /
+         *     securityAnswer 1〜100）にそろえる。空白だけの答えを弾く規則は、
+         *     サインアップと**同じ関数**（`reject_blank_security_answer`）を共有する。
+         */
+        ChangeSecurityQuestionRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+            /** Securityanswer */
+            securityAnswer: string;
+            /** Securityquestion */
+            securityQuestion: string;
         };
         /**
          * ClientConfigResponse
@@ -3198,6 +3241,64 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    change_my_security_question_api_v1_users_me_security_question_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeSecurityQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
