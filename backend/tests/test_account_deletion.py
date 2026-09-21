@@ -602,7 +602,11 @@ def test_concurrent_operations_keep_invariants(client: TestClient, keys: list[st
     assert _scalar("SELECT deleted_at IS NOT NULL FROM users WHERE id = :id", id=me.uuid) is True
     assert results["follow"] in (204, 404), results
     assert results["comment"] in (201, 404), results
-    assert results["upload"] in (401, 500), results  # 本人のアップロードは失敗（孤児なし）
+    # アップロードが本人行のロックを先に取れば、退会より先に確定して 201 になる。
+    # 退会が先なら 401（本人が消えている）。ロックの取り合いに負けた側が落ちれば 500。
+    # どれになるかはスレッドの進み方しだいで決まらないので、結果そのものは問わない。
+    # 本当に確かめたいのは「画像が孤児にならない」ことで、それは下の uploads の件数で見る。
+    assert results["upload"] in (201, 401, 500), results
     # 作成が本人行のロックを先に取れば、退会より先に確定して投稿は保持される。
     # 退会が先なら 401。どちらでも退会後に新規投稿が確定することはない。
     assert results["create"] in (201, 401), results
