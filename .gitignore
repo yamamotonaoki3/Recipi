@@ -28,7 +28,11 @@ coverage.json
 .coverage
 
 # pytest / ツールの一時ディレクトリ
+# --basetemp 等で場所を指定して実行すると、ここに作業用のディレクトリが残る。
+# 除外しないと、ruff が読もうとしてクラッシュしたり、レビューで毎回指摘されたりする（Issue #238）。
 .tmp/
+.pytest-temp*/
+backend/.test-temp/
 
 # Terraform（infra/）: state・変数・plan・backend 設定には実値が入るのでコミットしない（Issue #165）。
 # ロックファイル（.terraform.lock.hcl）はプロバイダのバージョンを固定するのでコミットする。
