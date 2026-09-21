@@ -11,6 +11,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Platform } from "react-native";
 
 import type { UploadFile } from "./api";
+import type { CropRect } from "./avatarCrop";
 
 /**
  * 公開設定APIを取得できない場合に使う、送信前の縮小長辺（px）。通常は
@@ -131,6 +132,31 @@ async function toUploadFile(uri: string): Promise<UploadFile> {
   } as unknown as UploadFile;
 }
 
+/** 選んだ直後の元画像。切り抜き UI がこれを見て範囲を決める。 */
+export type PickedAsset = { uri: string; width: number; height: number };
+
+export type PickImageOptions = {
+  /**
+   * 指定すると、選んだあとに**切り抜く範囲を利用者に決めさせる**（アバター用。Issue #251）。
+   * `null` を返したら取り消し（何も送らない）。範囲は元画像の画素で返す。
+   */
+  chooseCrop?: (asset: PickedAsset) => Promise<CropRect | null>;
+};
+
+/** 範囲を切り抜いて JPEG で保存し、上限まで縮小する。切り抜いた範囲だけが送られる。 */
+async function cropAndShrink(uri: string, rect: CropRect, maxDimension: number): Promise<string> {
+  const context = ImageManipulator.manipulate(uri).crop(rect);
+  let rendered: Awaited<ReturnType<typeof context.renderAsync>> | null = null;
+  try {
+    rendered = await context.renderAsync();
+    const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: COMPRESS });
+    return shrink(saved.uri, saved.width, saved.height, maxDimension);
+  } finally {
+    rendered?.release();
+    context.release();
+  }
+}
+
 /**
  * 画像を 1 枚選び、縮小して返す。キャンセルされたら `null`。
  *
@@ -141,6 +167,7 @@ async function toUploadFile(uri: string): Promise<UploadFile> {
 export async function pickImage(
   source: PickSource = "library",
   maxDimension: number = DEFAULT_IMAGE_MAX_DIMENSION,
+  cropOptions: PickImageOptions = {},
 ): Promise<PickResult> {
   await ensurePermission(source);
 
@@ -159,6 +186,17 @@ export async function pickImage(
 
   const asset = result.assets[0];
   if (!asset) return null;
+
+  if (cropOptions.chooseCrop) {
+    const rect = await cropOptions.chooseCrop({
+      uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
+    });
+    if (!rect) return null;
+    const cropped = await cropAndShrink(asset.uri, rect, maxDimension);
+    return { uri: cropped, file: await toUploadFile(cropped) };
+  }
 
   const uri = await shrink(asset.uri, asset.width, asset.height, maxDimension);
   return { uri, file: await toUploadFile(uri) };

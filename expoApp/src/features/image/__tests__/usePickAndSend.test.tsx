@@ -38,7 +38,7 @@ describe("usePickAndSend", () => {
       value = await result.current.pickAndSend("camera");
     });
 
-    expect(mockPickImage).toHaveBeenCalledWith("camera", 2048);
+    expect(mockPickImage).toHaveBeenCalledWith("camera", 2048, undefined);
     expect(send).toHaveBeenCalledWith(picked.file);
     expect(value).toBe("ok");
     expect(result.current.status).toBe("idle");
@@ -138,6 +138,20 @@ describe("usePickAndSend", () => {
       await result.current.pickAndSend("library");
     });
 
-    expect(mockPickImage).toHaveBeenCalledWith("library", 1536);
+    expect(mockPickImage).toHaveBeenCalledWith("library", 1536, undefined);
+  });
+
+  it("切り抜きの指定（chooseCrop）をそのまま画像選択へ渡す", async () => {
+    mockPickImage.mockResolvedValue(picked);
+    const options = { chooseCrop: jest.fn() };
+    const { result } = await renderHook(() => usePickAndSend<string>(jest.fn(), options), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.pickAndSend("library");
+    });
+
+    expect(mockPickImage).toHaveBeenCalledWith("library", expect.any(Number), options);
   });
 });

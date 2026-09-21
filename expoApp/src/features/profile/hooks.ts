@@ -16,6 +16,7 @@ import { useCallback } from "react";
 import { FEED_ROOT_KEY } from "@/features/feed/hooks";
 import { HISTORY_ROOT_KEY } from "@/features/history/hooks";
 import type { UploadFile } from "@/features/image/api";
+import type { PickImageOptions } from "@/features/image/pickImage";
 import { usePickAndSend } from "@/features/image/usePickAndSend";
 import { secureStorage } from "@/lib/secureStorage";
 import { useSession } from "@/store/session";
@@ -117,7 +118,7 @@ function setCachedAvatar(
  * 選択中 / 送信中の分け方・押し直しの扱いはレシピ画像と同じ（usePickAndSend）。
  * 成功したら、編集画面・マイページ・一覧に**その場で**反映する。
  */
-export function useAvatarUpload() {
+export function useAvatarUpload(pickOptions?: PickImageOptions) {
   const queryClient = useQueryClient();
   const send = useCallback(
     async (file: UploadFile) => {
@@ -131,7 +132,7 @@ export function useAvatarUpload() {
     },
     [queryClient],
   );
-  return usePickAndSend(send);
+  return usePickAndSend(send, pickOptions);
 }
 
 /** アバターを外す。 */

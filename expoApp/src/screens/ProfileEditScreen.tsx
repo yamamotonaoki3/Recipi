@@ -10,7 +10,7 @@
  *
  */
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -24,6 +24,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
+import { useAvatarCropper } from "@/components/AvatarCropDialog";
 import { BackLabel } from "@/components/BackLabel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ApiError } from "@/features/auth/api";
@@ -388,7 +389,11 @@ function AvatarSection({
   avatarUrl: string | null;
   displayName: string;
 }) {
-  const upload = useAvatarUpload();
+  // 選んだあと、表示範囲を利用者に決めてもらってから送る（Issue #251）。
+  const cropper = useAvatarCropper();
+  const upload = useAvatarUpload(
+    useMemo(() => ({ chooseCrop: cropper.chooseCrop }), [cropper.chooseCrop]),
+  );
   const remove = useDeleteAvatar();
   const [removeError, setRemoveError] = useState<string | null>(null);
 
@@ -428,6 +433,7 @@ function AvatarSection({
 
   return (
     <View className="items-center gap-2">
+      {cropper.dialog}
       <View className="h-20 w-20 items-center justify-center">
         {isUploading ? (
           <ActivityIndicator testID="profile-edit-avatar-spinner" />
