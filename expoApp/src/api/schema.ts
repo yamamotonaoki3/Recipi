@@ -474,6 +474,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/me/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change My Email
+         * @description ログインに使うメールアドレスを変更する（features/auth.md。Issue #241）。
+         *
+         *     **再確認メールは送らない**（メール送信基盤を持たない設計）。代わりに現在の
+         *     パスワードで再認証し、打ち間違いはクライアントの確認入力欄で防ぐ。
+         *
+         *     成功すると**既存のセッションは全て失効**し、呼び出し元用に新しいトークン対を
+         *     発行して返す。`token_version` を上げるだけでは他端末をログアウトできない
+         *     （`/auth/refresh` が世代を見ないため）理由は `services/credentials.py` を参照。
+         */
+        put: operations["change_my_email_api_v1_users_me_email_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/favorites": {
         parameters: {
             query?: never;
@@ -809,6 +836,24 @@ export interface components {
              * @description JPEG / PNG / WebP の画像 1 枚
              */
             file: string;
+        };
+        /**
+         * ChangeEmailRequest
+         * @description `PUT /users/me/email` の body（Issue #241）。
+         *
+         *     ログインに使うアドレスを差し替えるので、現在のパスワードによる再認証を求める。
+         *     再確認メールは送らない（メール送信基盤を持たない設計。features/auth.md）。
+         */
+        ChangeEmailRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Rememberme */
+            rememberMe: boolean;
         };
         /**
          * ChangeSecurityQuestionRequest
@@ -3007,6 +3052,75 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    change_my_email_api_v1_users_me_email_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokenResponse"];
+                };
+            };
+            /** @description リクエストの内容が不正です */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

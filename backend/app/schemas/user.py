@@ -6,9 +6,13 @@ import re
 import uuid
 from typing import Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import EmailStr, Field, field_validator, model_validator
 
-from app.schemas.auth import PASSWORD_MAX_LENGTH, reject_blank_security_answer
+from app.schemas.auth import (
+    PASSWORD_MAX_LENGTH,
+    normalize_email,
+    reject_blank_security_answer,
+)
 from app.schemas.base import CamelModel
 
 # 表示名・自己紹介文・URL の上限（features/profile.md §6）。URL の上限は DB の列長
@@ -129,6 +133,27 @@ class ChangeSecurityQuestionRequest(CamelModel):
     security_answer: str = Field(min_length=1, max_length=100)
 
     _reject_blank_security_answer = field_validator("security_answer")(reject_blank_security_answer)
+
+
+class ChangeEmailRequest(CamelModel):
+    """`PUT /users/me/email` の body（Issue #241）。
+
+    ログインに使うアドレスを差し替えるので、現在のパスワードによる再認証を求める。
+    再確認メールは送らない（メール送信基盤を持たない設計。features/auth.md）。
+    """
+
+    # `min_length` を付けない理由は `ChangeSecurityQuestionRequest` と同じ。
+    current_password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    email: EmailStr
+
+    # **既定値を置かない（必須にする）。** 変更のたびに全セッションを作り直すので、
+    # 新しいリフレッシュトークンの有効期限をどちらにするか決める必要がある。
+    # 既定を True にすると、「ログインを保持」OFF で使っていた利用者が、
+    # メールアドレスを変えただけで黙って長期セッションに切り替わってしまう。
+    # 呼び出し元は自分の設定を知っているので、明示させる。
+    remember_me: bool
+
+    _normalize_email = field_validator("email", mode="before")(normalize_email)
 
 
 class UserMeResponse(CamelModel):

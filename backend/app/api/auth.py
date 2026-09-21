@@ -27,6 +27,11 @@ from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlmodel import Session, select
 
 from app.audit import audit_event
+from app.auth_transport import (
+    delete_refresh_cookie,
+    is_web_request,
+    set_refresh_cookie,
+)
 from app.config import settings
 from app.db import advisory_xact_lock, get_session
 from app.dependencies import get_current_user
@@ -61,15 +66,16 @@ from app.schemas.auth import (
 )
 from app.security import (
     create_access_token,
-    generate_refresh_token,
     hash_password,
     hash_refresh_token,
     hash_security_answer,
+    verify_password,
     verify_password_or_dummy,
     verify_security_answer,
 )
 from app.services.account import reactivate_account
 from app.services.image import image_url
+from app.services.session_tokens import issue_refresh_token
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -96,87 +102,51 @@ _RESET_LOCKOUT_MAX_ATTEMPTS = 5
 # 複数アカウントを操作しうるため、メールより緩めの閾値にする）。
 _IP_LOCKOUT_MAX_ATTEMPTS = 20
 
-# 「ログインを保持」OFF 時のリフレッシュトークン有効期限（暫定値・todo #16）。
-# auth.md §8 で具体的な日数は未確定。ここでは「アプリを再起動したら
-# 再ログインが必要」という要件の意図を汲み、1 日という短い値にしている。
-_REMEMBER_ME_OFF_TTL_DAYS = 1
-
-
-def _is_web_request(request: Request) -> bool:
-    """ブラウザ由来のリクエストだけCookie方式を有効にする。"""
-    # Tauri の開発時は画面を Expo dev server（http://localhost:8081）から
-    # 読み込むため、Origin だけでは通常ブラウザと区別できない。そのままだと
-    # refresh token を HttpOnly Cookie にしか入れず、Stronghold へ空文字を
-    # 保存して再起動後の復元が 401 になる。Tauri クライアントだけが付ける
-    # 印は開発・テスト環境でのみ受け入れる。本番は Tauri の tauri:// Origin
-    # 自体が Cookie 対象外であり、任意ヘッダーで token を露出させない。
-    if (
-        settings.APP_ENV != "production"
-        and request.headers.get("x-recipi-auth-transport") == "token"
-    ):
-        return False
-    origin = request.headers.get("origin")
-    return (
-        origin is not None
-        and origin.startswith(("http://", "https://"))
-        and origin in settings.cors_allow_origins
-    )
-
-
-def _set_refresh_cookie(response: Response, token: str, remember_me: bool) -> None:
-    """Web用refresh token Cookieを設定する。"""
-    max_age = settings.REFRESH_TOKEN_TTL_DAYS * 86400 if remember_me else None
-    response.set_cookie(
-        key=settings.AUTH_COOKIE_NAME,
-        value=token,
-        max_age=max_age,
-        httponly=True,
-        secure=settings.AUTH_COOKIE_SECURE,
-        samesite=settings.AUTH_COOKIE_SAMESITE,
-        path=settings.AUTH_COOKIE_PATH,
-    )
-
-
-def _delete_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(
-        key=settings.AUTH_COOKIE_NAME,
-        httponly=True,
-        secure=settings.AUTH_COOKIE_SECURE,
-        samesite=settings.AUTH_COOKIE_SAMESITE,
-        path=settings.AUTH_COOKIE_PATH,
-    )
-
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-def _issue_refresh_token(
-    session: Session, user_id: uuid.UUID, chain_id: uuid.UUID, remember_me: bool = True
-) -> str:
-    """新しいリフレッシュトークンを 1 本発行して DB に保存し、生トークンを返す。
+def _lock_and_revalidate(session: Session, user: User, email: str, raw_password: str) -> bool:
+    """ユーザー行をロックし、**最新の値で**メールアドレスとパスワードを確かめ直す。
 
-    `remember_me` に応じて有効期限を変える（processing-model.md §6:
-    「login: refresh_tokens INSERT（rememberMe で有効期限を調整）」）。
-    OFF 時の具体的な日数は auth.md §8 で未確定（→ todo.md）につき、
-    ここでは "端末再起動をまたいでは残らない程度" の暫定的に短い値を使う。
+    ロックを取る前に読んだ値で認証を通しても、その後にメールアドレス変更や
+    パスワードリセットが割り込めば、失効処理を免れたセッションを発行してしまう
+    （Issue #241）。ここでロックしてから確認し直し、以降の書き込みと commit まで
+    ロックを保持する。
+
+    `session.refresh(..., with_for_update=True)` を使うのが要点。単に
+    `select(...).with_for_update()` で取り直しても、identity map に載っている
+    既存インスタンスの属性は最新値で上書きされず、**古い値のまま再検証**して
+    しまう（app/services/credentials.py の `reauthenticate` と同じ理由）。
+
+    戻り値は「今も正しい認証情報か」。退会状態はここでは判定しない（呼び出し側が
+    login は 409、reactivate は 401 と、別の扱いをするため）。
     """
-    raw_token = generate_refresh_token()
-    ttl_days = settings.REFRESH_TOKEN_TTL_DAYS if remember_me else _REMEMBER_ME_OFF_TTL_DAYS
-    refresh_token = RefreshToken(
-        user_id=user_id,
-        token_hash=hash_refresh_token(raw_token),
-        chain_id=chain_id,
-        expires_at=_utcnow() + timedelta(days=ttl_days),
-        remember_me=remember_me,
-    )
-    session.add(refresh_token)
-    return raw_token
+    try:
+        session.refresh(user, with_for_update=True)
+    except InvalidRequestError:
+        # ロックを待っている間に行が消えた（同時に退会した等）。
+        return False
+    # 待っている間にメールアドレスが変わっていたら、この要求のアドレスはもう
+    # このユーザーのものではない。
+    if user.email != email:
+        return False
+    return verify_password(raw_password, user.password_hash)
 
 
 def _auth_response(
     session: Session, user: User, raw_refresh_token: str, *, expose_refresh_token: bool = True
 ) -> AuthTokenResponse:
+    """認証成功の応答を組み立てる。
+
+    **必ず `session.commit()` の前に呼ぶこと。** commit すると ORM の属性が expire
+    され、`user.token_version` を読んだ時点で DB から読み直される。その隙に別の
+    リクエスト（メールアドレス変更・パスワードリセット）が世代を上げて全セッションを
+    失効させていると、**失効させたはずの新しい世代でアクセストークンを作ってしまう**
+    （Issue #241）。ユーザー行のロックを保持したままここで値を確定し、commit が
+    成功してからその値を返す。
+    """
     access_token = create_access_token(user.id, user.token_version)
     return AuthTokenResponse(
         user=UserPublic(id=user.id, display_name=user.display_name),
@@ -225,14 +195,18 @@ def signup(
         audit_event("auth.signup", "failure", reason="email_taken", email=body.email)
         raise conflict("このメールアドレスは既に登録されています") from exc
 
-    raw_refresh_token = _issue_refresh_token(session, user.id, chain_id=uuid.uuid4())
+    raw_refresh_token = issue_refresh_token(session, user.id, chain_id=uuid.uuid4())
+    # 応答は commit の前に確定する（`_auth_response` のコメント）。作ったばかりの
+    # アカウントなので割り込みの実害はほぼ無いが、同じ書き方が残ると真似されるため
+    # 3 つの認証エンドポイントで形をそろえる（Issue #241）。
+    auth_response = _auth_response(
+        session, user, raw_refresh_token, expose_refresh_token=not is_web_request(request)
+    )
     session.commit()
     audit_event("auth.signup", "success", user_id=user.id, email=body.email)
-    if _is_web_request(request):
-        _set_refresh_cookie(response, raw_refresh_token, remember_me=False)
-    return _auth_response(
-        session, user, raw_refresh_token, expose_refresh_token=not _is_web_request(request)
-    )
+    if is_web_request(request):
+        set_refresh_cookie(response, raw_refresh_token, remember_me=False)
+    return auth_response
 
 
 @router.post("/login", responses=_error_responses(401, 409))
@@ -259,6 +233,22 @@ def login(
     # （verify_password_or_dummy は password_hash が None なら常に False を
     # 返すので、上の if で 401 になっていない = user is not None）。
     assert user is not None
+
+    # --- ここからユーザー行をロックして、最新の値で確かめ直す（Issue #241） ---
+    #
+    # ロックを**パスワード検証の後**に置くのが重要。実在ユーザーだけを先にロック
+    # すると、誤ったパスワードを連打するだけで refresh や退会を待たせられるうえ、
+    # 応答時間の差がメールアドレスの登録有無を推測する material になる。
+    #
+    # ロックが要る理由: ここまでの検証は**ロックを取る前に読んだ値**に基づいている。
+    # その後にメールアドレス変更（token_version を上げて全セッションを失効させる）が
+    # 割り込むと、失効処理を免れたセッションをここで作ってしまう。refresh() は
+    # 既に「ユーザー行 → トークン行」の順でロックして読み直しており、login だけが
+    # この対策から漏れていた。
+    if not _lock_and_revalidate(session, user, body.email, body.password):
+        audit_event("auth.login", "failure", reason="invalid_credentials", email=body.email)
+        raise unauthorized("メールアドレスまたはパスワードが正しくありません")
+
     if user.deleted_at is not None:
         # 認証情報を知る本人にだけ退会状態を示す。トークンは発行しないので、
         # 続く /reactivate の明示操作までアカウントは再開されない。
@@ -269,16 +259,18 @@ def login(
     # （processing-model.md §6）。永続化するかどうか自体はフロントエンド
     # （#36）の責務だが、サーバー側の有効期限もそれに合わせて短くしておく
     # ことで、OFF 時に古いトークンが漏れても長期間使えてしまわないようにする。
-    raw_refresh_token = _issue_refresh_token(
+    raw_refresh_token = issue_refresh_token(
         session, user.id, chain_id=uuid.uuid4(), remember_me=body.remember_me
+    )
+    # 応答はロックを保持したまま確定する（`_auth_response` のコメント）。
+    auth_response = _auth_response(
+        session, user, raw_refresh_token, expose_refresh_token=not is_web_request(request)
     )
     session.commit()
     audit_event("auth.login", "success", user_id=user.id)
-    if _is_web_request(request):
-        _set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
-    return _auth_response(
-        session, user, raw_refresh_token, expose_refresh_token=not _is_web_request(request)
-    )
+    if is_web_request(request):
+        set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
+    return auth_response
 
 
 @router.post("/reactivate", responses=_error_responses(401))
@@ -298,17 +290,31 @@ def reactivate(
     ):
         audit_event("auth.reactivate", "failure", reason="invalid_credentials", email=body.email)
         raise unauthorized("メールアドレスまたはパスワードが正しくありません")
+
+    # login と同じ理由でロックして確かめ直す（Issue #241）。`reactivate_account()` の
+    # UPDATE も行ロックを取るが、それは「認証情報が今も正しいか」の確認にはならない。
+    # 待っている間に再開やメールアドレス変更が済んでいる場合がある。
+    if not _lock_and_revalidate(session, user, body.email, body.password):
+        audit_event("auth.reactivate", "failure", reason="invalid_credentials", email=body.email)
+        raise unauthorized("メールアドレスまたはパスワードが正しくありません")
+    if user.deleted_at is None:
+        # 待っている間に別のリクエストが再開を終えていた。
+        audit_event("auth.reactivate", "failure", reason="invalid_credentials", email=body.email)
+        raise unauthorized("メールアドレスまたはパスワードが正しくありません")
+
     reactivate_account(session, user)
-    raw_refresh_token = _issue_refresh_token(
+    raw_refresh_token = issue_refresh_token(
         session, user.id, chain_id=uuid.uuid4(), remember_me=body.remember_me
+    )
+    # 応答はロックを保持したまま確定する（`_auth_response` のコメント）。
+    auth_response = _auth_response(
+        session, user, raw_refresh_token, expose_refresh_token=not is_web_request(request)
     )
     session.commit()
     audit_event("auth.reactivate", "success", user_id=user.id)
-    if _is_web_request(request):
-        _set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
-    return _auth_response(
-        session, user, raw_refresh_token, expose_refresh_token=not _is_web_request(request)
-    )
+    if is_web_request(request):
+        set_refresh_cookie(response, raw_refresh_token, remember_me=body.remember_me)
+    return auth_response
 
 
 @router.post("/refresh", responses=_error_responses(401))
@@ -389,16 +395,16 @@ def refresh(
     # ローテーションのたびに変えない）。
     token_row.revoked_at = _utcnow()
     session.add(token_row)
-    raw_refresh_token = _issue_refresh_token(
+    raw_refresh_token = issue_refresh_token(
         session, user.id, chain_id=token_row.chain_id, remember_me=token_row.remember_me
     )
     access_token = create_access_token(user.id, user.token_version)
     session.commit()
-    if _is_web_request(request):
-        _set_refresh_cookie(response, raw_refresh_token, remember_me=token_row.remember_me)
+    if is_web_request(request):
+        set_refresh_cookie(response, raw_refresh_token, remember_me=token_row.remember_me)
     return RefreshResponse(
         access_token=access_token,
-        refresh_token=raw_refresh_token if not _is_web_request(request) else None,
+        refresh_token=raw_refresh_token if not is_web_request(request) else None,
     )
 
 
@@ -412,7 +418,7 @@ def logout(
 ) -> None:
     raw_input_token = body.refresh_token or request.cookies.get(settings.AUTH_COOKIE_NAME)
     if not raw_input_token:
-        _delete_refresh_cookie(response)
+        delete_refresh_cookie(response)
         return None
     token_hash = hash_refresh_token(raw_input_token)
     token_row = session.exec(
@@ -423,7 +429,7 @@ def logout(
     # （current_user と所有者が食い違うトークンで他人のセッションを
     # 終了させられてしまう脆弱性を防ぐ。P2）。
     if token_row is None or token_row.user_id != current_user.id:
-        _delete_refresh_cookie(response)
+        delete_refresh_cookie(response)
         return None
 
     # ユーザー行をロックする（refresh() / password_reset_confirm と同じ
@@ -444,7 +450,7 @@ def logout(
         session.add(t)
     session.commit()
     audit_event("auth.logout", "success", user_id=current_user.id)
-    _delete_refresh_cookie(response)
+    delete_refresh_cookie(response)
     return None
 
 
