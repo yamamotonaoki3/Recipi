@@ -427,7 +427,11 @@ describe("RecipeDetailScreen の感想", () => {
       "まだ感想がありません。作ってみたら感想を書いてみましょう",
     );
     expect(getByTestId("comment-heading").props.children).toEqual(["感想（", 0, "）"]);
-    expect(mockListComments).toHaveBeenCalledWith("r1", { cursor: undefined, limit: 20 });
+    expect(mockListComments).toHaveBeenCalledWith(
+      "r1",
+      { cursor: undefined, limit: 20 },
+      expect.any(AbortSignal),
+    );
   });
 
   it("一覧を新しい順に出し、「もっと見る」で次のページを読む", async () => {
@@ -446,7 +450,11 @@ describe("RecipeDetailScreen の感想", () => {
     await fireEvent.press(getByTestId("comment-more"));
 
     expect(await findByTestId("comment-c1")).toBeTruthy();
-    expect(mockListComments).toHaveBeenLastCalledWith("r1", { cursor: "n1", limit: 20 });
+    expect(mockListComments).toHaveBeenLastCalledWith(
+      "r1",
+      { cursor: "n1", limit: 20 },
+      expect.any(AbortSignal),
+    );
     // 最後のページまで読んだら「もっと見る」は消える。
     await waitFor(() => expect(queryByTestId("comment-more")).toBeNull());
   });
