@@ -41,6 +41,11 @@ export function login(email) {
 /**
  * setup() から呼ぶ。VU 数ぶん（ユーザー数が上限）ログインして、トークンの一覧を返す。
  * 戻り値は各 VU の default 関数に `data` として渡る。
+ *
+ * 注意: この戻り値は k6 の summary（`--summary-export` の JSON）に `setup_data` として
+ * そのまま載る。つまり **出力ファイルにアクセストークンが書き出される**。
+ * そのため summary の JSON はコミットせず、数値を書き写したら破棄する
+ * （docs/requirements/testing.md §性能テストの実行手順）。
  */
 export function loginAll(vus) {
   const tokens = [];
