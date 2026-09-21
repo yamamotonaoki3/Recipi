@@ -11,9 +11,41 @@ import argparse
 import sys
 import time
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import func
 from sqlmodel import Session, select
+
+
+@dataclass(frozen=True)
+class FanoutSnapshot:
+    """別トランザクションから取得した fan-out の成立条件。"""
+
+    outbox_exists: bool
+    processed: bool
+    notification_count: int
+    recipient_ids: frozenset[uuid.UUID]
+    expected_recipient_ids: frozenset[uuid.UUID]
+
+
+def validate_snapshot(snapshot: FanoutSnapshot) -> None:
+    """投稿成功だけでは成立しない fan-out の成立条件を検証する。"""
+    if not snapshot.outbox_exists:
+        raise RuntimeError("対象 outbox がありません")
+    if not snapshot.processed:
+        raise RuntimeError("対象 outbox が未処理です")
+    if snapshot.recipient_ids != snapshot.expected_recipient_ids:
+        raise RuntimeError(
+            "通知の受信者が一致しません: "
+            f"expected={len(snapshot.expected_recipient_ids)} "
+            f"actual={len(snapshot.recipient_ids)}"
+        )
+    if snapshot.notification_count != len(snapshot.expected_recipient_ids):
+        raise RuntimeError(
+            "通知件数が一致しません: "
+            f"expected={len(snapshot.expected_recipient_ids)} "
+            f"actual={snapshot.notification_count}"
+        )
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -38,6 +70,7 @@ def verify(
         raise ValueError("timeout_seconds と poll_seconds は正数にしてください")
 
     from app.db import engine
+    from app.models.follow import Follow
     from app.models.notification import Notification
     from app.models.notification_outbox import NotificationOutbox
 
@@ -61,12 +94,34 @@ def verify(
                 ).one()
             )
             if outbox is not None and outbox.processed_at is not None:
-                if count != expected_followers:
-                    raise RuntimeError(
-                        f"通知件数が一致しません: expected={expected_followers} actual={count}"
+                # 受信者集合も照合する。件数だけでは誤配信を検出できない。
+                recipients = frozenset(
+                    session.exec(
+                        select(Notification.user_id).where(
+                            Notification.recipe_id == recipe_id,
+                            Notification.type == "followee_new_recipe",
+                        )
+                    ).all()
+                )
+                expected_recipients = frozenset(
+                    session.exec(
+                        select(Follow.follower_id).where(Follow.followee_id == outbox.author_id)
+                    ).all()
+                )
+                validate_snapshot(
+                    FanoutSnapshot(
+                        outbox_exists=True,
+                        processed=True,
+                        notification_count=count,
+                        recipient_ids=recipients,
+                        expected_recipient_ids=expected_recipients,
                     )
+                )
                 duration = (outbox.processed_at - outbox.created_at).total_seconds()
-                print(f"recipe_id={recipe_id} notifications={count} outbox_seconds={duration:.3f}")
+                print(
+                    f"recipe_id={recipe_id} notifications={len(recipients)} "
+                    f"outbox_seconds={duration:.3f} recipient_check=available"
+                )
                 return 0
         time.sleep(poll_seconds)
 
