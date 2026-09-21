@@ -1023,3 +1023,7 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 7. **スプラッシュの背景色は「ロゴの配色」から決める**。白を選んだところ、ロゴの白い要素（人・カトラリー）が背景に溶けて消えた。**ロゴを各候補色の上に合成した比較画像を作ってから決める**。今回はアイコンと同じ `#FC6338` にそろえた。
 8. **ローカルの Android ビルドは JDK 17 を明示する**。PATH 上の `java` は 25 で、RN 0.86 の Gradle ビルドは `configureCMakeDebug` が `A restricted method in java.lang.System has been called` で落ちる。`JAVA_HOME` に JDK 17 を指定すれば通る。
 9. **生成物の検証は「実機の見た目」まで見る**。`expo prebuild` が作る `res/mipmap-*` を円 / スクワークル / 角丸 / モノクロのマスクで合成すれば、エミュレータを起動せずに大半は確認できる。最終確認はエミュレータのアプリ一覧とスプラッシュのスクリーンショットで行う。
+
+10. **macOS だけはアイコンを自動で角丸にしない**。iOS・Android・Windows は OS 側が形を整えるが、macOS は画像をそのまま Dock に出すため、**角丸と余白を画像側に描き込まないと四角いアイコンになる**。Apple のグリッドは 1024px のキャンバスに対し絵が 824x824、角丸の半径 185.4。`tauri icon` は正方形を縮小するだけなのでこの処理は入らない。**一時ディレクトリで `tauri icon` をもう一度走らせ、できた `icon.icns` だけを持ってくる**と、`.icns` の書き出しを自前で組み立てずに済む。
+11. **`.mjs` で `Buffer` を使うなら明示的に import する**。ESLint の `no-undef` に引っかかる（`node:buffer` から import する）。
+12. **exe のアイコンは `[System.Drawing.Icon]::ExtractAssociatedIcon` で取り出して確認できる**。Tauri のリリースビルド（`npm run tauri:build`）は Rust のフルビルドでも数分で終わり、`target/release/app.exe` と MSI / NSIS のインストーラが出る。

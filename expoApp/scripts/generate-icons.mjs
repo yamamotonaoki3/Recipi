@@ -7,9 +7,11 @@
 // Node.js の ES Modules（.mjs）で書いている。`import` で他のモジュールを読み込み、
 // 上から下へ順に実行される普通のスクリプト。
 
+import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,6 +34,15 @@ const REQUIRED_SIZE = 1024;
 // Android アダプティブアイコンのセーフゾーン。前景の主要要素は中央 66% に収める必要がある。
 // （端末ごとに円・角丸四角などへ切り抜かれるため）
 const ADAPTIVE_SAFE_RATIO = 0.66;
+
+// macOS のアプリアイコンの余白と角丸。
+// macOS は iOS や Android と違って**アイコンを自動で角丸にしない**ため、
+// 角丸と周囲の余白を画像側に描き込む必要がある（描かないと Dock で四角く出る）。
+// 数値は Apple の macOS アイコンのグリッドに合わせたもの:
+// 1024px のキャンバスに対して、絵は 824x824、角丸の半径は 185.4。
+const MACOS_CANVAS = 1024;
+const MACOS_ARTWORK = 824;
+const MACOS_CORNER_RADIUS = 185.4;
 
 /** 処理を中断してユーザーに対処法を伝える。 */
 function fail(message) {
@@ -170,6 +181,43 @@ async function buildAdaptiveForeground(input, size) {
   }).composite([{ input: inner, top: padding, left: padding }]);
 }
 
+/**
+ * macOS のアプリアイコン用に、角丸（スクワークル）と周囲の余白を描き込んだ画像を作る。
+ * Windows やモバイルは OS 側が形を整えるのでこの処理は要らない（macOS だけの都合）。
+ */
+async function buildMacosIcon(input) {
+  // 絵の部分を 824x824 に縮め、角丸で切り抜く
+  const rounded = await sharp(input)
+    .resize(MACOS_ARTWORK, MACOS_ARTWORK, { fit: "cover" })
+    .composite([
+      {
+        input: Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${MACOS_ARTWORK}" height="${MACOS_ARTWORK}">` +
+            `<rect width="${MACOS_ARTWORK}" height="${MACOS_ARTWORK}" ` +
+            `rx="${MACOS_CORNER_RADIUS}" ry="${MACOS_CORNER_RADIUS}" fill="#fff"/></svg>`,
+        ),
+        // dest-in は「重ねた画像の不透明な部分だけを残す」合成。角の外側が透明になる。
+        blend: "dest-in",
+      },
+    ])
+    .png()
+    .toBuffer();
+
+  // 1024x1024 の透明なキャンバスの中央に置く（周囲が余白になる）
+  const offset = Math.round((MACOS_CANVAS - MACOS_ARTWORK) / 2);
+  return sharp({
+    create: {
+      width: MACOS_CANVAS,
+      height: MACOS_CANVAS,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: rounded, top: offset, left: offset }])
+    .png()
+    .toBuffer();
+}
+
 async function main() {
   // 1. マスター画像を読む（前景・スプラッシュは省略可）
   const appIcon = await loadSource("app-icon.png");
@@ -237,6 +285,23 @@ async function main() {
   // 生成する（Tauri はデスクトップのみ）ため、不要な出力を消しておく。
   for (const mobileDir of ["android", "ios"]) {
     await rm(join(tauriIconsDir, mobileDir), { recursive: true, force: true });
+  }
+
+  // macOS の .icns だけは、角丸と余白を描き込んだ画像から作り直す。
+  // 一時ディレクトリで Tauri CLI をもう一度走らせ、できた icon.icns だけを持ってくる
+  // （.icns の書き出しは Tauri CLI に任せ、自前で組み立てない）。
+  const macosWorkDir = await mkdtemp(join(tmpdir(), "recipi-macos-icon-"));
+  try {
+    const macosSource = join(macosWorkDir, "macos-icon.png");
+    await writeFile(macosSource, await buildMacosIcon(appIcon));
+    execFileSync(process.execPath, [tauriCli, "icon", macosSource, "-o", macosWorkDir], {
+      cwd: expoAppDir,
+      stdio: "inherit",
+    });
+    await copyFile(join(macosWorkDir, "icon.icns"), join(tauriIconsDir, "icon.icns"));
+  } finally {
+    // 後始末は失敗してもメインの処理結果を変えない
+    await rm(macosWorkDir, { recursive: true, force: true }).catch(() => {});
   }
 
   console.log(`✔ デスクトップ用アイコンを生成しました: ${relative(repoRoot, tauriIconsDir)}`);
