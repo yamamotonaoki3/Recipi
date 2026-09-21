@@ -1,0 +1,19 @@
+# Android E2E（e2e-android.yml）専用override。
+#
+# 401→リフレッシュ→リトライの経路をHermes実機で確実に踏ませるため、
+# アクセストークンのTTLを60秒に短縮する（Issue #246）。
+# このoverrideは e2e-android.yml の手動実行からのみ使う。通常のWeb E2E
+# （e2e.yml）や開発用のdocker-compose.ymlには影響しない。
+#
+# 実行例:
+# docker compose --env-file ../.env.development -f docker-compose.yml -f docker-compose.e2e-android.yml up -d --build api
+#
+# 注意: このoverrideをapiに適用すると、既存のAndroid E2E specも
+# （60秒を超えて動作した場合）実際にrefreshを通る統合テストになる。
+# 「透過的だから実害なし」という前提ではなく、既存specがrefreshを含み得る
+# 設計として受け入れる（Issue #246計画レビューでの指摘）。
+
+services:
+  api:
+    environment:
+      ACCESS_TOKEN_TTL_SECONDS: "60"

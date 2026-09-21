@@ -62,8 +62,11 @@ jobs:
         env:
           APP_ENV: development
 
-      - name: api を起動
-        run: docker compose --env-file ../.env.development -f docker-compose.yml up -d --build api
+      # ACCESS_TOKEN_TTL_SECONDS を短くして、401→リフレッシュ→リトライの経路を
+      # token-refresh.e2e.ts で確実に踏ませる（Issue #246）。既存specも
+      # 60秒を超えて実行された場合はrefreshを実際に通ることになる。
+      - name: api を起動（Issue #246: 短いアクセストークンTTLを注入）
+        run: docker compose --env-file ../.env.development -f docker-compose.yml -f docker-compose.e2e-android.yml up -d --build api
         working-directory: infra
 
       - name: api の起動を待つ（/healthz）
