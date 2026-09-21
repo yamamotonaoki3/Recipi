@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 
 import { api } from "@/api/client";
 import { recipeKeys } from "@/features/recipe/hooks";
+import { unmarkRecipeDeleted } from "@/features/recipe/deletionState";
 import { useSession } from "@/store/session";
 
 import {
@@ -88,6 +89,7 @@ beforeEach(() => {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  unmarkRecipeDeleted("r1");
   useSession.getState().clear();
   useSession.getState().setHydrated(false);
 });
@@ -163,10 +165,23 @@ describe("感想の hooks", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(mockGet).toHaveBeenCalledWith("/api/v1/recipes/{recipe_id}/comments", {
-      params: { path: { recipe_id: "r1" }, query: { cursor: undefined, limit: 20 } },
-    });
+    expect(mockGet).toHaveBeenCalledWith(
+      "/api/v1/recipes/{recipe_id}/comments",
+      expect.objectContaining({
+        params: { path: { recipe_id: "r1" }, query: { cursor: undefined, limit: 20 } },
+      }),
+    );
     expect(result.current.data?.pages[0].items).toHaveLength(1);
+  });
+
+  it("削除済みレシピの感想一覧は再取得しない", async () => {
+    useSession.getState().setHydrated(true);
+    client.setQueryData(["deleted-recipe", "r1"], true);
+
+    const { result } = await renderHook(() => useComments("r1"), { wrapper });
+
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe("idle");
   });
 
   it("投稿に成功したら一覧の先頭に足し、感想数を +1 して、最後に取り直す", async () => {

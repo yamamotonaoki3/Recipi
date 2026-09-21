@@ -13,12 +13,14 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   type InfiniteData,
   type QueryClient,
 } from "@tanstack/react-query";
 
 import { recipeKeys } from "@/features/recipe/hooks";
+import { isRecipeDeleted } from "@/features/recipe/deletionState";
 import { useSession } from "@/store/session";
 
 import {
@@ -50,13 +52,32 @@ function useSessionReady(): boolean {
 /** あるレシピの感想一覧（新しい順・無限スクロール）。 */
 export function useComments(recipeId: string | undefined) {
   const ready = useSessionReady();
+  const queryClient = useQueryClient();
+  // 削除 mutation が書き込むローカル marker を observer として購読する。
+  // getQueryData だけでは、画面が hidden stack に残ったままでも enabled が
+  // 更新されず、ログイン切替時に削除済みレシピを再取得してしまう（Issue #269）。
+  const deleted = useQuery({
+    queryKey: ["deleted-recipe", recipeId ?? ""],
+    queryFn: async () => false,
+    enabled: false,
+  }).data;
+  const recipeDeleted = isRecipeDeleted(recipeId) || deleted === true;
   return useInfiniteQuery({
     queryKey: commentKeys.list(recipeId ?? ""),
-    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
-      listComments(recipeId as string, { cursor: pageParam, limit: PAGE_SIZE }),
+    queryFn: ({ pageParam, signal }: { pageParam: string | undefined; signal: AbortSignal }) => {
+      // 画面が hidden stack に残ったまま再取得される競合にも備え、削除 marker
+      // を queryFn 内でも確認して API リクエスト自体を止める（Issue #269）。
+      if (
+        isRecipeDeleted(recipeId) ||
+        queryClient.getQueryData<boolean>(["deleted-recipe", recipeId]) === true
+      ) {
+        return { items: [], nextCursor: null };
+      }
+      return listComments(recipeId as string, { cursor: pageParam, limit: PAGE_SIZE }, signal);
+    },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-    enabled: ready && Boolean(recipeId),
+    enabled: ready && Boolean(recipeId) && !recipeDeleted,
   });
 }
 
