@@ -146,6 +146,15 @@ jobs:
         env:
           APP_ENV: test
 
+      # head の分岐は、既に適用済みのローカル DB では upgrade が走らないため気づけず、
+      # 本番デプロイのときに初めて Multiple head revisions で失敗する（Issue #199・#255）。
+      # モデルだけ変えてマイグレーションを書き忘れた場合も、テスト DB は upgrade で
+      # 作られるので気づけない。どちらもここで落とす。
+      - name: マイグレーションの検査（head が 1 つ / モデルとの差分）
+        run: python -m scripts.check_migrations
+        env:
+          APP_ENV: test
+
       - name: pytest（単体 ＋ 結合、行・分岐カバレッジ）
         id: pytest
         # coverage.json は下の下限判定と PR コメントで使う。
