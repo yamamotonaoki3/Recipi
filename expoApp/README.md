@@ -52,6 +52,22 @@ npm run build:web               # dist/ に Web ビルド（Tauri の中身）
 npm run tauri:build             # デスクトップの配布パッケージ（未署名）
 ```
 
+## アイコン / ファビコンの差し替え
+
+アプリアイコン・ファビコン・スプラッシュは、原本 1 枚から全プラットフォーム分を生成する。
+
+```bash
+# 1. 1024x1024 の正方形 PNG を原本として置く
+#    → ../design/icons/app-icon.png
+# 2. 生成する
+npm run gen:icons
+# 3. git diff で差分を確認してコミット
+```
+
+生成先は `assets/images/`（Expo: iOS / Android / Web）と `src-tauri/icons/`（デスクトップ）。
+必要なファイル・セーフゾーン・背景色の扱いは
+[`../design/icons/README.md`](../design/icons/README.md) を参照。
+
 ## 画像権限
 
 `app.json` の `microphonePermission: false` は、アプリが静止画だけを扱い録音しないため、
