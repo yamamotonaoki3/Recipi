@@ -6,7 +6,7 @@
  * 除く）はサーバー側で済んでいる（features/view-history.md §3）。
  */
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FlatList, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -16,12 +16,16 @@ import { ListFooterStatus } from "@/components/ListFooterStatus";
 import { RecipeCardSkeletonList } from "@/components/Skeleton";
 import { useClearHistory, useHistory } from "@/features/history/hooks";
 import { getListStatus } from "@/features/list/useListStatus";
+import { useRetap } from "@/features/navigation/retap";
 
 export function HistoryScreen({ basePath }: { basePath: string }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const history = useHistory();
   const clearHistory = useClearHistory();
+  const listRef = useRef<FlatList>(null);
+  // 選択中の「履歴」を再タップしたら最上部へ（Issue #249）。
+  useRetap(basePath, () => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
 
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearError, setClearError] = useState(false);
@@ -85,6 +89,7 @@ export function HistoryScreen({ basePath }: { basePath: string }) {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           testID="history-list"
           data={items}
           keyExtractor={(r) => r.id}

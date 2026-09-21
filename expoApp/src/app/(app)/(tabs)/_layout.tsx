@@ -40,6 +40,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavCreateButton, NavItemLabel, useIsNavRail } from "@/components/AppNavBar";
 import { DESTINATIONS_WITH_RECIPE_STACK } from "@/features/navigation/destinations";
 import { useUnreadNotificationCount } from "@/features/notification/hooks";
+import { notifyRetap } from "@/features/navigation/retap";
 import { useUnsavedChangesStore } from "@/features/navigation/unsavedChanges";
 
 /**
@@ -109,6 +110,8 @@ export default function TabsLayout() {
    */
   const handleTabPress = (href: string, event?: GestureResponderEvent) => {
     const isInside = pathname === href || pathname.startsWith(`${href}/`);
+    // 根の画面（一覧）を選択中に押したら、その画面へ「再タップ」を伝える（最上部へスクロール等。Issue #249）。
+    if (pathname === href) notifyRetap(href);
     if (isInside) {
       popToDestinationRoot(href, event);
       return;
