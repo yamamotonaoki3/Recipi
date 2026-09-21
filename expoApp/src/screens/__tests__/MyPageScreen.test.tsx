@@ -120,6 +120,12 @@ describe("MyPageScreen", () => {
     expect(mockPush).toHaveBeenCalledWith("/my-page/profile-edit");
   });
 
+  it("「アカウント設定」へ push する（Issue #242）", async () => {
+    const { getByTestId } = await render(<MyPageScreen basePath="/my-page" />);
+    await fireEvent.press(getByTestId("my-page-account-settings"));
+    expect(mockPush).toHaveBeenCalledWith("/my-page/account-settings");
+  });
+
   it("ログアウトできる", async () => {
     const { getByTestId } = await render(<MyPageScreen basePath="/my-page" />);
     await fireEvent.press(getByTestId("my-page-logout"));

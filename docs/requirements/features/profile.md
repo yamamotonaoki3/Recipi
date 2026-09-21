@@ -43,7 +43,7 @@
 - メール / X / Instagram / その他 URL には**項目ごとの公開トグル**がある。既定はすべて非公開（OFF）。
 - 他ユーザーのプロフィール取得（`GET /users/{id}`）では、**公開トグル OFF の項目をレスポンスに含めない**。本人取得時のみ全項目 + 各トグル状態を返す（[non-functional.md](../non-functional.md) データ可視性ルール）。
 - アバターの実体は S3 互換ストレージに保存（[image.md](image.md)）。`users.avatar_key` を記録し、表示用 URL はキーから生成する。
-- 「秘密の質問・答え」はサインアップ時に登録する（[auth.md](auth.md)）。プロフィール編集からの変更手段は未確定（→ [../todo.md](../todo.md)）。
+- 「秘密の質問・答え」はサインアップ時に登録する（[auth.md](auth.md)）。後からの変更はプロフィール編集ではなく、マイページの「アカウント設定」画面で行う（Issue #242。[auth.md](auth.md) §8）。
 - **アカウント削除**（`DELETE /users/me`）:
   - 本人のみ。確認 UI 必須。
   - 削除は**単一のアプリケーショントランザクション**で `users.deleted_at` を設定する論理削除。削除前に `users.token_version` を原子的に `+1` し、本人の `follows`（両方向）・`favorites`・`recipe_comments`・`refresh_tokens`・`notifications`・`recipe_views`・未使用 `uploads` を明示削除する。
@@ -159,5 +159,5 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 - SNS URL のドメイン検証の厳格度 → [todo.md](../todo.md) #14
 - アバターのデフォルト画像・トリミング UI → [todo.md](../todo.md) #15
 - 退会ユーザーの感想の扱い（現状 CASCADE 削除）→ [comment.md](comment.md) / [../todo.md](../todo.md)
-- 秘密の質問・答えの変更手段（プロフィール編集に入れるか）→ [../todo.md](../todo.md)
+- ~~秘密の質問・答えの変更手段~~ → 確定: マイページの「アカウント設定」画面（Issue #242。[auth.md](auth.md) §8）
 - メール変更フローは対象外（将来）

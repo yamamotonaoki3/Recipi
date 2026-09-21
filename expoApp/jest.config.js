@@ -55,6 +55,11 @@ module.exports = {
       // 一律 transform 対象外にするデフォルトを外す（node 環境の小さな
       // テストプロジェクトなのでビルド時間への影響は無視できる）。
       transformIgnorePatterns: [],
+      // tsconfig の `@/*` → `src/*` を node プロジェクトでも解決する。react-native
+      // プロジェクトは jest-expo のプリセットが解決するが、こちらは素の babel-jest なので
+      // 自前で書く必要がある。無いと `@/` を使うファイル（features/*/api.ts 等）を
+      // MSW テストから読み込めない（Issue #242）。
+      moduleNameMapper: { "^@/(.*)$": "<rootDir>/src/$1" },
     },
   ],
   collectCoverageFrom: [
