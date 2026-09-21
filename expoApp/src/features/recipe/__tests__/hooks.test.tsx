@@ -73,8 +73,9 @@ describe("useDeleteRecipe", () => {
       await expect(result.current.mutateAsync("r1")).rejects.toThrow("delete failed");
     });
 
-    expect(cancel).not.toHaveBeenCalled();
-    expect(remove).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledWith({ queryKey: ["comments", "r1"] });
+    expect(remove).not.toHaveBeenCalledWith({ queryKey: ["comments", "r1"] });
     expect(client.getQueryData(["comments", "r1"])).toBe(cached);
+    expect(client.getQueryData(["deleted-recipe", "r1"])).toBeUndefined();
   });
 });
