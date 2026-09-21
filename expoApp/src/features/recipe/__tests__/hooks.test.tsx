@@ -6,6 +6,7 @@ import { deleteRecipe } from "../api";
 import { FEED_ROOT_KEY } from "@/features/feed/hooks";
 import { HISTORY_ROOT_KEY } from "@/features/history/hooks";
 import { recipeKeys, useDeleteRecipe } from "../hooks";
+import { unmarkRecipeDeleted } from "../deletionState";
 
 jest.mock("../api", () => ({
   createRecipe: jest.fn(),
@@ -32,6 +33,7 @@ describe("useDeleteRecipe", () => {
     client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
+    unmarkRecipeDeleted("r1");
   });
 
   it("削除成功時に感想一覧をキャンセル・破棄し、既存キャッシュも更新する", async () => {

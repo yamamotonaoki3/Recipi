@@ -20,6 +20,7 @@ import {
 } from "@tanstack/react-query";
 
 import { recipeKeys } from "@/features/recipe/hooks";
+import { isRecipeDeleted } from "@/features/recipe/deletionState";
 import { useSession } from "@/store/session";
 
 import {
@@ -60,19 +61,23 @@ export function useComments(recipeId: string | undefined) {
     queryFn: async () => false,
     enabled: false,
   }).data;
+  const recipeDeleted = isRecipeDeleted(recipeId) || deleted === true;
   return useInfiniteQuery({
     queryKey: commentKeys.list(recipeId ?? ""),
     queryFn: ({ pageParam }: { pageParam: string | undefined }) => {
       // 画面が hidden stack に残ったまま再取得される競合にも備え、削除 marker
       // を queryFn 内でも確認して API リクエスト自体を止める（Issue #269）。
-      if (queryClient.getQueryData<boolean>(["deleted-recipe", recipeId]) === true) {
+      if (
+        isRecipeDeleted(recipeId) ||
+        queryClient.getQueryData<boolean>(["deleted-recipe", recipeId]) === true
+      ) {
         return { items: [], nextCursor: null };
       }
       return listComments(recipeId as string, { cursor: pageParam, limit: PAGE_SIZE });
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-    enabled: ready && Boolean(recipeId) && deleted !== true,
+    enabled: ready && Boolean(recipeId) && !recipeDeleted,
   });
 }
 

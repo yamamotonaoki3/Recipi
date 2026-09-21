@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 
 import { api } from "@/api/client";
 import { recipeKeys } from "@/features/recipe/hooks";
+import { unmarkRecipeDeleted } from "@/features/recipe/deletionState";
 import { useSession } from "@/store/session";
 
 import {
@@ -88,6 +89,7 @@ beforeEach(() => {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  unmarkRecipeDeleted("r1");
   useSession.getState().clear();
   useSession.getState().setHydrated(false);
 });

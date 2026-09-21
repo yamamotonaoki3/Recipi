@@ -11,6 +11,7 @@ import { useSession } from "@/store/session";
 
 import { FEED_ROOT_KEY } from "@/features/feed/hooks";
 import { HISTORY_ROOT_KEY } from "@/features/history/hooks";
+import { markRecipeDeleted, unmarkRecipeDeleted } from "./deletionState";
 import {
   createRecipe,
   deleteRecipe,
@@ -110,11 +111,13 @@ export function useDeleteRecipe() {
     onMutate: async (recipeId) => {
       // 削除リクエスト中に走っている comments の再取得が、削除完了後に
       // 404 で返る競合を防ぐため、開始時点で止める（Issue #269）。
+      markRecipeDeleted(recipeId);
       queryClient.setQueryData(["deleted-recipe", recipeId], true);
       await queryClient.cancelQueries({ queryKey: ["comments", recipeId] });
     },
     onError: (_error, recipeId) => {
       // 削除失敗時は通常どおり一覧を利用できる状態へ戻す。
+      unmarkRecipeDeleted(recipeId);
       void queryClient.removeQueries({ queryKey: ["deleted-recipe", recipeId] });
       void queryClient.invalidateQueries({ queryKey: ["comments", recipeId] });
     },
@@ -122,6 +125,7 @@ export function useDeleteRecipe() {
       // 削除済みレシピの感想一覧を、画面に残った observer やページングの
       // 再取得で取り直さないようにする（Issue #269）。comment/hooks.ts
       // との循環 import を避けるため、既存の query key 契約をここで直接指定する。
+      markRecipeDeleted(recipeId);
       void queryClient.cancelQueries({ queryKey: ["comments", recipeId] });
       void queryClient.removeQueries({ queryKey: ["comments", recipeId] });
       void queryClient.invalidateQueries({ queryKey: ["my-recipes"] });
