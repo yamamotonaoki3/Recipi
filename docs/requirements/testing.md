@@ -81,7 +81,7 @@
 | `frontend-ts.yml` | `expoApp/**` を含む push / PR                                         | `checks` ジョブ: ESLint → Prettier `--check` → `tsc --noEmit` → jest（単体・結合、`--coverage` で行・分岐の下限を判定）→ Web ビルド（`npm run build:web`）                                                                                |
 | `contract.yml`    | backend / `openapi.json` / 生成設定の変更                             | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後）                                                                                                                                  |
 | `e2e.yml`         | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行 → E2E データの後始末（`cleanup_e2e.py`、残数 0 を確認）                                                                                            |
-| `e2e-android.yml` | **手動（`workflow_dispatch`）**                                       | docker-compose でフルスタック起動 → `expo prebuild` → release APK ビルド（Gradle cache）→ エミュレータ（AVD snapshot cache）→ **Android（Appium + WebdriverIO）** の E2E フロー実行                                                       |
+| `e2e-android.yml` | **手動（`workflow_dispatch`）**                                       | docker-compose でフルスタック起動（`docker-compose.e2e-android.yml` で `ACCESS_TOKEN_TTL_SECONDS=60` を注入。Issue #246） → `expo prebuild` → release APK ビルド（Gradle cache）→ エミュレータ（AVD snapshot cache）→ **Android（Appium + WebdriverIO）** の E2E フロー実行                                                       |
 | `tauri.yml`       | **手動（`workflow_dispatch`）**                                       | Web ビルド → Tauri の Rust を `cargo check`                                                                                                                                                                                               |
 
 - **通常 PR のトリガー**: `pull_request`（→ `main`。マージの必須チェックにする）＋必要な feature ブランチへの `push`。
@@ -95,6 +95,7 @@
   - 「main の最新に追いついていること」（`strict`）は求めない。1 人開発で毎回の取り込み直しは負担が大きく、main は squash マージのみで衝突は PR 側で気づけるため。
   - 管理者は保護を迂回できる設定（`enforce_admins: false`）のままにする。緊急時の逃げ道で、通常は使わない。使ったときは PR に理由を書く。
 - **ローカルでの再現**（CI と同じ内容）: `backend/` は `ruff check .` / `ruff format --check .` / `mypy .` / `pytest --cov-report=json` → `python -m scripts.check_coverage coverage.json --lines 85 --branches 75`、`expoApp/` は `npm run lint` / `npm run format` / `npm run typecheck` / `npm test -- --coverage`。E2E は `npm run e2e:web`（Playwright）/ `npm run e2e:android`（要 Appium サーバー起動・エミュレータ）。手順はルート `README.md`（Issue で作成）。
+  - **Android E2E で短い TTL を使う場合**（`token-refresh.e2e.ts`、Issue #246）: `infra` で `docker compose --env-file ../.env.development -f docker-compose.yml -f docker-compose.e2e-android.yml up -d --build api` として `api` を起動する（`ACCESS_TOKEN_TTL_SECONDS=60` が注入される）。反映確認は `docker compose --env-file ../.env.development -f docker-compose.yml -f docker-compose.e2e-android.yml config` で `api.environment.ACCESS_TOKEN_TTL_SECONDS: "60"` を見る。このoverrideを当てると、他の Android spec も 60 秒を超えれば実際に refresh を通る（意図した設計。「実害なし」ではない）。
 
 ## 6. CD（継続的デリバリー）
 
