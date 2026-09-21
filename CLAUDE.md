@@ -130,9 +130,10 @@ Web の spec は `@playwright/test` ではなく **`./console-guard` の `test` 
 「テストが落ちた」の大半は実装ではなく環境が原因になりうる。原因の切り分けにかかる時間を減らすため、実行前に次を確かめる。
 
 1. **静的サーバーが指定ポートを本当に確保したか**。`npx serve -l 8081` は**ポートが埋まっていると黙って別のポートにフォールバックする**（終了コードも正常）。`curl` が 200 を返しても、応答しているのは別のサーバーかもしれない。必ず `serve` のログの `Accepting connections at ...` を読む。
-2. **配信されている HTML が静的バンドルを指しているか**。`curl <URL>/login | grep 'src='` が `/_expo/static/js/web/entry-*.js` なら正しい。`node_modules/expo-router/entry.bundle?...dev=true` を指していたら、掴んでいるのは Expo 開発サーバーで、そのリクエストは永久に pending になり `load` が完了しない。
-3. **Web ビルド時に `EXPO_PUBLIC_API_BASE_URL` を渡したか**（CI の `e2e.yml` は渡している）。渡し忘れると API の宛先が解決できない。
-4. 実行後は **`cleanup_e2e.py` で残数 0 を確認**する。
+2. **静的サーバーに `-s`（SPA フォールバック）を付けない**。`-s` は全ルートに `index.html` を返すため、ルートごとに事前描画した HTML と URL が食い違い、開くたびに `Minified React error #418`（ハイドレーション不一致）が出る（Issue #267 で原因を確定）。`npx serve dist -l 8081 -c ../e2e/serve.json`（`expoApp/e2e/serve.json` が動的ルートを対応する HTML へ振る）を使う。
+3. **配信されている HTML が静的バンドルを指しているか**。`curl <URL>/login | grep 'src='` が `/_expo/static/js/web/entry-*.js` なら正しい。`node_modules/expo-router/entry.bundle?...dev=true` を指していたら、掴んでいるのは Expo 開発サーバーで、そのリクエストは永久に pending になり `load` が完了しない。
+4. **Web ビルド時に `EXPO_PUBLIC_API_BASE_URL` を渡したか**（CI の `e2e.yml` は渡している）。渡し忘れると API の宛先が解決できない。
+5. 実行後は **`cleanup_e2e.py` で残数 0 を確認**する。
 
 #### レート制限のあるエンドポイントを E2E で叩くとき
 

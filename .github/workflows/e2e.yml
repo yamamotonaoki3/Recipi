@@ -112,7 +112,10 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: http://localhost:8000
 
       - name: 静的サーバーで配信
-        run: npx serve -s dist -l 8081 &
+        # `-s`（SPA フォールバック）は付けない。付けると全ルートに index.html を返し、
+        # ルートごとに事前描画した HTML と URL が食い違って React #418 が出る（Issue #267）。
+        # 動的ルート（レシピ詳細等）は e2e/serve.json の rewrites で対応する HTML へ振る。
+        run: npx serve dist -l 8081 -c ../e2e/serve.json &
         working-directory: expoApp
 
       - name: 静的サーバーの起動を待つ
