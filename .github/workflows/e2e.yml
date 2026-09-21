@@ -133,6 +133,8 @@ jobs:
         working-directory: expoApp
         env:
           E2E_WEB_BASE_URL: http://localhost:8081
+          # 画面がまだ無い API を直接叩く spec 用（security-question-api.spec.ts）。
+          E2E_API_BASE_URL: http://localhost:8000
 
       - name: Playwright のデバッグ出力（レポート・スクリーンショット・トレース）を保存
         if: failure()
