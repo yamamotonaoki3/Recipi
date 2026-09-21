@@ -17,7 +17,7 @@
  * `security-question-api.spec.ts` の 2 回と合わせて 4 回で、上限には余裕があるが、
  * これ以上増やさないこと。
  */
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./console-guard";
 
 import { PASSWORD, makeRunId } from "./helpers";
 

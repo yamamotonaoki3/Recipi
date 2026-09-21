@@ -6,7 +6,7 @@
  * アドレス（@example.com）＋ e2euser_ プレフィックスを使う。実行ごとに
  * 一意なアドレスを生成するため、開発DBを毎回初期化する必要はない。
  */
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./console-guard";
 
 test("signup → 自動ログイン確認 → logout → 再ログイン", async ({ page }) => {
   const email = `e2euser_signup_${Date.now()}@example.com`;

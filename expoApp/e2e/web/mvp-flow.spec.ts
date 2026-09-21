@@ -11,7 +11,7 @@
  * 同じ testID が複数マッチするので、最前面（＝最後にマウントされた画面）を見る
  * `.last()` を使う。
  */
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./console-guard";
 
 // 検索でこのレシピだけがヒットするよう、他のテストと重ならない語を材料名に使う。
 const UNIQUE_INGREDIENT = "ズッキーニ";

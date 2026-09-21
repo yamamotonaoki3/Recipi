@@ -16,7 +16,7 @@
  * テストデータは `e2euser_social_{a|b}_<runId>@example.com`、レシピ・感想は
  * `[E2E_TEST]` 付き。CI では e2e.yml の後始末ステップ（cleanup_e2e.py）が消す。
  */
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./console-guard";
 
 import {
   createPublicRecipe,
@@ -28,7 +28,13 @@ import {
   visibleText,
 } from "./helpers";
 
-test("フォロー → お気に入り → 感想 → 通知 → 既読 → 退会 → 再開", async ({ page }) => {
+test("フォロー → お気に入り → 感想 → 通知 → 既読 → 退会 → 再開", async ({ page, consoleGuard }) => {
+  consoleGuard.allow({
+    kind: "console",
+    message: /status of 409 \(Conflict\)/,
+    url: /\/api\/v1\/auth\/login$/,
+    reason: "退会中のアカウントで正しくログインすると 409（再開の確認を出すことを確かめている）",
+  });
   const runId = makeRunId();
   const a = { email: `e2euser_social_a_${runId}@example.com`, name: "E2E Social A" };
   const b = { email: `e2euser_social_b_${runId}@example.com`, name: "E2E Social B" };

@@ -22,7 +22,8 @@
  * テストデータは `e2euser_life_{a|b}_<runId>@example.com` と `[E2E_TEST]`。
  * CI の後始末（cleanup_e2e.py）が、ユーザー・レシピ・フォロー・お気に入り・感想・通知を消す。
  */
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./console-guard";
 
 import { createRecipe, logIn, logOut, makeRunId, searchHome, signUp, visibleText } from "./helpers";
 
@@ -56,7 +57,15 @@ async function waitForNotification(page: Page, message: string) {
     .toBeGreaterThan(0);
 }
 
-test("非公開・解除・感想の編集削除・新着通知・レシピ削除", async ({ page }) => {
+test("非公開・解除・感想の編集削除・新着通知・レシピ削除", async ({ page, consoleGuard }) => {
+  // 一時許可（本物の不具合）: レシピ削除後に、削除済みレシピの感想一覧を取りに行って 404 になる。
+  // **#269 を直したらこの許可を消すこと。**
+  consoleGuard.allow({
+    kind: "console",
+    message: /status of 404 \(Not Found\)/,
+    url: /\/api\/v1\/recipes\/[0-9a-f-]+\/comments/,
+    reason: "#269: レシピ削除後の感想一覧の再取得（削除時にクエリを破棄していない）",
+  });
   const runId = makeRunId();
   const a = { email: `e2euser_life_a_${runId}@example.com`, name: "E2E Life A" };
   const b = { email: `e2euser_life_b_${runId}@example.com`, name: "E2E Life B" };

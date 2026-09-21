@@ -15,7 +15,7 @@
  * 担保済み。E2E に入れると IP ごとの試行上限を毎回使うため入れない。1 回の実行での試行記録は
  * メールごとに最大 3 件（上限 5 件）で、CI の後始末（cleanup_e2e.py）が消す。
  */
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./console-guard";
 
 import { PASSWORD, makeRunId, signUp } from "./helpers";
 
@@ -24,7 +24,28 @@ const NEW_PASSWORD = "NewTestPass456!";
 test("パスワード再設定 → 新しいパスワードでログイン → 古い端末は再ログインが必要", async ({
   page,
   browser,
+  consoleGuard,
 }) => {
+  // このテストが意図して起こす異常系（Issue #247 のコンソール監視で許可する）。
+  consoleGuard.allow({
+    kind: "console",
+    message: /status of 404 \(Not Found\)/,
+    url: /\/api\/v1\/auth\/password-reset\/request$/,
+    reason: "未登録メールで再設定を始めると 404（下で「登録されていません」を確かめている）",
+  });
+  consoleGuard.allow({
+    kind: "console",
+    message: /status of 400 \(Bad Request\)/,
+    url: /\/api\/v1\/auth\/password-reset\/confirm$/,
+    reason: "答えを誤ると 400（下で「入力内容を確認してください」を確かめている）",
+  });
+  consoleGuard.allow({
+    kind: "console",
+    message: /status of 401 \(Unauthorized\)/,
+    url: /\/api\/v1\/auth\/login$/,
+    reason: "再設定後に古いパスワードでログインすると 401（拒否されることを確かめている）",
+  });
+
   const runId = makeRunId();
   const email = `e2euser_reset_${runId}@example.com`;
   const unregistered = `e2euser_resetnone_${runId}@example.com`;
@@ -36,6 +57,8 @@ test("パスワード再設定 → 新しいパスワードでログイン → �
   // newContext は playwright.config.ts の baseURL を引き継がないので明示する。
   const deviceB = await browser.newContext({ baseURL: test.info().project.use.baseURL });
   const b = await deviceB.newPage();
+  // 自分で作ったページは自動では監視されないので、最初の goto の前に登録する（Issue #247）。
+  consoleGuard.watch(b);
   try {
     await b.goto("/login");
     await b.getByText("パスワードをお忘れの方").click();
