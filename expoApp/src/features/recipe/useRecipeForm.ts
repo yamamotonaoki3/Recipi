@@ -5,7 +5,7 @@
  * 一緒に返す。編集モードでは `fromRecipeResponse(recipe)` を初期状態にし、
  * それがそのまま baseline になる。
  */
-import { useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer } from "react";
 
 import {
   fromRecipeResponse,
@@ -23,18 +23,46 @@ export type UseRecipeFormResult = {
   dirty: boolean;
 };
 
+type FormContainer = { state: RecipeFormState; baseline: RecipeFormState };
+type ContainerAction =
+  Parameters<typeof recipeFormReducer>[1] | { type: "syncRecipe"; state: RecipeFormState };
+
+function formContainerReducer(container: FormContainer, action: ContainerAction): FormContainer {
+  if (action.type === "syncRecipe") {
+    return { state: action.state, baseline: action.state };
+  }
+  return { ...container, state: recipeFormReducer(container.state, action) };
+}
+
 /** `recipe` を渡すと編集モード（その値が初期値＝baseline）、渡さなければ新規モード。 */
 export function useRecipeForm(recipe?: RecipeResponse): UseRecipeFormResult {
-  // 初期状態は初回マウント時に 1 回だけ作る（useReducer の第3引数 = 遅延初期化）。
-  const [state, dispatch] = useReducer(recipeFormReducer, recipe, (r) =>
-    r ? fromRecipeResponse(r) : initialFormState(),
-  );
-
-  // baseline も同じ入力から 1 回だけ作る。以後は変化しない基準点。
-  const baseline = useMemo(
+  const incoming = useMemo(
     () => (recipe ? fromRecipeResponse(recipe) : initialFormState()),
     [recipe],
   );
+  const [container, dispatchInternal] = useReducer(formContainerReducer, {
+    state: incoming,
+    baseline: incoming,
+  });
+  const dispatch = useCallback(
+    (action: Parameters<typeof recipeFormReducer>[1]) => dispatchInternal(action),
+    [],
+  );
 
-  return { state, dispatch, baseline, dirty: isDirty(state, baseline) };
+  // React Query may replace an initially stale recipe with the latest response after
+  // the editor has mounted. Synchronize only while the user has not edited the form.
+  // Keeping the previous baseline in state means dirty is evaluated against the
+  // user's original data even while a newer response is waiting to be applied.
+  useEffect(() => {
+    if (incoming === container.baseline || isDirty(container.state, container.baseline)) return;
+
+    dispatchInternal({ type: "syncRecipe", state: incoming });
+  }, [container, incoming]);
+
+  return {
+    state: container.state,
+    dispatch,
+    baseline: container.baseline,
+    dirty: isDirty(container.state, container.baseline),
+  };
 }

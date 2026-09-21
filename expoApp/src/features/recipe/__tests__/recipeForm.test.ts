@@ -293,6 +293,15 @@ describe("fromRecipeResponse / hydrate 往復", () => {
     expect(s.steps.map((st) => st.body)).toEqual(["切る", "煮る"]);
   });
 
+  it("hydrate はフォーム状態全体を最新値へ置き換える", () => {
+    const before = fromRecipeResponse(recipe);
+    const after = { ...before, title: "再取得後のタイトル", isPublic: false };
+    const hydrated = recipeFormReducer(before, { type: "hydrate", state: after });
+    expect(hydrated).toBe(after);
+    expect(hydrated.title).toBe("再取得後のタイトル");
+    expect(hydrated.isPublic).toBe(false);
+  });
+
   it("変更しなければ toWriteRequest はサーバーの内容と一致（丸め込みなし）", () => {
     const body = toWriteRequest(fromRecipeResponse(recipe));
     expect(body.ingredientGroups[0].ingredients[0]).toEqual({
