@@ -169,6 +169,16 @@ describe("感想の hooks", () => {
     expect(result.current.data?.pages[0].items).toHaveLength(1);
   });
 
+  it("削除済みレシピの感想一覧は再取得しない", async () => {
+    useSession.getState().setHydrated(true);
+    client.setQueryData(["deleted-recipe", "r1"], true);
+
+    const { result } = await renderHook(() => useComments("r1"), { wrapper });
+
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
   it("投稿に成功したら一覧の先頭に足し、感想数を +1 して、最後に取り直す", async () => {
     login();
     seed([makeComment("c1")]);

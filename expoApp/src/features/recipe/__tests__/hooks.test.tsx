@@ -48,6 +48,7 @@ describe("useDeleteRecipe", () => {
       await result.current.mutateAsync("r1");
     });
 
+    expect(client.getQueryData(["deleted-recipe", "r1"])).toBe(true);
     expect(cancel).toHaveBeenCalledWith({ queryKey: ["comments", "r1"] });
     expect(remove).toHaveBeenCalledWith({ queryKey: ["comments", "r1"] });
     expect(remove).toHaveBeenCalledWith({ queryKey: recipeKeys.detail("r1") });

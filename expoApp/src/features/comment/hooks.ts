@@ -50,13 +50,16 @@ function useSessionReady(): boolean {
 /** あるレシピの感想一覧（新しい順・無限スクロール）。 */
 export function useComments(recipeId: string | undefined) {
   const ready = useSessionReady();
+  const queryClient = useQueryClient();
+  const deleted =
+    recipeId != null && queryClient.getQueryData<boolean>(["deleted-recipe", recipeId]) === true;
   return useInfiniteQuery({
     queryKey: commentKeys.list(recipeId ?? ""),
     queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
       listComments(recipeId as string, { cursor: pageParam, limit: PAGE_SIZE }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-    enabled: ready && Boolean(recipeId),
+    enabled: ready && Boolean(recipeId) && !deleted,
   });
 }
 
