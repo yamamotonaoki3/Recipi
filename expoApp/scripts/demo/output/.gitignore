@@ -1,0 +1,3 @@
+# record-demo.tsが生成する動画（.webm）はコミットしない。
+*
+!.gitignore
