@@ -9,6 +9,7 @@
     "core:default",
     "stronghold:default",
     "stronghold:allow-remove-store-record",
-    "opener:allow-open-url"
+    "opener:allow-open-url",
+    "opener:allow-default-urls"
   ]
 }
