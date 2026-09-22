@@ -118,7 +118,7 @@ describe("メールアドレス変更", () => {
     expect(emailErrorsOf({ currentPassword: "" }).currentPassword).toBeDefined();
     expect(emailErrorsOf({ email: "" }).email).toBeDefined();
     expect(emailErrorsOf({ email: "not-an-email", emailConfirm: "not-an-email" }).email).toBe(
-      "メールアドレスの形式が正しくありません",
+      "有効なメールアドレスを入力してください",
     );
   });
 

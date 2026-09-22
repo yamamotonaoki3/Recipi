@@ -661,9 +661,14 @@ describe("RecipeDetailScreen の感想", () => {
 
     await fireEvent.changeText(getByTestId("comment-composer-input"), "   ");
     expect(getByTestId("comment-composer-submit").props.accessibilityState.disabled).toBe(true);
+    expect(await findByTestId("comment-composer-error")).toBeTruthy();
+    expect(getByTestId("comment-composer-error").props.children).toBe("感想を入力してください");
 
     await fireEvent.changeText(getByTestId("comment-composer-input"), "あ".repeat(1001));
     expect(getByTestId("comment-composer-submit").props.accessibilityState.disabled).toBe(true);
+    expect(getByTestId("comment-composer-error").props.children).toBe(
+      "感想は1000文字以内で入力してください",
+    );
 
     await fireEvent.changeText(getByTestId("comment-composer-input"), "あ".repeat(1000));
     expect(getByTestId("comment-composer-submit").props.accessibilityState.disabled).toBe(false);

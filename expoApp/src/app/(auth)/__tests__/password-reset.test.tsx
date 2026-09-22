@@ -59,6 +59,15 @@ describe("PasswordResetScreen", () => {
     expect(await findByText("このメールアドレスは登録されていません")).toBeTruthy();
   });
 
+  it("ステップ1のメール形式不正はAPIを呼ばずに表示する", async () => {
+    const { getByTestId, findByText } = await render(<PasswordResetScreen />, { wrapper });
+    await fireEvent.changeText(getByTestId("password-reset-email"), "invalid");
+    await fireEvent.press(getByTestId("password-reset-request-submit"));
+
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(await findByText("有効なメールアドレスを入力してください")).toBeTruthy();
+  });
+
   it("ステップ2で新パスワードが不一致だとブロックし、confirm は呼ばれない", async () => {
     mockRequest.mockResolvedValue({ securityQuestion: "好きな食べ物は？" });
 

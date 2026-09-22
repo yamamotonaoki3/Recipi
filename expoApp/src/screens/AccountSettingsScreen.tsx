@@ -25,7 +25,7 @@ import {
   validateSecurityQuestionForm,
 } from "@/features/account/validation";
 import { ApiError } from "@/features/auth/api";
-import { hasFieldErrors } from "@/features/auth/validation";
+import { hasFieldErrors, mapServerValidationErrors } from "@/features/auth/validation";
 
 const FALLBACK_PATH = "/my-page";
 
@@ -107,7 +107,9 @@ function EmailChangeSection() {
           } else if (error instanceof ApiError && error.status === 429) {
             setErrorMessage("試行回数が上限に達しました。しばらくしてからお試しください");
           } else if (error instanceof ApiError && error.status === 400) {
-            setErrorMessage("入力内容を確認してください");
+            const mapped = mapServerValidationErrors(error.details, ["email"]);
+            if (mapped.email) setFieldErrors({ email: mapped.email });
+            if (mapped.form) setErrorMessage(mapped.form);
           } else if (error instanceof EmailChangeUncertainError) {
             // サーバー側だけ変更済みのことがある（全セッション失効）。再送を促さず再ログインを案内する。
             setErrorMessage(
@@ -238,6 +240,18 @@ function SecurityQuestionSection() {
           setSucceeded(true);
         },
         onError: (error) => {
+          if (error instanceof ApiError && error.status === 400) {
+            const mapped = mapServerValidationErrors(error.details, [
+              "securityQuestion",
+              "securityAnswer",
+            ]);
+            setFieldErrors({
+              securityQuestion: mapped.securityQuestion,
+              securityAnswer: mapped.securityAnswer,
+            });
+            if (mapped.form) setErrorMessage(mapped.form);
+            return;
+          }
           const described = describeError(error);
           if (described.field) setFieldErrors({ [described.field]: described.message });
           else setErrorMessage(described.message);

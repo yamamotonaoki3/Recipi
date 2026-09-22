@@ -24,8 +24,10 @@ function isBlank(value: string): boolean {
 
 export function validateEmail(email: string): string | undefined {
   if (isBlank(email)) return "メールアドレスを入力してください";
-  // 簡易チェックのみ（厳密な形式検証はサーバー側の EmailStr に任せる）。
-  if (!email.includes("@")) return "メールアドレスの形式が正しくありません";
+  // クライアントでは入力ミスを早く知らせ、細かな形式判定はサーバーにも残す。
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return "有効なメールアドレスを入力してください";
+  }
   return undefined;
 }
 
@@ -118,6 +120,79 @@ export function validatePasswordResetConfirm(
   const newPasswordConfirm = validatePasswordMatch(values.newPassword, values.newPasswordConfirm);
   if (!newPassword && newPasswordConfirm) errors.newPasswordConfirm = newPasswordConfirm;
   return errors;
+}
+
+export type LoginFormValues = { email: string; password: string };
+export type LoginFieldErrors = FieldErrors<keyof LoginFormValues> & { form?: string };
+
+export function validateLogin(values: LoginFormValues): LoginFieldErrors {
+  const errors: LoginFieldErrors = {};
+  const email = validateEmail(values.email);
+  if (email) errors.email = email;
+  const password = validatePassword(values.password);
+  if (password) errors.password = password;
+  return errors;
+}
+
+export type ServerValidationField = {
+  loc?: unknown;
+  msg?: unknown;
+  type?: unknown;
+};
+
+type ServerValidationDetails = Record<string, unknown> | null;
+
+export function localizeServerValidationMessage(field: string, message: unknown): string {
+  const original = typeof message === "string" ? message : "";
+  const msg = original.toLowerCase();
+  if (field === "email" && (msg.includes("email") || msg.includes("valid"))) {
+    return "有効なメールアドレスを入力してください";
+  }
+  if (field === "password" && (msg.includes("character") || msg.includes("length"))) {
+    return "パスワードの長さを確認してください";
+  }
+  if (msg.includes("at most") || msg.includes("less than or equal")) {
+    const labels: Record<string, string> = {
+      displayName: "表示名",
+      securityQuestion: "秘密の質問",
+      securityAnswer: "答え",
+    };
+    if (labels[field]) return `${labels[field]}の文字数を確認してください`;
+  }
+  if (/[ぁ-んァ-ン一-龥]/.test(original)) return original;
+  return "入力内容を確認してください";
+}
+
+function serverMessage(field: string, issue: ServerValidationField): string {
+  return localizeServerValidationMessage(field, issue.msg);
+}
+
+function toCamelCase(value: string): string {
+  return value.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+}
+
+/** API共通の400 details.errorsを、画面で安全に表示できる形へ変換する。 */
+export function mapServerValidationErrors(
+  details: ServerValidationDetails,
+  fields: readonly string[],
+): Record<string, string> {
+  const known = new Set(fields);
+  const result: Record<string, string> = {};
+  const raw = details?.errors;
+  if (!Array.isArray(raw)) return { form: "入力内容を確認してください" };
+
+  for (const candidate of raw) {
+    if (typeof candidate !== "object" || candidate === null) continue;
+    const issue = candidate as ServerValidationField;
+    if (!Array.isArray(issue.loc)) continue;
+    const field = issue.loc
+      .map(String)
+      .map(toCamelCase)
+      .find((part) => known.has(part));
+    if (field && !result[field]) result[field] = serverMessage(field, issue);
+  }
+  if (Object.keys(result).length === 0) result.form = "入力内容を確認してください";
+  return result;
 }
 
 export function hasFieldErrors(errors: Record<string, string | undefined>): boolean {

@@ -428,16 +428,15 @@ describe("RecipeEditor（作成）", () => {
         errors: [{ loc: ["body", "title"], msg: "too long", type: "value_error" }],
       }),
     );
-    const { getByTestId, findByText, findByTestId, getAllByText } = await render(
+    const { getByTestId, findByTestId, getAllByText } = await render(
       <RecipeEditor mode="create" />,
       { wrapper },
     );
     await fillMinimalRecipe(getByTestId);
     await fireEvent.press(getByTestId("editor-save"));
-    expect(await findByText("入力内容を確認してください")).toBeTruthy();
     // サーバー 400 もクライアント検証と同じ形に翻訳されるので、同じポップアップに載る。
     expect(await findByTestId("editor-error-dialog")).toBeTruthy();
-    expect(getAllByText("too long").length).toBeGreaterThanOrEqual(2);
+    expect(getAllByText("入力内容を確認してください").length).toBeGreaterThanOrEqual(2);
   });
 
   it("未入力のまま「×」なら確認なしで閉じる", async () => {

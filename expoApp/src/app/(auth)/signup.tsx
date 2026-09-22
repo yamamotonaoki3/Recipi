@@ -12,7 +12,11 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "@/features/auth/api";
 import { useSignup } from "@/features/auth/useSignup";
-import { validateSignup, type SignupFieldErrors } from "@/features/auth/validation";
+import {
+  mapServerValidationErrors,
+  validateSignup,
+  type SignupFieldErrors,
+} from "@/features/auth/validation";
 import { PasswordField } from "@/components/PasswordField";
 
 export default function SignupScreen() {
@@ -49,7 +53,17 @@ export default function SignupScreen() {
           router.replace("/home");
         },
         onError: (error) => {
-          if (error instanceof ApiError && error.status === 409) {
+          if (error instanceof ApiError && error.status === 400) {
+            const mapped = mapServerValidationErrors(error.details, [
+              "email",
+              "password",
+              "displayName",
+              "securityQuestion",
+              "securityAnswer",
+            ]);
+            setFieldErrors((previous) => ({ ...previous, ...mapped }));
+            if (mapped.form) setSubmitErrorMessage(mapped.form);
+          } else if (error instanceof ApiError && error.status === 409) {
             setFieldErrors((prev) => ({
               ...prev,
               email: "このメールアドレスは登録済みです",
@@ -70,7 +84,10 @@ export default function SignupScreen() {
         <TextInput
           testID="signup-email"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(value) => {
+            setEmail(value);
+            setFieldErrors((previous) => ({ ...previous, email: undefined, form: undefined }));
+          }}
           placeholder="メールアドレス"
           autoCapitalize="none"
           autoCorrect={false}
@@ -85,7 +102,10 @@ export default function SignupScreen() {
       <PasswordField
         testID="signup-password"
         value={password}
-        onChangeText={setPassword}
+        onChangeText={(value) => {
+          setPassword(value);
+          setFieldErrors((previous) => ({ ...previous, password: undefined, form: undefined }));
+        }}
         placeholder="パスワード"
         errorMessage={fieldErrors.password}
       />
@@ -93,7 +113,14 @@ export default function SignupScreen() {
       <PasswordField
         testID="signup-password-confirm"
         value={passwordConfirm}
-        onChangeText={setPasswordConfirm}
+        onChangeText={(value) => {
+          setPasswordConfirm(value);
+          setFieldErrors((previous) => ({
+            ...previous,
+            passwordConfirm: undefined,
+            form: undefined,
+          }));
+        }}
         placeholder="パスワード（確認）"
         errorMessage={fieldErrors.passwordConfirm}
       />
@@ -102,7 +129,14 @@ export default function SignupScreen() {
         <TextInput
           testID="signup-display-name"
           value={displayName}
-          onChangeText={setDisplayName}
+          onChangeText={(value) => {
+            setDisplayName(value);
+            setFieldErrors((previous) => ({
+              ...previous,
+              displayName: undefined,
+              form: undefined,
+            }));
+          }}
           placeholder="表示名"
           className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
         />
@@ -115,7 +149,14 @@ export default function SignupScreen() {
         <TextInput
           testID="signup-security-question"
           value={securityQuestion}
-          onChangeText={setSecurityQuestion}
+          onChangeText={(value) => {
+            setSecurityQuestion(value);
+            setFieldErrors((previous) => ({
+              ...previous,
+              securityQuestion: undefined,
+              form: undefined,
+            }));
+          }}
           placeholder="秘密の質問（例: 好きな食べ物は？）"
           className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
         />
@@ -131,7 +172,14 @@ export default function SignupScreen() {
         <TextInput
           testID="signup-security-answer"
           value={securityAnswer}
-          onChangeText={setSecurityAnswer}
+          onChangeText={(value) => {
+            setSecurityAnswer(value);
+            setFieldErrors((previous) => ({
+              ...previous,
+              securityAnswer: undefined,
+              form: undefined,
+            }));
+          }}
           placeholder="秘密の質問の答え"
           className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
         />

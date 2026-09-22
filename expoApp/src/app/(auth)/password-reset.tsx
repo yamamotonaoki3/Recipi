@@ -14,6 +14,7 @@ import { ApiError } from "@/features/auth/api";
 import { useConfirmPasswordReset, useRequestPasswordReset } from "@/features/auth/usePasswordReset";
 import {
   validatePasswordResetConfirm,
+  validateEmail,
   type PasswordResetConfirmFieldErrors,
 } from "@/features/auth/validation";
 import { PasswordField } from "@/components/PasswordField";
@@ -27,6 +28,7 @@ export default function PasswordResetScreen() {
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
   const [fieldErrors, setFieldErrors] = useState<PasswordResetConfirmFieldErrors>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | undefined>();
 
   const requestReset = useRequestPasswordReset();
   const confirmReset = useConfirmPasswordReset();
@@ -34,6 +36,9 @@ export default function PasswordResetScreen() {
 
   function handleRequestSubmit() {
     setErrorMessage(null);
+    const validationError = validateEmail(email);
+    setEmailError(validationError);
+    if (validationError) return;
     requestReset.mutate(
       { email },
       {
@@ -89,7 +94,11 @@ export default function PasswordResetScreen() {
       <TextInput
         testID="password-reset-email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(value) => {
+          setEmail(value);
+          setEmailError(undefined);
+          setErrorMessage(null);
+        }}
         editable={step === 1}
         placeholder="メールアドレス"
         autoCapitalize="none"
@@ -97,6 +106,7 @@ export default function PasswordResetScreen() {
         keyboardType="email-address"
         className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
       />
+      {step === 1 && emailError && <Text className="text-sm text-red-600">{emailError}</Text>}
 
       {step === 1 && (
         <Pressable
@@ -120,7 +130,10 @@ export default function PasswordResetScreen() {
             <TextInput
               testID="password-reset-security-answer"
               value={securityAnswer}
-              onChangeText={setSecurityAnswer}
+              onChangeText={(value) => {
+                setSecurityAnswer(value);
+                setFieldErrors((previous) => ({ ...previous, securityAnswer: undefined }));
+              }}
               placeholder="答え"
               className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
             />
@@ -132,7 +145,10 @@ export default function PasswordResetScreen() {
           <PasswordField
             testID="password-reset-new-password"
             value={newPassword}
-            onChangeText={setNewPassword}
+            onChangeText={(value) => {
+              setNewPassword(value);
+              setFieldErrors((previous) => ({ ...previous, newPassword: undefined }));
+            }}
             placeholder="新しいパスワード"
             errorMessage={fieldErrors.newPassword}
           />
@@ -140,7 +156,10 @@ export default function PasswordResetScreen() {
           <PasswordField
             testID="password-reset-new-password-confirm"
             value={newPasswordConfirm}
-            onChangeText={setNewPasswordConfirm}
+            onChangeText={(value) => {
+              setNewPasswordConfirm(value);
+              setFieldErrors((previous) => ({ ...previous, newPasswordConfirm: undefined }));
+            }}
             placeholder="新しいパスワード（確認）"
             errorMessage={fieldErrors.newPasswordConfirm}
           />
