@@ -198,6 +198,12 @@ jobs:
         run: |
           set -euo pipefail
           echo "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          # expo prebuildが生成するgradle.propertiesは末尾に改行が無いことがあり、
+          # cat >>でそのまま追記すると最初の行が直前の行と連結され、
+          # RECIPI_RELEASE_STORE_FILE等のキーが存在しない状態になる
+          # （"Could not get unknown property"の実際の原因だった）。
+          # 追記前に改行を1つ入れて確実に新しい行から始める。
+          printf '\n' >> android/gradle.properties
           cat >> android/gradle.properties <<EOF
           RECIPI_RELEASE_STORE_FILE=release.keystore
           RECIPI_RELEASE_STORE_PASSWORD=$ANDROID_RELEASE_KEYSTORE_PASSWORD

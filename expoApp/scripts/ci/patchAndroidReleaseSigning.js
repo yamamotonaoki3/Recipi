@@ -10,6 +10,12 @@
  *   buildTypes { release { ... signingConfig signingConfigs.debug ... } }
  * が生成済み（expo prebuildの既定テンプレート）。
  *
+ * gradle.propertiesの値はproject.property(...)で明示的に取得する
+ * （ベア識別子は使わない）。新しいAndroid Gradle Plugin（DSLがdecorated
+ * プロキシ実装になっている版）ではsigningConfigsクロージャ内でのプロパティ
+ * 解決がdelegate（SigningConfigインスタンス）止まりでownerへフォールバック
+ * せず、"Could not get unknown property"で失敗するため。
+ *
  * 使い方: node scripts/ci/patchAndroidReleaseSigning.js
  */
 const fs = require("fs");
@@ -20,10 +26,10 @@ let src = fs.readFileSync(buildGradlePath, "utf8");
 
 const releaseSigningConfig = `
         release {
-            storeFile file(RECIPI_RELEASE_STORE_FILE)
-            storePassword RECIPI_RELEASE_STORE_PASSWORD
-            keyAlias RECIPI_RELEASE_KEY_ALIAS
-            keyPassword RECIPI_RELEASE_KEY_PASSWORD
+            storeFile file(project.property('RECIPI_RELEASE_STORE_FILE'))
+            storePassword project.property('RECIPI_RELEASE_STORE_PASSWORD')
+            keyAlias project.property('RECIPI_RELEASE_KEY_ALIAS')
+            keyPassword project.property('RECIPI_RELEASE_KEY_PASSWORD')
         }`;
 
 if (!src.includes("signingConfigs {")) {
