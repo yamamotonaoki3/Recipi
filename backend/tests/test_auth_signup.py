@@ -69,3 +69,22 @@ def test_signup_whitespace_only_security_answer_returns_400(client: TestClient, 
     res = client.post(SIGNUP_URL, json=body)
     assert res.status_code == 400
     assert res.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_signup_validation_message_is_localized_without_echoing_password(
+    client: TestClient, unique_email: str
+):
+    body = _signup_body(unique_email, password="秘密の短いパス")
+    res = client.post(SIGNUP_URL, json=body)
+
+    assert res.status_code == 400
+    error = res.json()["error"]
+    assert error["message"] == "リクエストの内容が不正です"
+    assert error["details"]["errors"] == [
+        {
+            "loc": ["body", "password"],
+            "msg": "パスワードは8文字以上で入力してください",
+            "type": "string_too_short",
+        }
+    ]
+    assert "秘密の短いパス" not in res.text
