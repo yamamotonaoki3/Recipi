@@ -544,7 +544,9 @@ function CommentSection({
               saving={savingCommentIds.has(comment.id)}
               deleting={deletingCommentIds.has(comment.id)}
               saveError={saveError?.id === comment.id ? saveError.message : null}
-              onSaveErrorDismiss={() => setSaveError(null)}
+              onSaveErrorDismiss={() =>
+                setSaveError((previous) => (previous?.id === comment.id ? null : previous))
+              }
             />
           ))}
           {comments.hasNextPage && !isMoreCommentError && (

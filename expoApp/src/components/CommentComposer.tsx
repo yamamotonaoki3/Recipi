@@ -138,6 +138,7 @@ export function CommentComposer({
           if (submitting) return;
           setImage({ key, url });
           setImageChanged(true);
+          onErrorDismiss?.();
         }}
         onUploadingChange={setUploading}
       />
