@@ -19,22 +19,41 @@ type GithubReleaseResponse = {
   assets?: unknown;
 };
 
-/** `v1.2.3` → `[1,2,3]`。SemVer以外は`null`（比較不能として扱う）。 */
-function parseSemVer(version: string): [number, number, number] | null {
-  const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version.trim());
+type ParsedVersion = { major: number; minor: number; patch: number; prerelease: string | null };
+
+/**
+ * `v1.2.3` / `v1.2.3-beta.1` → 構造化した値。末尾に余分な文字がある不正な
+ * 形式（`v1.2.3junk`等）はnull（比較不能として扱う。Codexレビュー指摘）。
+ */
+function parseSemVer(version: string): ParsedVersion | null {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(version.trim());
   if (!match) return null;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] ?? null,
+  };
 }
 
-/** `a`が`b`より新しければ true。比較不能なら false（安全側＝更新なし扱い）。 */
+/**
+ * `a`が`b`より新しければ true。比較不能なら false（安全側＝更新なし扱い）。
+ * SemVerの優先順位規則どおり、コア版が同じならプレリリース版は正式版より
+ * 古いものとして扱う（Codexレビュー指摘）。プレリリース同士の詳細な
+ * ドット区切り比較までは行わず、文字列比較に留める（過剰実装を避ける。
+ * このプロジェクトの運用ではプレリリースタグ自体を使わない想定）。
+ */
 function isNewerVersion(a: string, b: string): boolean {
   const va = parseSemVer(a);
   const vb = parseSemVer(b);
   if (!va || !vb) return false;
-  for (let i = 0; i < 3; i++) {
-    if (va[i] !== vb[i]) return va[i] > vb[i];
-  }
-  return false;
+  if (va.major !== vb.major) return va.major > vb.major;
+  if (va.minor !== vb.minor) return va.minor > vb.minor;
+  if (va.patch !== vb.patch) return va.patch > vb.patch;
+  if (va.prerelease === vb.prerelease) return false;
+  if (va.prerelease === null) return true; // 正式版 > プレリリース
+  if (vb.prerelease === null) return false;
+  return va.prerelease > vb.prerelease;
 }
 
 function findAssetUrl(assets: unknown, suffix: string): string | undefined {

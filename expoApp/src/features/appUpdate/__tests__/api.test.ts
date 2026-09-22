@@ -79,6 +79,29 @@ describe("checkForUpdate", () => {
     expect(result.state).toBe("upToDate");
   });
 
+  it("インストール版がプレリリースで最新が同じコア版の正式版ならupdateAvailableを返す（Codexレビュー指摘への対応）", async () => {
+    mockGetCurrentAppVersion.mockResolvedValue("1.0.0-beta.1");
+    mockFetchOnce({
+      json: async () => ({
+        tag_name: "v1.0.0",
+        html_url: "https://github.com/owner/repo/releases/tag/v1.0.0",
+      }),
+    });
+    const result = await checkForUpdate();
+    expect(result.state).toBe("updateAvailable");
+  });
+
+  it("不正な形式のタグ（末尾に余分な文字）は比較不能としてupToDateを返す", async () => {
+    mockFetchOnce({
+      json: async () => ({
+        tag_name: "v1.2.3junk",
+        html_url: "https://github.com/owner/repo/releases/tag/v1.2.3junk",
+      }),
+    });
+    const result = await checkForUpdate();
+    expect(result.state).toBe("upToDate");
+  });
+
   it("Releaseが1つも無い（404）場合はupToDateを返す", async () => {
     mockFetchOnce({ ok: false, status: 404 });
     const result = await checkForUpdate();
