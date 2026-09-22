@@ -96,6 +96,8 @@
   - 管理者は保護を迂回できる設定（`enforce_admins: false`）のままにする。緊急時の逃げ道で、通常は使わない。使ったときは PR に理由を書く。
 - **ローカルでの再現**（CI と同じ内容）: `backend/` は `ruff check .` / `ruff format --check .` / `mypy .` / `pytest --cov-report=json` → `python -m scripts.check_coverage coverage.json --lines 85 --branches 75`、`expoApp/` は `npm run lint` / `npm run format` / `npm run typecheck` / `npm test -- --coverage`。E2E は `npm run e2e:web`（Playwright）/ `npm run e2e:android`（要 Appium サーバー起動・エミュレータ）。手順はルート `README.md`（Issue で作成）。
   - **Android E2E で短い TTL を使う場合**（`token-refresh.e2e.ts`、Issue #246）: `infra` で `docker compose --env-file ../.env.development -f docker-compose.yml -f docker-compose.e2e-android.yml up -d --build api` として `api` を起動する（`ACCESS_TOKEN_TTL_SECONDS=60` が注入される）。反映確認は `docker compose --env-file ../.env.development -f docker-compose.yml -f docker-compose.e2e-android.yml config` で `api.environment.ACCESS_TOKEN_TTL_SECONDS: "60"` を見る。このoverrideを当てると、他の Android spec も 60 秒を超えれば実際に refresh を通る（意図した設計。「実害なし」ではない）。
+  - **Android E2E で写真ピッカーを使う場合**（`avatar-crop.e2e.ts`、Issue #251。写真アップロード自体は #285 で修正）: エミュレータのギャラリーに事前に写真を 1 枚入れておく必要がある。`adb push <画像> /sdcard/Pictures/avatar-src.jpg` の後、`adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/avatar-src.jpg` でメディアスキャンを走らせる（スキャンしないとシステムの写真ピッカーの「最近」に出てこない）。CI（`e2e-android.yml`）もこの手順で用意する。
+  - **ホストで直接 `uvicorn` を起動したまま Android E2E を回さない**: `127.0.0.1:8000` を掴む野良プロセスがあると、エミュレータの `10.0.2.2:8000` 宛のリクエストがそちらに解決され、Docker の `api` コンテナ（`0.0.0.0:8000`）ではなく古い設定のプロセスが応答することがある（Issue #251 の実機確認で発見。画像 URL のホストが食い違い、署名なしの安定 URL でも読み込めなかった）。`netstat -ano | grep :8000` で複数プロセスが listen していないか確認する。
 
 ## 6. CD（継続的デリバリー）
 
