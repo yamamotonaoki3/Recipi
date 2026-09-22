@@ -11,6 +11,12 @@ import { Pressable, Switch, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "@/features/auth/api";
 import { useLogin, useReactivate } from "@/features/auth/useLogin";
+import {
+  hasFieldErrors,
+  mapServerValidationErrors,
+  validateLogin,
+  type LoginFieldErrors,
+} from "@/features/auth/validation";
 import { PasswordField } from "@/components/PasswordField";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -19,6 +25,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
   const [confirmReactivate, setConfirmReactivate] = useState(false);
 
   const login = useLogin();
@@ -40,6 +47,9 @@ export default function LoginScreen() {
 
   function handleSubmit() {
     setErrorMessage(null);
+    const validationErrors = validateLogin({ email, password });
+    setFieldErrors(validationErrors);
+    if (hasFieldErrors(validationErrors)) return;
     login.mutate(
       { email, password, rememberMe },
       {
@@ -47,7 +57,11 @@ export default function LoginScreen() {
           router.replace("/home");
         },
         onError: (error) => {
-          if (error instanceof ApiError && error.code === "ACCOUNT_DEACTIVATED") {
+          if (error instanceof ApiError && error.status === 400) {
+            const mapped = mapServerValidationErrors(error.details, ["email", "password"]);
+            setFieldErrors(mapped);
+            if (mapped.form) setErrorMessage(mapped.form);
+          } else if (error instanceof ApiError && error.code === "ACCOUNT_DEACTIVATED") {
             setConfirmReactivate(true);
           } else if (error instanceof ApiError && error.status === 401) {
             // メール/パスワードのどちらが誤りかは区別しない（enumeration 対策。auth.md）。
@@ -67,19 +81,30 @@ export default function LoginScreen() {
       <TextInput
         testID="login-email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(value) => {
+          setEmail(value);
+          setFieldErrors((previous) => ({ ...previous, email: undefined, form: undefined }));
+          setErrorMessage(null);
+        }}
         placeholder="メールアドレス"
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="email-address"
+        accessibilityLabel="メールアドレス"
         className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
       />
+      {fieldErrors.email && <Text className="text-sm text-red-600">{fieldErrors.email}</Text>}
 
       <PasswordField
         testID="login-password"
         value={password}
-        onChangeText={setPassword}
+        onChangeText={(value) => {
+          setPassword(value);
+          setFieldErrors((previous) => ({ ...previous, password: undefined, form: undefined }));
+          setErrorMessage(null);
+        }}
         placeholder="パスワード"
+        errorMessage={fieldErrors.password}
       />
 
       <View className="flex-row items-center gap-2">

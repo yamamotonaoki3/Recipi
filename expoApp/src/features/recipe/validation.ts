@@ -6,6 +6,7 @@
  * （グループ 1〜20 / グループ内材料 1〜50 / 手順 1〜100 / 検索 q は別）。
  */
 import { countChars } from "@/lib/textLength";
+import { localizeServerValidationMessage } from "@/features/auth/validation";
 
 import type { RecipeFormState, RecipeSubmission } from "./recipeForm";
 import type { ServerValidationError } from "./api";
@@ -168,24 +169,25 @@ export function mapServerErrors(
     const [head, ...rest] = path;
 
     if (head === "title" && !errors.title) {
-      errors.title = err.msg;
+      errors.title = localizeServerValidationMessage("title", err.msg);
     } else if ((head === "servings" || head === "description") && !errors[head]) {
-      errors[head] = err.msg;
+      errors[head] = localizeServerValidationMessage(String(head), err.msg);
     } else if (head === "ingredientGroups" && typeof rest[0] === "number") {
       const groupIdx = rest[0];
       const groupId = submission.groupIds[groupIdx];
       if (rest[1] === "ingredients" && typeof rest[2] === "number") {
         const ingId = submission.ingredientIds[groupIdx]?.[rest[2]];
-        if (ingId) errors.ingredients[ingId] = err.msg;
+        if (ingId)
+          errors.ingredients[ingId] = localizeServerValidationMessage("ingredient", err.msg);
         else unmapped.push(err.msg);
       } else if (groupId) {
-        errors.groups[groupId] = err.msg;
+        errors.groups[groupId] = localizeServerValidationMessage("group", err.msg);
       } else {
         unmapped.push(err.msg);
       }
     } else if (head === "steps" && typeof rest[0] === "number") {
       const stepId = submission.stepIds[rest[0]];
-      if (stepId) errors.steps[stepId] = err.msg;
+      if (stepId) errors.steps[stepId] = localizeServerValidationMessage("step", err.msg);
       else unmapped.push(err.msg);
     } else {
       unmapped.push(err.msg);

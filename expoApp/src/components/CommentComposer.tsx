@@ -63,6 +63,7 @@ export function CommentComposer({
   const [image, setImage] = useState(initialImage);
   const [imageChanged, setImageChanged] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const trimmed = body.trim();
   // JavaScript の string.length は絵文字を 2 文字として数えることがある。
@@ -70,9 +71,25 @@ export function CommentComposer({
   const trimmedLength = countChars(trimmed);
   const tooLong = trimmedLength > COMMENT_MAX_LENGTH;
   const canSubmit = trimmedLength > 0 && !tooLong && !submitting && !uploading;
+  const inlineValidationMessage =
+    body.length > 0 && trimmedLength === 0
+      ? "感想を入力してください"
+      : tooLong
+        ? `感想は${COMMENT_MAX_LENGTH}文字以内で入力してください`
+        : null;
+  const visibleError = validationError ?? error ?? inlineValidationMessage;
 
   async function handleSubmit() {
+    if (trimmedLength === 0) {
+      setValidationError("感想を入力してください");
+      return;
+    }
+    if (tooLong) {
+      setValidationError(`感想は${COMMENT_MAX_LENGTH}文字以内で入力してください`);
+      return;
+    }
     if (!canSubmit) return;
+    setValidationError(null);
     const ok = await onSubmit({ body: trimmed, imageKey: image.key, imageChanged });
     if (ok && resetOnSuccess) {
       setBody("");
@@ -86,7 +103,10 @@ export function CommentComposer({
       <TextInput
         testID={`${testID}-input`}
         value={body}
-        onChangeText={setBody}
+        onChangeText={(value) => {
+          setBody(value);
+          setValidationError(null);
+        }}
         editable={!submitting}
         placeholder="作ってみた感想を書く"
         multiline
@@ -115,9 +135,9 @@ export function CommentComposer({
         onUploadingChange={setUploading}
       />
 
-      {error ? (
+      {visibleError ? (
         <Text testID={`${testID}-error`} className="text-sm text-red-600">
-          {error}
+          {visibleError}
         </Text>
       ) : null}
 

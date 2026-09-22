@@ -7,7 +7,7 @@
  * アバターはここに含めない。アバターは選んだ時点でサーバーに保存される
  * （screens/profile-edit.md §5「即時反映」）ので、「保存」ボタンの対象外。
  */
-import { validateDisplayName } from "@/features/auth/validation";
+import { localizeServerValidationMessage, validateDisplayName } from "@/features/auth/validation";
 import { countChars } from "@/lib/textLength";
 
 import type { UpdateMeRequest, UserSelfProfile } from "./api";
@@ -129,7 +129,7 @@ export function mapServerErrors(details: Record<string, unknown> | null): Profil
     if (!Array.isArray(item.loc)) continue;
     const field = item.loc.find((part): part is ProfileField => known.has(String(part)));
     if (field && !errors[field]) {
-      errors[field] = typeof item.msg === "string" ? item.msg : "入力内容を確認してください";
+      errors[field] = localizeServerValidationMessage(field, item.msg);
     }
   }
   return errors;

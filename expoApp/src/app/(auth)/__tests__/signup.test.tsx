@@ -103,4 +103,22 @@ describe("SignupScreen", () => {
 
     expect(await findByText("このメールアドレスは登録済みです")).toBeTruthy();
   });
+
+  it("400 VALIDATION_ERROR は該当欄へ表示する", async () => {
+    mockSignup.mockRejectedValue(
+      new ApiError("不正", "VALIDATION_ERROR", 400, {
+        errors: [
+          { loc: ["body", "email"], msg: "Input should be a valid email address" },
+          { loc: ["body", "displayName"], msg: "String should have at most 30 characters" },
+        ],
+      }),
+    );
+
+    const { getByTestId, findByText } = await render(<SignupScreen />, { wrapper });
+    await fillValidForm(getByTestId);
+    await fireEvent.press(getByTestId("signup-submit"));
+
+    expect(await findByText("有効なメールアドレスを入力してください")).toBeTruthy();
+    expect(await findByText("表示名の文字数を確認してください")).toBeTruthy();
+  });
 });

@@ -94,6 +94,15 @@ describe("LoginScreen", () => {
     expect(await findByText("メールアドレスまたはパスワードが違います")).toBeTruthy();
   });
 
+  it("入力不備はAPIを呼ばず、項目別に表示する", async () => {
+    const { getByTestId, findByText } = await render(<LoginScreen />, { wrapper });
+    await fireEvent.press(getByTestId("login-submit"));
+
+    expect(mockLogin).not.toHaveBeenCalled();
+    expect(await findByText("メールアドレスを入力してください")).toBeTruthy();
+    expect(await findByText("パスワードを入力してください")).toBeTruthy();
+  });
+
   it("それ以外のエラーは通信エラー文言を表示する", async () => {
     mockLogin.mockRejectedValue(new Error("network down"));
 
