@@ -148,6 +148,8 @@ export function localizeServerValidationMessage(field: string, message: unknown)
   if (field === "email" && (msg.includes("email") || msg.includes("valid"))) {
     return "有効なメールアドレスを入力してください";
   }
+  // backendのパスワード検証は min_length/max_length のみ（文字種要件は無い）ため、
+  // Pydanticの "at least/at most N characters" 系メッセージは常に長さの話として扱ってよい。
   if (field === "password" && (msg.includes("character") || msg.includes("length"))) {
     return "パスワードの長さを確認してください";
   }

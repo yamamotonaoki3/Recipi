@@ -2,7 +2,7 @@
  * パスワードリセット画面のテスト（BB: 2ステップの流れ、新パスワード不一致ブロック）。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import PasswordResetScreen from "../password-reset";
@@ -130,5 +130,64 @@ describe("PasswordResetScreen", () => {
     expect(
       await findByText("試行回数が上限に達しました。しばらくしてからお試しください"),
     ).toBeTruthy();
+  });
+
+  it("ステップ2でエラー表示後に入力を変えると、再送信前にエラーが消える（Issue #320）", async () => {
+    mockRequest.mockResolvedValue({ securityQuestion: "好きな食べ物は？" });
+    mockConfirm.mockRejectedValue(new ApiError("試行しすぎ", "TOO_MANY_REQUESTS", 429));
+
+    const { getByTestId, findByText, queryByText } = await render(<PasswordResetScreen />, {
+      wrapper,
+    });
+    await fireEvent.changeText(getByTestId("password-reset-email"), "testuser_040@example.com");
+    await fireEvent.press(getByTestId("password-reset-request-submit"));
+    await findByText("好きな食べ物は？");
+
+    await fireEvent.changeText(getByTestId("password-reset-security-answer"), "ちがう答え");
+    await fireEvent.changeText(getByTestId("password-reset-new-password"), "NewTestPass456!");
+    await fireEvent.changeText(
+      getByTestId("password-reset-new-password-confirm"),
+      "NewTestPass456!",
+    );
+    await fireEvent.press(getByTestId("password-reset-confirm-submit"));
+    await findByText("試行回数が上限に達しました。しばらくしてからお試しください");
+
+    await fireEvent.changeText(getByTestId("password-reset-security-answer"), "別の答え");
+
+    expect(queryByText("試行回数が上限に達しました。しばらくしてからお試しください")).toBeNull();
+  });
+
+  it("送信中に入力を変えたあとに古いリクエストが失敗しても、エラーを表示しない（Issue #320）", async () => {
+    mockRequest.mockResolvedValue({ securityQuestion: "好きな食べ物は？" });
+    let rejectConfirm!: (error: unknown) => void;
+    mockConfirm.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectConfirm = reject;
+      }),
+    );
+
+    const { getByTestId, findByText, queryByText } = await render(<PasswordResetScreen />, {
+      wrapper,
+    });
+    await fireEvent.changeText(getByTestId("password-reset-email"), "testuser_040@example.com");
+    await fireEvent.press(getByTestId("password-reset-request-submit"));
+    await findByText("好きな食べ物は？");
+
+    await fireEvent.changeText(getByTestId("password-reset-security-answer"), "ちがう答え");
+    await fireEvent.changeText(getByTestId("password-reset-new-password"), "NewTestPass456!");
+    await fireEvent.changeText(
+      getByTestId("password-reset-new-password-confirm"),
+      "NewTestPass456!",
+    );
+    await fireEvent.press(getByTestId("password-reset-confirm-submit"));
+
+    // レスポンス待ちの間に答えを変える（古いリクエストはまだ飛んだまま）。
+    await fireEvent.changeText(getByTestId("password-reset-security-answer"), "書き直した答え");
+
+    await act(async () => {
+      rejectConfirm(new ApiError("試行しすぎ", "TOO_MANY_REQUESTS", 429));
+    });
+
+    expect(queryByText("試行回数が上限に達しました。しばらくしてからお試しください")).toBeNull();
   });
 });

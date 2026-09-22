@@ -44,6 +44,11 @@ type CommentComposerProps = {
   submitting: boolean;
   /** 送信の失敗メッセージ。 */
   error?: string | null;
+  /**
+   * 本文を編集したときに、親が持つ `error`（サーバー由来）を消してもらうための通知。
+   * 呼ばないと、再送信するまで古いエラー文言が画面に残り続ける（Issue #320）。
+   */
+  onErrorDismiss?: () => void;
   /** 成功したあと入力を空に戻すか（新規投稿は true、編集は false）。 */
   resetOnSuccess?: boolean;
 };
@@ -57,6 +62,7 @@ export function CommentComposer({
   onCancel,
   submitting,
   error,
+  onErrorDismiss,
   resetOnSuccess = false,
 }: CommentComposerProps) {
   const [body, setBody] = useState(initialBody);
@@ -106,6 +112,7 @@ export function CommentComposer({
         onChangeText={(value) => {
           setBody(value);
           setValidationError(null);
+          onErrorDismiss?.();
         }}
         editable={!submitting}
         placeholder="作ってみた感想を書く"
@@ -131,6 +138,7 @@ export function CommentComposer({
           if (submitting) return;
           setImage({ key, url });
           setImageChanged(true);
+          onErrorDismiss?.();
         }}
         onUploadingChange={setUploading}
       />
