@@ -7,7 +7,7 @@
  *   （答えだけを検証する中間エンドポイントは無い）
  */
 import { Link, useRouter } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "@/features/auth/api";
@@ -34,19 +34,26 @@ export default function PasswordResetScreen() {
   const confirmReset = useConfirmPasswordReset();
   const router = useRouter();
 
+  // 送信中に入力が変わったら、後から届く古いリクエストの結果でエラーを復活させない
+  // （Issue #320）。入力を変えるたびに版を進め、レスポンス到着時に版が一致するときだけ反映する。
+  const editVersion = useRef(0);
+
   function handleRequestSubmit() {
     setErrorMessage(null);
     const validationError = validateEmail(email);
     setEmailError(validationError);
     if (validationError) return;
+    const submittedVersion = editVersion.current;
     requestReset.mutate(
       { email },
       {
         onSuccess: (data) => {
+          if (editVersion.current !== submittedVersion) return;
           setSecurityQuestion(data.securityQuestion);
           setStep(2);
         },
         onError: (error) => {
+          if (editVersion.current !== submittedVersion) return;
           if (error instanceof ApiError && error.status === 404) {
             setErrorMessage("このメールアドレスは登録されていません");
           } else {
@@ -67,6 +74,7 @@ export default function PasswordResetScreen() {
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
+    const submittedVersion = editVersion.current;
     confirmReset.mutate(
       { email, securityAnswer, newPassword },
       {
@@ -76,6 +84,7 @@ export default function PasswordResetScreen() {
           router.replace("/(auth)/login?reset=done");
         },
         onError: (error) => {
+          if (editVersion.current !== submittedVersion) return;
           if (error instanceof ApiError && error.status === 429) {
             setErrorMessage("試行回数が上限に達しました。しばらくしてからお試しください");
           } else {
@@ -98,6 +107,7 @@ export default function PasswordResetScreen() {
           setEmail(value);
           setEmailError(undefined);
           setErrorMessage(null);
+          editVersion.current += 1;
         }}
         editable={step === 1}
         placeholder="メールアドレス"
@@ -134,6 +144,7 @@ export default function PasswordResetScreen() {
                 setSecurityAnswer(value);
                 setFieldErrors((previous) => ({ ...previous, securityAnswer: undefined }));
                 setErrorMessage(null);
+                editVersion.current += 1;
               }}
               placeholder="答え"
               className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
@@ -150,6 +161,7 @@ export default function PasswordResetScreen() {
               setNewPassword(value);
               setFieldErrors((previous) => ({ ...previous, newPassword: undefined }));
               setErrorMessage(null);
+              editVersion.current += 1;
             }}
             placeholder="新しいパスワード"
             errorMessage={fieldErrors.newPassword}
@@ -162,6 +174,7 @@ export default function PasswordResetScreen() {
               setNewPasswordConfirm(value);
               setFieldErrors((previous) => ({ ...previous, newPasswordConfirm: undefined }));
               setErrorMessage(null);
+              editVersion.current += 1;
             }}
             placeholder="新しいパスワード（確認）"
             errorMessage={fieldErrors.newPasswordConfirm}
