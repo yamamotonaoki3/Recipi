@@ -106,30 +106,39 @@ async function shrink(
 }
 
 /**
- * ローカルの URI を `FormData` に載せられる形に変換する。
+ * ローカルの URI を `FormData` に載せられる形（`Blob` / `File`）に変換する。
  *
- * **ここがネイティブと web の最大の違い。**
+ * **ネイティブでも実体の `Blob` を渡す**（Issue #285）。以前は React Native 独自の
+ * `{ uri, name, type }` を渡していたが、Expo SDK 57 のグローバル `fetch`
+ * （`expo/src/winter/fetch/convertFormData.ts`）は `uri` 形式を受け付けず、
+ * 送信時に `Unsupported FormDataPart implementation` で失敗する。受け付けるのは
+ * 文字列・`Blob`・`bytes()` を持つオブジェクトだけ。
  *
- * - ネイティブ（iOS / Android）: React Native の `FormData` は
- *   `{ uri, name, type }` という独自の形を受け付け、送信時にネイティブの
- *   ネットワーク層がそのファイルを直接読んでストリームに流す。ファイルの
- *   中身を JS 側のメモリに載せないので、大きな画像でも軽い。
- *   TypeScript の `FormData.append` は `Blob | string` しか受け付けないため、
- *   キャストが必要になる（RN の実装が独自拡張しているため）。
- * - web: 標準の `FormData` なので `{ uri }` は通らない。`uri`（`blob:` や
- *   `data:` の URL）を `fetch` して実体の `Blob` を取り出し、`File` にする。
+ * - ネイティブ: `XMLHttpRequest`（`responseType = "blob"`）で `file://` / `content://` を読む。
+ *   React Native の `Blob`（ネイティブ側のブロブストア参照）が返るので、JS のメモリに
+ *   画像全体を載せずに済む。`fetch` は Expo 版でローカル URI を扱えない可能性があるため使わない。
+ * - web: `blob:` / `data:` の URL を `fetch` して `File` にする。
+ *
+ * ファイル名（`filename`）は `Blob` に無いので、`FormData.append(名前, blob, "upload.jpg")`
+ * の第 3 引数で付ける（`features/image/api.ts` / `features/profile/api.ts`）。
  */
+function readNativeBlob(uri: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => resolve(xhr.response as Blob);
+    xhr.onerror = () => reject(new Error("選んだ画像を読み込めませんでした"));
+    xhr.responseType = "blob";
+    xhr.open("GET", uri);
+    xhr.send();
+  });
+}
+
 async function toUploadFile(uri: string): Promise<UploadFile> {
   if (Platform.OS === "web") {
     const blob = await fetch(uri).then((res) => res.blob());
     return new File([blob], "upload.jpg", { type: blob.type || "image/jpeg" });
   }
-
-  return {
-    uri,
-    name: "upload.jpg",
-    type: "image/jpeg",
-  } as unknown as UploadFile;
+  return readNativeBlob(uri);
 }
 
 /** 選んだ直後の元画像。切り抜き UI がこれを見て範囲を決める。 */

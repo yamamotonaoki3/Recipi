@@ -57,7 +57,8 @@ export async function uploadImage(file: UploadFile): Promise<ImageUploadResponse
     body: { file: file as unknown as string },
     bodySerializer(body: { file: unknown }) {
       const form = new FormData();
-      form.append("file", body.file as Blob);
+      // 第 3 引数のファイル名は、ネイティブの Blob（名前を持たない）でも multipart に filename を付けるため。
+      form.append("file", body.file as Blob, "upload.jpg");
       return form;
     },
   });

@@ -44,6 +44,23 @@ jest.mock("expo-image-manipulator", () => ({
   },
 }));
 
+// ネイティブで選んだ画像の URI を実体の Blob として読むために `pickImage.ts` が使う
+// （Issue #285。Expo の fetch は React Native 独自の `{ uri, name, type }` 形式を
+// 受け付けないため）。jest（Node）には `XMLHttpRequest` の実装が無く、テストごとに
+// 差し替えるのも手間なので、既定で空の Blob を即座に返すモックをここに置く。
+// 実際の中身を確かめたいテストは `global.XMLHttpRequest` を個別に上書きする。
+global.XMLHttpRequest = jest.fn().mockImplementation(() => {
+  const xhr = {
+    open: jest.fn(),
+    send: jest.fn(() => xhr.onload?.()),
+    response: new Blob([], { type: "image/jpeg" }),
+    responseType: "",
+    onload: null,
+    onerror: null,
+  };
+  return xhr;
+});
+
 jest.mock("react-native-safe-area-context", () => {
   const insets = { top: 0, right: 0, bottom: 0, left: 0 };
   const frame = { x: 0, y: 0, width: 320, height: 640 };
