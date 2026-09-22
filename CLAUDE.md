@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-手軽にレシピを登録・共有・検索できるアプリ。モバイルファーストで Android / iOS / デスクトップ（Windows・macOS）に対応。フォロー / お気に入り / 感想 / 通知など軽いソーシャル機能も持つ。バックエンドとフロントエンドを持つ複数レイヤー構成。
+手軽にレシピを登録・共有・検索できるアプリ。モバイルファーストで Android / デスクトップ（Windows・macOS）に対応。**iOS はこの学習プロジェクトでは対象外**（[docs/requirements/todo.md](docs/requirements/todo.md) #3。Windows 環境では Xcode/Mac が無く iOS のネイティブアプリをローカルビルドできず、実機テスト・ストア配布には Mac または有料の Apple Developer Program が必要になるため割愛）。フォロー / お気に入り / 感想 / 通知など軽いソーシャル機能も持つ。バックエンドとフロントエンドを持つ複数レイヤー構成。
 
 実装フェーズ（2026-09-22 時点）。frontend-ts（必須トラック）は Phase 0〜9・11 が完了し、Phase 10（仕上げ）も主要項目が完了している（詳細は [docs/requirements/roadmap.md](docs/requirements/roadmap.md) の状況列）。frontend-kotlin（随時トラック）は未着手。要件定義書は機能別に分割され [docs/requirements/](docs/requirements/)（索引: [docs/requirements/README.md](docs/requirements/README.md)）。全機能版だが、**MVP（初回リリース）は Phase 4 まで**に確定（候補 B: 認証・レシピ CRUD・画像・ナビ・ホーム「全体」フィード・検索・閲覧履歴。[docs/requirements/roadmap.md](docs/requirements/roadmap.md) 「MVP ライン」）。この線引きはスコープ定義であって進捗記述ではなく、Phase 5 以降（MVP 後）・Phase 11（AI・MVP 対象外）を先行実装していても変更しない。
 
@@ -10,14 +10,14 @@
 
 - **フロントエンド**: **2 トラック**。どちらも 1 本の FastAPI を共通の OpenAPI 契約で叩く。
   - **(A) TypeScript（必須トラック）**: React Native + Expo（Expo Router / New Architecture）、NativeWind、openapi-typescript + openapi-fetch、TanStack Query。Desktop（Windows・macOS）は React Native Web ビルドを **Tauri 2** でパッケージ。カリキュラム指定
-  - **(B) Kotlin Multiplatform（随時トラック・非ブロッキング）**: Compose Multiplatform（Android / iOS / Desktop）、Ktor Client、kotlinx.serialization。開発者の学習用
+  - **(B) Kotlin Multiplatform（随時トラック・非ブロッキング）**: Compose Multiplatform（Android / Desktop。iOS は対象外）、Ktor Client、kotlinx.serialization。開発者の学習用
   - ブラウザ（Web）単体配信は当面対象外
 - **バックエンド**: Python 3.14.7 + FastAPI（Uvicorn）、SQLModel（SQLAlchemy 2.0）、Alembic、psycopg 3、Pydantic v2、Argon2id（argon2-cffi）、JWT 認証（ライブラリは PyJWT / Authlib から選定、アクセス＋リフレッシュトークン / ローテーション）。パッケージ管理は venv + pip + requirements.txt（従来方式で学習、後で uv と比較）
 - **DB**: PostgreSQL
 - **画像保存**: S3 互換クラウドストレージ（ローカルは MinIO）
 - **型共有**: FastAPI が出力する OpenAPI 3.1 →（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）で各クライアントの型を自動生成（コンパイル時共有はしない）
 - **インフラ**: ローカルは Docker Compose（api + postgres + minio。フロントは compose 外）。本番は **AWS**（Terraform で管理。API Gateway ＋ ECS Fargate ／ RDS PostgreSQL 18 ／ S3 ＋ CloudFront。[infra/terraform/README.md](infra/terraform/README.md)）
-- **リポジトリ構成**: モノレポ。`backend/`（Python、Gradle 非登録）、`expoApp/`（TS、Gradle 非登録）、Kotlin フロントは Gradle（`shared` / `composeApp` / `iosApp` / `desktopApp`）
+- **リポジトリ構成**: モノレポ。`backend/`（Python、Gradle 非登録）、`expoApp/`（TS、Gradle 非登録）、Kotlin フロントは Gradle（`shared` / `composeApp` / `desktopApp`。未着手。iOS は対象外のため `iosApp/` は作らない）
 - バージョンは実装着手前に `resolve-tech-stack` で確定する（バックエンドの Python 構成・フロントの 2 トラック構成は確定済み）
 
 ## 学習方針

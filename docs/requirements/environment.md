@@ -120,7 +120,7 @@
 - 加えて各サービスの `env_file:` でコンテナ内のランタイム環境変数として渡す（`${...}` 展開とは別の役割）。**`env_file:` のパスは compose ファイルからの相対**なので、`infra/docker-compose.yml` では `env_file: ../.env.development` と書く（リポジトリルートの `.env.development` を指す）。
 - **ホスト名は「誰が接続するか」で分ける**（3 系統）:
   - **バックエンド → DB / ストレージ**（サーバー内部の接続。`DATABASE_URL` / `S3_ENDPOINT_URL`）: ホストで uvicorn なら `localhost`、compose の `api` サービスなら `postgres` / `minio`（`api` サービスの `environment:` で上書き）。
-  - **クライアント → バックエンド / 画像**（`EXPO_PUBLIC_API_BASE_URL` / `S3_PUBLIC_URL_BASE`。API が返す画像 URL もこれで組み立てる）: 開発マシンをどう指すかに合わせる。Web / デスクトップ / iOS シミュレータは `localhost`、**Android エミュレータは `10.0.2.2`、実機は開発マシンの LAN IP**。`EXPO_PUBLIC_API_BASE_URL` と `S3_PUBLIC_URL_BASE` は**必ず同じホスト表記に揃える**。
+  - **クライアント → バックエンド / 画像**（`EXPO_PUBLIC_API_BASE_URL` / `S3_PUBLIC_URL_BASE`。API が返す画像 URL もこれで組み立てる）: 開発マシンをどう指すかに合わせる。Web / デスクトップは `localhost`、**Android エミュレータは `10.0.2.2`、実機は開発マシンの LAN IP**（iOS は対象外）。`EXPO_PUBLIC_API_BASE_URL` と `S3_PUBLIC_URL_BASE` は**必ず同じホスト表記に揃える**。
   - Android エミュレータでの E2E など、`localhost` が使えない実行では両方を `10.0.2.2` にした `.env` を用意する。
 - **標準の開発フロー**: compose は `postgres` / `minio` だけ起動し、バックエンドは `uvicorn --reload` でホスト実行（高速な反復のため）。`api` サービスはフルスタック実行・E2E 用。
 

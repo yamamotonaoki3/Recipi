@@ -22,7 +22,7 @@
 | フレームワーク | React Native + **Expo（SDK 57）** | **React Native 0.86**、New Architecture（Fabric / TurboModules）。2026 の RN 標準構成 |
 | ルーティング | **Expo Router**（ファイルベース） | React Navigation の上に乗る。web / ネイティブ共通 |
 | パッケージマネージャ | **npm**（11.x、Node 同梱） | pnpm / yarn は使わない |
-| 対象プラットフォーム | iOS / Android（Expo ネイティブ）＋ **Desktop（Windows・macOS）** | Desktop は下記のとおり RN Web ビルドを Tauri で包む |
+| 対象プラットフォーム | Android（Expo ネイティブ）＋ **Desktop（Windows・macOS）** | Desktop は下記のとおり RN Web ビルドを Tauri で包む。**iOS はこの学習プロジェクトでは対象外**（[todo.md](todo.md) #3。Windows 環境では Xcode/Mac が無く iOS のネイティブアプリをローカルビルドできない（EAS Build のクラウドビルドで、Apple Developer Program への加入なしで作れるのはシミュレータ向けビルドまで（シミュレータの実行自体には Mac/Xcode が必要）。自分の端末の実機で試すには、Mac 上のローカル Xcode ビルド（無料だがプロビジョニングが短期で失効）か、有料の Apple Developer Program〈年額 $99〉のいずれかが要り、TestFlight・App Store・Ad Hoc 配布にも同じ Program が必須）ため、この学習プロジェクトでは割愛） |
 | Desktop シェル | **Tauri 2**（core 2.11 系、システム WebView + Rust コア） | RN Web（React Native Web）ビルドを読み込み、`.msi` / `.dmg` を生成。Electron より軽量。**最低 Rust 1.77.2**、Windows は **MSVC C++ Build Tools ＋ WebView2**（WebView2 は導入済み）が前提 |
 | UI / スタイル | **NativeWind**（Tailwind for RN） | デザイントークン・ダークモード対応の詳細は → [todo.md](todo.md) |
 | アイコン | **lucide-react-native**（`1.46.0`）＋ **react-native-svg**（`15.15.4`）。Issue #144 で確定 | 線で描く SVG アイコン集（MIT）。絵文字は OS ごとに絵柄が変わるため使わない。大きさ・色の既定値は `src/components/Icon.tsx` にまとめる。react-native-svg はネイティブモジュールなので、追加・更新時は dev build を作り直す |
@@ -32,16 +32,16 @@
 | テスト | jest（`jest-expo` preset）＋ `@testing-library/react-native` ＋ `test-renderer` | ESLint 9 ＋ Prettier ＋ `tsc --noEmit`。MSW は jest-expo の RN 環境と相性が悪く Phase 1 で node 環境用に整える（[testing.md](testing.md)） |
 | バージョン固定 | `expoApp/package-lock.json`（CI は `npm ci`） | `.npmrc` に `legacy-peer-deps=true`（RN/Expo の peer 依存ずれを許容する実務的設定）。Issue #34 で確定 |
 | ネイティブ機能 | Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store` / `expo-network`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
-| 通信状態（オンライン / オフライン） | **expo-network**（`~57.0.2`。Issue #133 で確定） | Android / iOS の通信状態の変化を TanStack Query の `onlineManager` に伝える（オフライン中の一時停止と自動のやり直し、オフラインの案内）。Web / Tauri はブラウザの online / offline の知らせを TanStack Query が既定で使う |
-| ビルド / 配布 | EAS Build（クラウド）or ローカルビルド、Tauri の `.msi` / `.dmg` | iOS のローカルビルドは Windows では不可 → EAS Build（クラウド）。詳細 → [todo.md](todo.md) |
+| 通信状態（オンライン / オフライン） | **expo-network**（`~57.0.2`。Issue #133 で確定） | Android の通信状態の変化を TanStack Query の `onlineManager` に伝える（オフライン中の一時停止と自動のやり直し、オフラインの案内）。Web / Tauri はブラウザの online / offline の知らせを TanStack Query が既定で使う |
+| ビルド / 配布 | ローカルビルド（Android APK）、Tauri の `.msi` / `.dmg`（未署名。todo.md #31） | iOS は対象外のため EAS Build は使わない |
 
 ### (B) Kotlin Multiplatform トラック（随時）
 
 | 項目 | 採用 | 備考 |
 | --- | --- | --- |
 | 言語 | Kotlin | |
-| UI | Compose Multiplatform | Android / iOS / Desktop を単一コードベース |
-| 対象プラットフォーム | **Android / iOS / Desktop（Windows・macOS、JVM）** | ブラウザ（Web）は将来検討（→ [todo.md](todo.md)） |
+| UI | Compose Multiplatform | Android / Desktop を単一コードベース（iOS は対象外） |
+| 対象プラットフォーム | **Android / Desktop（Windows・macOS、JVM）** | **iOS は対象外**（TS トラックと同じ理由。[todo.md](todo.md) #3）。ブラウザ（Web）は将来検討（→ [todo.md](todo.md)） |
 | HTTP クライアント | Ktor Client | |
 | シリアライズ | kotlinx.serialization | OpenAPI から生成した Kotlin クライアント / DTO で使用 |
 | 画像選択 / カメラ | KMP 対応ライブラリ（例: Peekaboo）を候補として調査。Desktop はファイル選択ダイアログ | → [todo.md](todo.md) |
@@ -131,11 +131,11 @@
 - **TypeScript トラック（React Native / Expo / Expo Router / React Native Web / Tauri / NativeWind / TanStack Query / openapi-typescript / openapi-fetch）はすべて OSS で無料**（MIT / Apache 2.0）。Expo は EAS のクラウドビルドに無料枠＋有料プランがあるが、ローカルビルドなら費用は発生しない（→ [todo.md](todo.md)）。
 - **Kotlin Multiplatform / Compose Multiplatform も無料・オープンソース（Apache 2.0、JetBrains 製）。** ビルド・実行・配布にライセンス料はかからない（デスクトップアプリ含む）。IDE も IntelliJ IDEA Community / Android Studio は無料。
 - 費用が発生するのは**ストア配布・コード署名**で、これはフレームワーク非依存:
-  - Apple Developer Program $99/年（iOS 配布、macOS アプリの notarization）
+  - Apple Developer Program $99/年（iOS 配布、macOS アプリの notarization）。**iOS はこの学習プロジェクトでは対象外**（[todo.md](todo.md) #3）のため未取得。macOS アプリ自体は notarization なしでも起動時の警告を許容すれば配布できる
   - Google Play Developer $25（一度きり。APK 直接配布は不要）
   - Microsoft Store 登録 約 $19（一度きり。`.exe` / `.msi` 直接配布は不要）
   - Windows コード署名証明書 年 $100〜400 程度（任意。SmartScreen 警告回避用）
-- **課題提出・メンターへのデモ（TypeScript トラック）**: Tauri で生成した `.msi` / `.dmg` を渡す、または `npm run tauri dev` ＋ 画面共有。コード署名なしだと OS が「発行元不明」の警告を出すが、Windows は「詳細情報 → 実行」、macOS は右クリック →「開く」で回避できる。署名は課題提出時は不要。
+- **課題提出・メンターへのデモ（TypeScript トラック）**: Tauri で生成した `.msi` / `.dmg` を渡す、または `npm run tauri dev` ＋ 画面共有。コード署名なしだと OS が「発行元不明」の警告を出すが、Windows は「詳細情報 → 実行」、macOS は Gatekeeper の警告画面または「プライバシーとセキュリティ」設定から許可すれば回避できる（具体的な操作は macOS のバージョン・設定で変わりうる）。署名は課題提出時は不要。
 - **課題提出・メンターへのデモ（Kotlin トラック）**: `packageDistributionForCurrentOS` で生成した `.msi` / `.dmg` を渡す、または `./gradlew run` ＋ 画面共有。Java ランタイムは同梱されるためメンター側の事前準備は不要。
 - **バックエンドの Python スタック（FastAPI / Uvicorn / SQLModel / SQLAlchemy / Alembic / Pydantic / psycopg / argon2-cffi / PyJWT）はすべて OSS で無料**（MIT / Apache 2.0 / BSD / PSF）。Python 本体も同様。
 

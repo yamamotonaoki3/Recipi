@@ -68,7 +68,7 @@
 Webブラウザでは、refresh tokenをlocalStorageへ保存せず、HttpOnly Cookie
 （`recipi_refresh_token`）で保持する。Cookieは `SameSite=Lax`、本番では
 `Secure` を付け、`Path=/api/v1/auth` に限定する。WebのrefreshはCookieを自動送信し、
-JavaScriptからrefresh token本体を読み取らない。iOS / Android / Tauriは従来どおり
+JavaScriptからrefresh token本体を読み取らない。Android / Tauriは従来どおり
 Bearer tokenと各プラットフォームのセキュアストレージを使う。
 
 Cookie認証を使うWebの状態変更リクエストは、許可Originを限定し、CORSの
@@ -81,7 +81,7 @@ refresh tokenをJSON応答で受け取る。この印は開発・テスト環境
 
 | チェック | 挙動 |
 | --- | --- |
-| ON | リフレッシュトークンを端末のセキュアストレージ（iOS Keychain / Android Keystore）に**永続保存**。アプリ再起動時、保存済みリフレッシュトークンで自動的にアクセストークンを再取得（自動再ログイン） |
+| ON | リフレッシュトークンを端末のセキュアストレージ（Android Keystore）に**永続保存**。アプリ再起動時、保存済みリフレッシュトークンで自動的にアクセストークンを再取得（自動再ログイン） |
 | OFF | リフレッシュトークンを永続化しない（メモリ / セッションのみ）。アプリ再起動後は再ログインが必要 |
 
 - 永続保存とローテーションは両立する（保存＝置き場所、ローテーション＝値の入れ替え）。ON でも更新のたびに保存値を差し替える。

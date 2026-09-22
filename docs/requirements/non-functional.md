@@ -24,9 +24,9 @@
 - 「ログインを保持」OFF のときは、リフレッシュトークンを端末のセキュアストレージに永続化しない。
 - WebブラウザではリフレッシュトークンをlocalStorageに保存せず、HttpOnly Cookieで管理する。
 - Cookie認証の状態変更リクエストは、SameSite属性・許可Origin・CORS credentialsを適切に設定し、CSRFを防止する。
-- セキュアストレージの実体はプラットフォームごとに実装する（iOS: Keychain、Android: Keystore / EncryptedSharedPreferences、Desktop: OS のクレデンシャルストア。相当機能が無い場合の扱いは → [todo.md](todo.md)）。
-  - **TypeScript トラック**: `expo-secure-store`（iOS Keychain / Android Keystore）、デスクトップは Tauri の keyring / Stronghold プラグイン。
-  - **Kotlin トラック**: `expect` / `actual` で `androidMain` / `iosMain` / `desktopMain` に実装。
+- セキュアストレージの実体はプラットフォームごとに実装する（Android: Keystore / EncryptedSharedPreferences、Desktop: OS のクレデンシャルストア。iOS は対象外。相当機能が無い場合の扱いは → [todo.md](todo.md)）。
+  - **TypeScript トラック**: `expo-secure-store`（Android Keystore）、デスクトップは Tauri の keyring / Stronghold プラグイン。
+  - **Kotlin トラック**: `expect` / `actual` で `androidMain` / `desktopMain` に実装。
 
 ### パスワードリセット（[features/auth.md](features/auth.md)）
 
@@ -67,7 +67,7 @@
 - レシピ一覧 / フィード API のレスポンスは通常時 300ms 以内（ローカル環境目安）。
 - 一覧取得時、`isFollowing` / `isFavorited` は**まとめて取得**し N+1 クエリを避ける。各種カウント（`favoriteCount` / `commentCount` / フォロー数 / フォロワー数）は**カウント列キャッシュ**（下記）から読むだけで済む。
 - 画像: サムネイル 1 枚・手順画像は手順 1 行につき 1 枚・感想画像は感想 1 件につき 1 枚・アバター 1 枚。いずれも 1 枚あたり最大 5MB（初期値、実装時に調整可。[features/image.md](features/image.md)）。
-- 通知一覧の取得時、未読件数も同時に返して往復を減らす。`followee_new_recipe` の fan-out（フォロワー全員への配布）は**公開レシピ作成トランザクション内で `notification_outbox` に 1 行 → コミット後に `BackgroundTasks` が配布 → 落ちた分は定期スイープが回収**する（[processing-model.md](processing-model.md) §7・§9）。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）は発火元と同一トランザクションで作る。大量フォロワー時の性能測定と専用ジョブキューの要否は → [todo.md](todo.md) #18。
+- 通知一覧の取得時、未読件数も同時に返して往復を減らす。`followee_new_recipe` の fan-out（フォロワー全員への配布）は**公開レシピ作成トランザクション内で `notification_outbox` に 1 行 → コミット後に `BackgroundTasks` が配布 → 落ちた分は定期スイープが回収**する（[processing-model.md](processing-model.md) §7・§9）。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）は発火元と同一トランザクションで作る。大量フォロワー時の探索的性能測定は実施済み（[testing.md](testing.md) §9）。専用ジョブキューへの移行は行わない（学習用アプリのため不要と確定。[todo.md](todo.md) #18）。
 
 ### ページング（横断・重要）
 
@@ -172,13 +172,12 @@
 
 ## 対応プラットフォーム
 
-フロントエンドは 2 トラック（[tech-stack.md](tech-stack.md)）。どちらも Android / iOS / Desktop（Windows・macOS）を対象とする。
+フロントエンドは 2 トラック（[tech-stack.md](tech-stack.md)）。どちらも Android / Desktop（Windows・macOS）を対象とする。**iOS はこの学習プロジェクトでは対象外**（[todo.md](todo.md) #3。Windows 環境では Xcode/Mac が無く iOS のネイティブアプリをローカルビルドできない（EAS Build のクラウドビルドで、Apple Developer Program への加入なしで作れるのはシミュレータ向けビルドまで（シミュレータの実行自体には Mac/Xcode が必要）。自分の端末の実機で試すには、Mac 上のローカル Xcode ビルド（無料だがプロビジョニングが短期で失効）か、有料の Apple Developer Program〈年額 $99〉のいずれかが要り、TestFlight・App Store・Ad Hoc 配布にも同じ Program が必須）ため、この学習プロジェクトでは割愛）。
 
-- **TypeScript トラック（必須）**: iOS / Android = Expo（React Native）。Desktop = React Native Web ビルドを Tauri 2 でパッケージ。
-- **Kotlin トラック（随時）**: Android / iOS / Desktop = Compose Multiplatform（Desktop は JVM）。
+- **TypeScript トラック（必須）**: Android = Expo（React Native）。Desktop = React Native Web ビルドを Tauri 2 でパッケージ。
+- **Kotlin トラック（随時・未着手）**: Android / Desktop = Compose Multiplatform（Desktop は JVM）。
 
 - **Android**: minSdk は実装時に確定（目安 API 26 / Android 8.0 以上）。
-- **iOS**: 対応下限は実装時に確定（目安 iOS 15 以上）。
 - **Desktop**: Windows / macOS。最小 OS バージョン・ウィンドウ最小サイズは実装時に確定。
 - ブラウザ（Web）単体配信は対象外（将来検討）。TS トラックの RN Web ビルドは Tauri デスクトップの土台としてのみ使う。
 - → [todo.md](todo.md)

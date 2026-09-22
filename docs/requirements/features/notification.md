@@ -133,7 +133,7 @@
 
 ## 8. 未確定・メモ
 
-- fan-out（`followee_new_recipe`）は**公開レシピ作成トランザクション内で `notification_outbox` に 1 行だけ書き、コミット後に `BackgroundTasks` が配布、落ちた分は定期スイープが回収**する（[../processing-model.md](../processing-model.md) §3・§7・§9）。フォロワー集合は配布時点の `follows` で解決する。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）は発火元と同一トランザクションで作る（実装は Phase 8）。大量フォロワー時の性能測定・専用ジョブキューの要否は → [../todo.md](../todo.md) #18
+- fan-out（`followee_new_recipe`）は**公開レシピ作成トランザクション内で `notification_outbox` に 1 行だけ書き、コミット後に `BackgroundTasks` が配布、落ちた分は定期スイープが回収**する（[../processing-model.md](../processing-model.md) §3・§7・§9）。フォロワー集合は配布時点の `follows` で解決する。単一行の通知（`followed` / `recipe_favorited` / `recipe_commented`）は発火元と同一トランザクションで作る（実装は Phase 8）。大量フォロワー時の性能測定は実施済み（探索的測定でフォロワー1,000人まで問題なし）。専用ジョブキューは導入しない（確定 → [../todo.md](../todo.md) #18）
 - 通知の保持期間・自動削除 → Issue #72 で確定: 既読から 90 日を過ぎた通知と、処理済みから 7 日を過ぎた `notification_outbox` を `python -m app.jobs.cleanup_notifications` が消す（未読・未処理は残す）
 - fan-out の受信者は配布処理の実行時点の `follows` で決まる（障害回収が遅れると投稿時点のフォロワーと差が出うる）。厳密な投稿時点スナップショットが要るかは実装時に判断（現状は許容。[../processing-model.md](../processing-model.md) §9）
 - まとめ表示（「〇〇さん他 3 人がフォローしました」）→ 将来
