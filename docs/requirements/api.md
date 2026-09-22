@@ -13,6 +13,7 @@
 - 1 ページ 20 件目安
 - 日時は ISO 8601（UTC）
 - レスポンスの `thumbnailUrl` / `avatarUrl` / `imageUrl` は、サーバーが永続化されたオブジェクトキーから生成する表示用 URL（派生値）で、DB には永続化しない。**キーの置き場所で種類が変わる**（[features/image.md](features/image.md) §4・Issue #185）: `avatarUrl` は安定 URL（本番は CloudFront）、レシピのサムネ・手順画像・感想画像は**期限付きの署名付き URL**（既定 1 時間）。期限切れの URL は取得できないため、クライアントは再取得が要る
+  - **署名付き URL のホスト**は、ブラウザ / アプリが実際に読みに行けるホストで作る（Issue #268）。ローカルの Docker 構成では API の接続先（`S3_ENDPOINT_URL=http://minio:9000`、コンテナ間の名前）とブラウザ向けのホストが異なるため、署名専用のクライアントは `S3_PUBLIC_URL_BASE` の origin で署名する。本番（AWS）は接続先とブラウザ向けが同じなので影響しない
 - 各操作のトランザクション境界・副作用の同期 / 非同期の別は [processing-model.md](processing-model.md) を正とする。例: `POST /recipes`（公開）は 201 を返した**後**にフォロワー通知を非同期で生成する。画像の実削除は削除キュー経由の定期バッチで行う
 
 ### 統一エラーレスポンス
@@ -45,6 +46,8 @@
 | PATCH | `/users/me` | 必要 | `displayName`, `bio`, `emailPublic`, `xUrl`, `xPublic`, `instagramUrl`, `instagramPublic`, `otherUrl`, `otherPublic` |
 | PUT | `/users/me/avatar` | 必要 | アバター画像アップロード（multipart）。200 `{ avatarUrl }`。形式・サイズ不正は 400 |
 | DELETE | `/users/me/avatar` | 必要 | アバター削除。設定していなくても 204（冪等） |
+| PUT | `/users/me/security-question` | 必要 | 現在のパスワードで再認証してから、秘密の質問・答えを変更。204（本文なし）。現在のパスワード違いは 403 `REAUTH_FAILED`（401 にしない） |
+| PUT | `/users/me/email` | 必要 | 現在のパスワードで再認証してからメールアドレスを変更（`currentPassword`, `email`, `rememberMe`）。200 `AuthTokenResponse`（成功すると全セッションを失効させ、呼び出し元用の新トークン対を返す）。再確認メールは送らない（[features/auth.md](features/auth.md) §8）。現在のパスワード違いは 403 `REAUTH_FAILED`、既に使われているアドレス（退会済みが持つアドレスも含む）は 409 |
 | DELETE | `/users/me` | 必要 | 復帰可能なアカウント退会。成功時 204。投稿レシピは保持して匿名表示、本人の行動データとトークンを削除する。以降の同トークンは 401 |
 | GET | `/users/{id}/recipes` | 必要 | そのユーザーのレシピ一覧（他人には公開のみ、本人には非公開も）。query: `limit`, `cursor`。1 件は `GET /users/me/recipes` と同じ `RecipeSummary`（`author` / `favoriteCount` / `isPublic` を含む） |
 
