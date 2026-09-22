@@ -4,7 +4,7 @@
 
 手軽にレシピを登録・共有・検索できるアプリ。モバイルファーストで Android / iOS / デスクトップ（Windows・macOS）に対応。フォロー / お気に入り / 感想 / 通知など軽いソーシャル機能も持つ。バックエンドとフロントエンドを持つ複数レイヤー構成。
 
-現在は要件定義フェーズ。要件定義書は機能別に分割され [docs/requirements/](docs/requirements/)（索引: [docs/requirements/README.md](docs/requirements/README.md)）。全機能版だが、**MVP（初回リリース）は Phase 4 まで**に確定（候補 B: 認証・レシピ CRUD・画像・ナビ・ホーム「全体」フィード・検索・閲覧履歴。[docs/requirements/roadmap.md](docs/requirements/roadmap.md) 「MVP ライン」）。Phase 5 以降は MVP 後、Phase 11（AI）は MVP 対象外。
+実装フェーズ（2026-09-22 時点）。frontend-ts（必須トラック）は Phase 0〜9・11 が完了し、Phase 10（仕上げ）も主要項目が完了している（詳細は [docs/requirements/roadmap.md](docs/requirements/roadmap.md) の状況列）。frontend-kotlin（随時トラック）は未着手。要件定義書は機能別に分割され [docs/requirements/](docs/requirements/)（索引: [docs/requirements/README.md](docs/requirements/README.md)）。全機能版だが、**MVP（初回リリース）は Phase 4 まで**に確定（候補 B: 認証・レシピ CRUD・画像・ナビ・ホーム「全体」フィード・検索・閲覧履歴。[docs/requirements/roadmap.md](docs/requirements/roadmap.md) 「MVP ライン」）。この線引きはスコープ定義であって進捗記述ではなく、Phase 5 以降（MVP 後）・Phase 11（AI・MVP 対象外）を先行実装していても変更しない。
 
 ## 技術スタック
 
