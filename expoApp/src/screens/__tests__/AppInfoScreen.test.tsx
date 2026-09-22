@@ -18,6 +18,7 @@ jest.mock("expo-router", () => ({
 
 const mockGetCurrentAppVersion = jest.fn();
 const mockOpenReleasePage = jest.fn();
+const mockCheckForUpdate = jest.fn();
 
 jest.mock("@/features/appUpdate/config", () => ({
   getCurrentAppVersion: () => mockGetCurrentAppVersion(),
@@ -26,6 +27,9 @@ jest.mock("@/features/appUpdate/config", () => ({
 jest.mock("@/features/appUpdate/openExternal", () => ({
   openReleasePage: (url: string) => mockOpenReleasePage(url),
 }));
+jest.mock("@/features/appUpdate/api", () => ({
+  checkForUpdate: () => mockCheckForUpdate(),
+}));
 
 beforeEach(() => {
   mockBack.mockClear();
@@ -33,6 +37,7 @@ beforeEach(() => {
   mockCanGoBack = true;
   mockGetCurrentAppVersion.mockReset();
   mockOpenReleasePage.mockReset();
+  mockCheckForUpdate.mockReset();
 });
 
 describe("AppInfoScreen", () => {
@@ -68,12 +73,40 @@ describe("AppInfoScreen", () => {
     expect(await findByTestId("app-info-open-error")).toBeTruthy();
   });
 
-  it("「更新を確認」ボタンはStage1では非活性", async () => {
+  it("「更新を確認」を押すと結果（最新版）を表示する（Issue #318）", async () => {
     mockGetCurrentAppVersion.mockResolvedValue("1.0.0");
+    mockCheckForUpdate.mockResolvedValue({ state: "upToDate" });
     const { findByTestId } = await render(<AppInfoScreen />);
-    expect((await findByTestId("app-info-check-update")).props.accessibilityState.disabled).toBe(
-      true,
-    );
+    await fireEvent.press(await findByTestId("app-info-check-update"));
+    expect((await findByTestId("app-info-update-state")).props.children).toEqual([
+      "最新版です",
+      "",
+    ]);
+  });
+
+  it("「更新を確認」で新版があればバージョン付きで表示する", async () => {
+    mockGetCurrentAppVersion.mockResolvedValue("1.0.0");
+    mockCheckForUpdate.mockResolvedValue({
+      state: "updateAvailable",
+      release: { version: "1.2.3" },
+    });
+    const { findByTestId } = await render(<AppInfoScreen />);
+    await fireEvent.press(await findByTestId("app-info-check-update"));
+    expect((await findByTestId("app-info-update-state")).props.children).toEqual([
+      "新しいバージョンがあります",
+      "（v1.2.3）",
+    ]);
+  });
+
+  it("確認に失敗しても結果を表示する（クラッシュしない）", async () => {
+    mockGetCurrentAppVersion.mockResolvedValue("1.0.0");
+    mockCheckForUpdate.mockResolvedValue({ state: "checkFailed" });
+    const { findByTestId } = await render(<AppInfoScreen />);
+    await fireEvent.press(await findByTestId("app-info-check-update"));
+    expect((await findByTestId("app-info-update-state")).props.children).toEqual([
+      "確認できませんでした",
+      "",
+    ]);
   });
 
   it("戻れるときは戻り、戻れないときはログイン画面へ置き換える", async () => {

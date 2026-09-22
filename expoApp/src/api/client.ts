@@ -21,10 +21,12 @@
  * 「画面遷移」は useProtectedRoute の責務、と分けている
  * （features/auth/useProtectedRoute.ts 参照）。
  */
+import { onlineManager } from "@tanstack/react-query";
 import createClient from "openapi-fetch";
 
 import { RefreshCoordinator, type RefreshResult } from "./refreshCoordinator";
 import type { paths } from "./schema";
+import { useBackendReachability } from "../features/appUpdate/backendReachability";
 import { isTauriTokenClient, usesCookieAuth } from "../lib/authPlatform";
 import { secureStorage } from "../lib/secureStorage";
 import { useSession } from "../store/session";
@@ -54,6 +56,9 @@ const REFRESH_PATH = "/api/v1/auth/refresh";
 // トークンがサーバー側に残り続けてしまう。ボディを新トークンで作り直す必要が
 // あるため、パスで判定してリトライ処理を分ける。
 const LOGOUT_PATH = "/api/v1/auth/logout";
+// backend固有の接続不能とみなすHTTPステータス（Issue #318）。
+// ゲートウェイ層は応答しているがbackend本体が応答不能、という状態。
+const BACKEND_UNREACHABLE_STATUSES = new Set([502, 503, 504]);
 
 async function callRefreshEndpoint(refreshToken: string): Promise<RefreshResult> {
   try {
@@ -136,6 +141,15 @@ api.use({
     const requestClone = pendingRequestClones.get(id);
     pendingRequestClones.delete(id);
 
+    // backend接続状態の判定（Issue #318）。401の分岐とは独立に行う。
+    // 502/503/504以外（2xx・400・401・403・404・409・422・429等の業務エラー含む）
+    // はbackendが応答できている証拠として reachable に戻す。
+    if (BACKEND_UNREACHABLE_STATUSES.has(response.status)) {
+      useBackendReachability.getState().markUnreachable();
+    } else {
+      useBackendReachability.getState().markReachable();
+    }
+
     // openapi-fetch 0.17 の onResponse は「レスポンスを差し替えるときだけ
     // `new Response()` を返す。変えないなら undefined を返す」という契約。
     // 受け取った `response` をそのまま return すると
@@ -196,5 +210,11 @@ api.use({
   onError({ id }) {
     // ネットワークエラー等で onResponse が呼ばれずに終わった場合の後始末。
     pendingRequestClones.delete(id);
+    // raw fetch自体が例外を投げた＝真の意味で「backendに届かない」状態
+    // （DNS失敗・接続拒否・タイムアウト等）。端末がオフラインのときは
+    // 既存の OfflineBanner が担当するため、二重に判定しない（Issue #318）。
+    if (onlineManager.isOnline()) {
+      useBackendReachability.getState().markUnreachable();
+    }
   },
 });

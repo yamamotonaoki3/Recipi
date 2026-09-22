@@ -38,6 +38,10 @@ const { secureStorage } = require("../lib/secureStorage") as typeof import("../l
 // 登録するので、上の jest.mock より後に import する。
 // eslint-disable-next-line import/first
 import { api } from "./client";
+// eslint-disable-next-line import/first
+import { useBackendReachability } from "../features/appUpdate/backendReachability";
+// eslint-disable-next-line import/first
+import { onlineManager } from "@tanstack/react-query";
 
 const BASE_URL = "http://localhost:8000";
 
@@ -47,6 +51,8 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   server.resetHandlers();
   useSession.getState().clear();
+  useBackendReachability.setState({ status: "ok" });
+  onlineManager.setOnline(true);
   jest.clearAllMocks();
 });
 afterAll(() => server.close());
@@ -248,5 +254,49 @@ describe("client.ts の認証ミドルウェア", () => {
     // サーバー側は「もう無効なトークン」を渡されたことになり、実際には
     // ローテーション後の新しいリフレッシュトークンを失効できない。
     expect(receivedLogoutBody).toEqual({ refreshToken: "new-refresh" });
+  });
+});
+
+describe("client.ts とbackendReachability連携（Issue #318）", () => {
+  it("503を受けたらmarkUnreachable()が呼ばれる", async () => {
+    server.use(http.get(`${BASE_URL}/healthz`, () => new HttpResponse(null, { status: 503 })));
+    await api.GET("/healthz");
+    expect(useBackendReachability.getState().status).toBe("unreachable");
+  });
+
+  it("502/504でも同様にunreachableになる", async () => {
+    server.use(http.get(`${BASE_URL}/healthz`, () => new HttpResponse(null, { status: 502 })));
+    await api.GET("/healthz");
+    expect(useBackendReachability.getState().status).toBe("unreachable");
+  });
+
+  it("正常応答(200)ならmarkReachable()でokに戻る", async () => {
+    useBackendReachability.getState().markUnreachable();
+    server.use(http.get(`${BASE_URL}/healthz`, () => HttpResponse.json({ status: "ok" })));
+    await api.GET("/healthz");
+    expect(useBackendReachability.getState().status).toBe("ok");
+  });
+
+  it("404等の業務エラーはbackendが応答している証拠としてreachable扱いにする", async () => {
+    useBackendReachability.getState().markUnreachable();
+    server.use(
+      http.get(`${BASE_URL}/api/v1/recipes/:recipe_id`, () => new HttpResponse(null, { status: 404 })),
+    );
+    await api.GET("/api/v1/recipes/{recipe_id}", { params: { path: { recipe_id: "r1" } } });
+    expect(useBackendReachability.getState().status).toBe("ok");
+  });
+
+  it("端末オンライン中にfetch自体が失敗したらmarkUnreachable()が呼ばれる", async () => {
+    server.use(http.get(`${BASE_URL}/healthz`, () => HttpResponse.error()));
+    onlineManager.setOnline(true);
+    await api.GET("/healthz").catch(() => undefined);
+    expect(useBackendReachability.getState().status).toBe("unreachable");
+  });
+
+  it("端末オフライン中はfetch失敗してもmarkUnreachable()を呼ばない（OfflineBannerの担当）", async () => {
+    server.use(http.get(`${BASE_URL}/healthz`, () => HttpResponse.error()));
+    onlineManager.setOnline(false);
+    await api.GET("/healthz").catch(() => undefined);
+    expect(useBackendReachability.getState().status).toBe("ok");
   });
 });

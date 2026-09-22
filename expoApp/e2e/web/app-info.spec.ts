@@ -45,7 +45,7 @@ test("バックエンドが停止していてもアプリ情報を表示でき�
   await expect(page.getByTestId("app-info-version")).toHaveText(/バージョン \d+\.\d+\.\d+/, {
     timeout: 10_000,
   });
-  // 更新を確認ボタン（Stage1では非活性）・リリースボタンは表示されクラッシュしない。
+  // 更新を確認ボタン・リリースボタンは表示されクラッシュしない。
   await expect(page.getByTestId("app-info-check-update")).toBeVisible();
   await expect(page.getByTestId("app-info-view-release")).toBeVisible();
 });

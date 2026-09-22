@@ -12,6 +12,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useAuthRefresh } from "@/features/auth/useAuthRefresh";
+import { AppUpdateGate } from "@/features/appUpdate/AppUpdateGate";
 import { QueryProvider } from "@/providers/QueryProvider";
 import "../global.css"; // NativeWind（className）を有効にする
 
@@ -40,6 +41,9 @@ export default function RootLayout() {
             TanStack Query が知っているので QueryProvider の内側に置く。ログイン前の
             画面にも出るよう、ルートに 1 つだけ置く。 */}
         <OfflineBanner />
+        {/* 更新通知・backend接続不能警告（Issue #318）。OfflineBannerと同じく
+            未ログイン画面にも出るよう、ルートに1つだけ置く。 */}
+        <AppUpdateGate />
         <Stack screenOptions={{ headerShown: false }} />
       </QueryProvider>
     </SafeAreaProvider>
