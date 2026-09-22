@@ -86,7 +86,10 @@ jobs:
       - name: タグの出所を検証（mainに到達済みか）
         run: |
           set -euo pipefail
-          git fetch origin main --depth=1
+          # checkoutをfetch-depth: 0にしているため全履歴が既にある。
+          # ここで--depth=1再フェッチすると履歴が切り詰められ、
+          # 共通祖先が失われてmerge-baseの判定が正しく行えなくなる。
+          git fetch origin main
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
             echo "タグ ${TAG} のコミット ${GITHUB_SHA} はmainブランチに到達していません" >&2
             exit 1
@@ -223,11 +226,22 @@ jobs:
           APK="android/app/build/outputs/apk/release/app-release.apk"
           BUILD_TOOLS=$(ls "$ANDROID_HOME"/build-tools | sort -V | tail -1)
           APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+          # keytoolは"SHA256: AA:BB:..."形式、apksignerは"SHA-256 digest: aabb..."
+          # （コロン無し・小文字16進）形式で出す。コロン・空白・ラベルを除去し
+          # 小文字化してから比較する。
           EXPECTED_FP=$(keytool -list -v -keystore android/app/release.keystore \
-            -storepass "$ANDROID_RELEASE_KEYSTORE_PASSWORD" 2>/dev/null | grep 'SHA256:' | head -1)
-          ACTUAL_FP=$("$APKSIGNER" verify --print-certs "$APK" | grep 'SHA-256 digest' | head -1)
+            -storepass "$ANDROID_RELEASE_KEYSTORE_PASSWORD" 2>/dev/null \
+            | grep 'SHA256:' | head -1 | sed -E 's/.*SHA256:\s*//' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          ACTUAL_FP=$("$APKSIGNER" verify --print-certs "$APK" \
+            | grep 'SHA-256 digest' | head -1 | sed -E 's/.*digest:\s*//' | tr -d ':' | tr '[:upper:]' '[:lower:]')
           if [ -z "$EXPECTED_FP" ] || [ -z "$ACTUAL_FP" ]; then
             echo "署名情報の取得に失敗しました" >&2
+            exit 1
+          fi
+          if [ "$EXPECTED_FP" != "$ACTUAL_FP" ]; then
+            echo "APKの署名鍵がkeystoreと一致しません（意図しない鍵で署名されています）" >&2
+            echo "期待値: $EXPECTED_FP" >&2
+            echo "実際値: $ACTUAL_FP" >&2
             exit 1
           fi
 
