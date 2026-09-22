@@ -22,7 +22,7 @@ Android / デスクトップ（Windows・macOS）に対応しています。**iO
 
 ## アプリの入手方法
 
-Windows（`.msi`）/ Android（`.apk`）は [GitHub Releases](https://github.com/yamamotonaoki3/Recipi/releases) から配布しています。学習用途のためコード署名は行っておらず、インストール時にOSの警告（Windows「発行元不明」／Android「提供元不明」）が表示されます。内容を確認のうえ許可してください。
+Windows（`.msi`）/ Android（`.apk`）は [GitHub Releases](https://github.com/yamamotonaoki3/Recipi/releases) から配布しています。学習用途のため証明機関の正規証明書は取得しておらず、Windowsは無署名、Androidは自己署名鍵での署名です。インストール時にOSの警告（Windows「発行元不明」／Android「提供元不明」）が表示されるので、内容を確認のうえ許可してください。
 
 インストール後は、アプリが起動時にGitHub Releaseの最新版を自動確認し、新しいバージョンがあればアプリ内で通知します。通知から「更新する」を選ぶと、インストール案内とOS別の配布ファイルへの導線が表示されます（ログイン画面の「アプリ情報」からも同じ確認・更新操作が行えます）。詳細な仕様は [更新機能](docs/requirements/features/update.md) を参照してください。
 
