@@ -145,19 +145,19 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 
 ## 7. 受け入れ基準
 
-- [ ] 表示名を変更すると、自分の投稿・一覧・感想の表示名に反映される
-- [ ] 表示名が空 / 31 文字以上だと 400
-- [ ] 自己紹介文を保存でき、本人・他人のプロフィールに改行を保って表示できる
-- [ ] 自己紹介文が空欄なら未設定になり、2,001 文字以上だと 400
-- [ ] URL 項目に不正な文字列を入れると 400
-- [ ] 公開トグル OFF の項目は、他人が `GET /users/{id}` しても返らない
-- [ ] 公開トグル ON にした項目だけが他人のプロフィール画面に表示される
-- [ ] アバターを設定 / 変更 / 削除でき、一覧カード・詳細・プロフィールに反映される
-- [ ] アカウント削除の確認ダイアログを経ないと削除できない
-- [ ] アカウント削除後、公開レシピは残り投稿者が「アカウント削除済み」と表示され、プロフィールは開けない
-- [ ] アカウント削除後、本人のフォロー・お気に入り・感想・通知・閲覧履歴が削除される
+- [x] 表示名を変更すると、自分の投稿・一覧・感想の表示名に反映される（`backend/tests/test_profile.py::test_display_name_change_is_reflected_everywhere`。投稿詳細・フィード・自分のレシピ一覧・プロフィール・フォロー一覧への反映を確認。感想欄そのものの表示名反映は別テストでは確認できていない）
+- [x] 表示名が空 / 31 文字以上だと 400（`backend/tests/test_profile.py::test_display_name_boundaries`、`backend/tests/test_users_me.py::test_update_display_name_length_boundary_returns_400`）
+- [x] 自己紹介文を保存でき、本人・他人のプロフィールに改行を保って表示できる（`backend/tests/test_profile.py::test_bio_validation`〈本人・改行保持〉、`test_bio_is_visible_to_other_users`〈他人向け〉）
+- [x] 自己紹介文が空欄なら未設定になり、2,001 文字以上だと 400（`backend/tests/test_profile.py::test_bio_validation`、`test_null_bio_clears_the_value`）
+- [x] URL 項目に不正な文字列を入れると 400（`backend/tests/test_profile.py::test_url_validation`）
+- [x] 公開トグル OFF の項目は、他人が `GET /users/{id}` しても返らない（`backend/tests/test_profile.py::test_public_profile_contains_only_public_items`）
+- [x] 公開トグル ON にした項目だけが他人のプロフィール画面に表示される（API: `backend/tests/test_profile.py::test_public_profile_contains_only_public_items`、`test_public_toggle_on_without_value_has_no_key`。画面: `expoApp/src/screens/__tests__/UserProfileScreen.test.tsx::"表示名・自己紹介文・フォロー数・公開 ON の連絡先だけを出す"`）
+- [x] アバターを設定 / 変更 / 削除でき、一覧カード・詳細・プロフィールに反映される（`backend/tests/test_avatar.py::test_set_avatar_saves_object_and_updates_profile`〈設定〉、`test_replace_queues_old_key`〈変更〉、`test_delete_avatar_queues_key_and_is_idempotent`〈削除〉、`test_avatar_url_is_reflected_everywhere`〈一覧・詳細・プロフィール等への反映〉）
+- [x] アカウント削除の確認ダイアログを経ないと削除できない（`expoApp/src/screens/__tests__/MyPageScreen.test.tsx::"アカウント削除は確認後にだけ実行する"`）
+- [x] アカウント削除後、公開レシピは残り投稿者が「アカウント削除済み」と表示され、プロフィールは開けない（`backend/tests/test_account_deletion.py::test_deactivate_account_keeps_recipes_and_fixes_counts`）
+- [x] アカウント削除後、本人のフォロー・お気に入り・感想・通知・閲覧履歴が削除される（`backend/tests/test_account_deletion.py::test_deactivate_account_keeps_recipes_and_fixes_counts`。お気に入り・感想は本人行 0 件を直接確認、フォローは削除後に相手側のフォロー数が 0 に再計算されることで間接確認。通知は本人コメント紐づけ分のみ、閲覧履歴は件数の直接 0 確認はしていない）
 - [ ] 退会済みアカウントを確認後に再開でき、プロフィール・レシピが復帰する
-- [ ] アカウント削除後、削除前に発行された既存のアクセストークンでリクエストすると 401 になる
+- [x] アカウント削除後、削除前に発行された既存のアクセストークンでリクエストすると 401 になる（`backend/tests/test_account_deletion.py::test_deactivate_account_keeps_recipes_and_fixes_counts`、`backend/tests/test_auth_login.py::test_deactivated_account_requires_explicit_reactivation`）
 
 ## 8. 未確定・メモ
 
