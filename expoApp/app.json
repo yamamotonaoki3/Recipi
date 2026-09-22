@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.recipi.app",
+      "versionCode": 1000000,
       "adaptiveIcon": {
         "backgroundColor": "#FC6338",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

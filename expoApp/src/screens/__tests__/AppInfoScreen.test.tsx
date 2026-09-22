@@ -19,6 +19,7 @@ jest.mock("expo-router", () => ({
 const mockGetCurrentAppVersion = jest.fn();
 const mockOpenReleasePage = jest.fn();
 const mockCheckForUpdate = jest.fn();
+const mockStartInstall = jest.fn();
 
 jest.mock("@/features/appUpdate/config", () => ({
   getCurrentAppVersion: () => mockGetCurrentAppVersion(),
@@ -30,6 +31,9 @@ jest.mock("@/features/appUpdate/openExternal", () => ({
 jest.mock("@/features/appUpdate/api", () => ({
   checkForUpdate: () => mockCheckForUpdate(),
 }));
+jest.mock("@/features/appUpdate/installer", () => ({
+  startInstall: (release: unknown) => mockStartInstall(release),
+}));
 
 beforeEach(() => {
   mockBack.mockClear();
@@ -38,6 +42,8 @@ beforeEach(() => {
   mockGetCurrentAppVersion.mockReset();
   mockOpenReleasePage.mockReset();
   mockCheckForUpdate.mockReset();
+  mockStartInstall.mockReset();
+  mockStartInstall.mockResolvedValue({ ok: true });
 });
 
 describe("AppInfoScreen", () => {
@@ -96,6 +102,28 @@ describe("AppInfoScreen", () => {
       "新しいバージョンがあります",
       "（v1.2.3）",
     ]);
+  });
+
+  it("新版があるとき「更新する」ボタンを出し、押すとインストール案内を表示する（Issue #319）", async () => {
+    mockGetCurrentAppVersion.mockResolvedValue("1.0.0");
+    const release = { version: "1.2.3", title: "", publishedAt: "", bodyUrl: "", assets: {} };
+    mockCheckForUpdate.mockResolvedValue({ state: "updateAvailable", release });
+    const { findByTestId } = await render(<AppInfoScreen />);
+    await fireEvent.press(await findByTestId("app-info-check-update"));
+    await fireEvent.press(await findByTestId("app-info-install-update"));
+    expect(await findByTestId("install-guide-dialog")).toBeTruthy();
+
+    await fireEvent.press(await findByTestId("install-guide-dialog-confirm"));
+    expect(mockStartInstall).toHaveBeenCalledWith(release);
+  });
+
+  it("最新版のときは「更新する」ボタンを出さない", async () => {
+    mockGetCurrentAppVersion.mockResolvedValue("1.0.0");
+    mockCheckForUpdate.mockResolvedValue({ state: "upToDate" });
+    const { findByTestId, queryByTestId } = await render(<AppInfoScreen />);
+    await fireEvent.press(await findByTestId("app-info-check-update"));
+    await findByTestId("app-info-update-state");
+    expect(queryByTestId("app-info-install-update")).toBeNull();
   });
 
   it("確認に失敗しても結果を表示する（クラッシュしない）", async () => {

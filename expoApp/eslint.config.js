@@ -38,6 +38,19 @@ module.exports = [
     },
   },
   {
+    // CI専用のNode.js CommonJSスクリプト（release.ymlから呼ばれる）。
+    files: ["scripts/ci/**/*.js"],
+    languageOptions: {
+      globals: {
+        require: "readonly",
+        module: "readonly",
+        __dirname: "readonly",
+        process: "readonly",
+        console: "readonly",
+      },
+    },
+  },
+  {
     ignores: [
       "dist/*",
       "coverage/*",

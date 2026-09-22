@@ -12,11 +12,13 @@ import { Text, View } from "react-native";
 import { checkForUpdate } from "./api";
 import { useBackendReachability } from "./backendReachability";
 import { getLatestReleaseUrl } from "./config";
+import { startInstall } from "./installer";
 import { openReleasePage } from "./openExternal";
 import type { ReleaseInfo } from "./types";
 import { useUpdateDismissal } from "./updateDismissal";
 import { useHealth } from "@/api/health";
 import { ConnectivityWarningDialog } from "@/components/ConnectivityWarningDialog";
+import { InstallGuideDialog } from "@/components/InstallGuideDialog";
 import { UpdateNotificationBanner } from "@/components/UpdateNotificationBanner";
 
 export function AppUpdateGate() {
@@ -35,6 +37,7 @@ export function AppUpdateGate() {
     if (status === "ok") setDialogDismissed(false);
   }
   const health = useHealth();
+  const [installGuideVisible, setInstallGuideVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,10 +65,17 @@ export function AppUpdateGate() {
       {showUpdateBanner && release && (
         <UpdateNotificationBanner
           release={release}
-          // インストーラー連携はStage 3（Issue #319）で実装する。
-          onUpdate={() => void openReleasePage(release.bodyUrl || getLatestReleaseUrl())}
+          onUpdate={() => setInstallGuideVisible(true)}
           onDismiss={() => dismiss(release.version)}
           onViewRelease={() => void openReleasePage(release.bodyUrl || getLatestReleaseUrl())}
+        />
+      )}
+
+      {release && (
+        <InstallGuideDialog
+          visible={installGuideVisible}
+          onConfirm={() => startInstall(release)}
+          onClose={() => setInstallGuideVisible(false)}
         />
       )}
 

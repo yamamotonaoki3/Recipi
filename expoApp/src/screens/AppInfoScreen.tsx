@@ -11,10 +11,12 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BackLabel } from "@/components/BackLabel";
+import { InstallGuideDialog } from "@/components/InstallGuideDialog";
 import { checkForUpdate } from "@/features/appUpdate/api";
 import { getCurrentAppVersion, getLatestReleaseUrl } from "@/features/appUpdate/config";
+import { startInstall } from "@/features/appUpdate/installer";
 import { openReleasePage } from "@/features/appUpdate/openExternal";
-import type { UpdateState } from "@/features/appUpdate/types";
+import type { ReleaseInfo, UpdateState } from "@/features/appUpdate/types";
 
 const FALLBACK_PATH = "/(auth)/login";
 
@@ -33,7 +35,8 @@ export function AppInfoScreen() {
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState(false);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
-  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [release, setRelease] = useState<ReleaseInfo | null>(null);
+  const [installGuideVisible, setInstallGuideVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +65,7 @@ export function AppInfoScreen() {
     setUpdateState("checking");
     const result = await checkForUpdate();
     setUpdateState(result.state);
-    setLatestVersion(result.release?.version ?? null);
+    setRelease(result.release ?? null);
   }
 
   return (
@@ -97,8 +100,18 @@ export function AppInfoScreen() {
           {updateState !== "idle" && updateState !== "checking" && (
             <Text testID="app-info-update-state" className="text-sm text-neutral-600">
               {UPDATE_STATE_LABEL[updateState]}
-              {updateState === "updateAvailable" && latestVersion ? `（v${latestVersion}）` : ""}
+              {updateState === "updateAvailable" && release ? `（v${release.version}）` : ""}
             </Text>
+          )}
+          {updateState === "updateAvailable" && release && (
+            <Pressable
+              testID="app-info-install-update"
+              onPress={() => setInstallGuideVisible(true)}
+              accessibilityRole="button"
+              className="items-center rounded-lg bg-orange-500 py-3"
+            >
+              <Text className="font-semibold text-white">更新する</Text>
+            </Pressable>
           )}
         </View>
 
@@ -119,6 +132,14 @@ export function AppInfoScreen() {
           </Text>
         )}
       </ScrollView>
+
+      {release && (
+        <InstallGuideDialog
+          visible={installGuideVisible}
+          onConfirm={() => startInstall(release)}
+          onClose={() => setInstallGuideVisible(false)}
+        />
+      )}
     </View>
   );
 }

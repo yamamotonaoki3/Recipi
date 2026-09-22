@@ -43,9 +43,38 @@ Recipiは未署名のWindows(.msi)/Android(.apk)で配布している（[tech-st
 - [x] 開発・デモ・テスト用API URLや秘密情報がRelease URL設定へ混入しない。
 - [x] 既存のログイン、通知、画面遷移に回帰がない。
 
-## 6. Stage 3（今後追記）
+## 6. Stage 3: インストーラー連携とリリース自動化（Issue #319）
 
-- 未署名インストーラー連携、GitHub Actionsによるリリース自動化（Issue #319）。
+### 画面・UI
+
+- 更新通知バナー・アプリ情報画面の「更新する」ボタンから、インストール案内ダイアログ（`InstallGuideDialog.tsx`）を表示する。未署名配布・OS警告（Windows「発行元不明」／Android「提供元不明」）への注意喚起を含む。
+- 「続行」でOS別の配布URL（Windows: `.msi`、Android: `.apk`）を外部ブラウザで開く。配布URLが無ければReleaseページ本文URLへ、それも無ければ最新Release一覧URLへフォールバックする。
+- 「キャンセル」で何も起きずダイアログを閉じる。
+
+### 内部設計
+
+- `expoApp/src/features/appUpdate/installer.ts` — `startInstall(release)`。プラットフォーム判定（`isTauri()`→msi、`Platform.OS === "android"`→apk、それ以外→bodyUrl）でURLを選び、`openExternal.ts`の`openReleasePage()`で開く。
+- `expoApp/src/components/InstallGuideDialog.tsx` — 注意喚起・確認・失敗時の再試行導線。
+
+### GitHub Actionsによるリリース自動化（`.github/workflows/release.yml`）
+
+- トリガー: `v<major>.<minor>.<patch>`形式のタグpush（プレリリースサフィックスは非対応）。
+- `verify-version` → `build-windows`（署名鍵不要）／`build-android`（`release-approval` Environment配下、必須レビュアー承認後のみ署名鍵に到達）→ `publish-release`の順に実行する。
+- タグと`package.json`/`app.json`/`tauri.conf.json`/`Cargo.toml`のバージョン一致、タグがmainに到達済みであることを検証してからビルドする。
+- Android版は`major*1_000_000+minor*1_000+patch`のversionCodeを計算し、`expo prebuild`前に`app.json`へ反映する（`expoApp/scripts/ci/patchAndroidVersionCode.js`）。安定した自己署名鍵（Environment Secretsに登録、リポジトリには含めない）で署名し、`build.gradle`のreleaseビルドタイプの署名設定を書き換える（`expoApp/scripts/ci/patchAndroidReleaseSigning.js`）。署名後、意図した鍵のfingerprintと一致するか検証する。
+- 本番API URLは既存の`secrets.AWS_API_BASE_URL`を再利用する（新規AWS権限は追加しない）。
+- 成果物（`.msi`/`.apk`とSHA-256 checksum）をGitHub Releaseに添付する。checksumは破損確認用であり、コード署名の代替ではない。
+- 実際のタグpush・Release公開はユーザー承認を経てから行う。
+
+## 6a. Issue #319の受け入れ基準
+
+- [x] 「更新する」からインストール案内ダイアログが表示され、未署名配布の注意喚起を含む。
+- [x] OS別に正しい配布URLを開く。配布URL欠如時はReleaseページへフォールバックする。
+- [x] キャンセル時は何も起きない。
+- [x] `release.yml`がタグ形式・バージョン整合性・タグの出所を検証してから成果物をビルドする。
+- [x] Android署名鍵は`release-approval` EnvironmentのEnvironment Secretsとしてのみ扱われ、承認前には到達できない。
+- [x] Android版versionCodeが単調増加し、既存アプリへの上書きインストールが成立する署名の一貫性を保つ。
+- [x] Web E2Eで「更新する」→インストール案内ダイアログの導線を検証している。
 
 ## 7. 画面・UI（Stage 2）
 
