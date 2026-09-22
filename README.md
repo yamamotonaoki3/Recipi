@@ -20,6 +20,12 @@
 
 Android / デスクトップ（Windows・macOS）に対応しています。**iOS はこの学習プロジェクトでは対象外**です。Windows 環境では Xcode/Mac が無く iOS のネイティブアプリをローカルビルドできません。EAS Build のクラウドビルドで、Apple Developer Program への加入なしで作れるのはシミュレータ向けビルドまで（シミュレータの実行自体には Mac/Xcode が必要）で、自分の端末の実機で試すにはMac上のローカルXcodeビルド（無料だがプロビジョニングが短期で失効）か有料の Apple Developer Program（年額 $99）が要り、TestFlight・App Store・Ad Hoc 配布にも同じ Program が必須なため割愛しました（frontend-kotlin トラックの iOS も同様の理由で未着手）。
 
+## アプリの入手方法
+
+Windows（`.msi`）/ Android（`.apk`）は [GitHub Releases](https://github.com/yamamotonaoki3/Recipi/releases) から配布しています。学習用途のため証明機関の正規証明書は取得しておらず、Windowsは無署名、Androidは自己署名鍵での署名です。インストール時にOSの警告（Windows「発行元不明」／Android「提供元不明」）が表示されるので、内容を確認のうえ許可してください。macOS版はGitHub Releaseでの配布物を用意していないため、[`expoApp/README.md`](expoApp/README.md)の手順（`npm run tauri:build`）でローカルビルドしてください。
+
+インストール後は、アプリが起動時にGitHub Releaseの最新版を自動確認し、新しいバージョンがあればアプリ内で通知します。通知から「更新する」を選ぶと、インストール案内とOS別の配布ファイルへの導線が表示されます（ログイン画面の「アプリ情報」からも同じ確認・更新操作が行えます）。詳細な仕様は [更新機能](docs/requirements/features/update.md) を参照してください。
+
 ## 技術構成
 
 | 領域 | 使用技術 |
