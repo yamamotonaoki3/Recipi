@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.1.0"
+version = "1.0.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -27,6 +27,7 @@ tauri-plugin-stronghold = "2.3.2"
 # tauri-plugin-stronghold のパスワード導出（argon2 ハッシュ）に使う。
 # クレート名は "rust-argon2" だが、Rust コードからは `argon2::...` として使う。
 rust-argon2 = "3.0.0"
+tauri-plugin-opener = "2.5.5"
 
 # tauri-plugin-stronghold の依存先 `scrypt` は、デバッグビルドの最適化無しだと
 # 極端に遅くなる既知の問題があるため、公式ドキュメント推奨のとおり

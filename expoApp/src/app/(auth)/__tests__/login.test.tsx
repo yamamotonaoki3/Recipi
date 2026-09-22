@@ -163,4 +163,9 @@ describe("LoginScreen", () => {
       rememberMe: false,
     });
   });
+
+  it("「アプリ情報」への導線を出す（Issue #317）", async () => {
+    const { findByText } = await render(<LoginScreen />, { wrapper });
+    expect(await findByText("アプリ情報")).toBeTruthy();
+  });
 });

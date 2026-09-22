@@ -1,6 +1,10 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    // Issue #317: 「リリース内容を見る」でGitHub ReleaseページをOS既定の
+    // ブラウザで開くために使う（`window.open()` はTauriのWebView内では
+    // 既定でブロックされ、外部ブラウザを開けないため）。
+    .plugin(tauri_plugin_opener::init())
     .plugin(
       // Issue #36: リフレッシュトークン（「ログインを保持」時）をデスクトップで
       // 安全に保存するための Stronghold プラグイン。JS 側から渡される
