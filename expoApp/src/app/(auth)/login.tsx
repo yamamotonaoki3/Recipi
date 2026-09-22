@@ -137,6 +137,9 @@ export default function LoginScreen() {
       <Link href="/(auth)/signup" className="text-center text-sm text-neutral-600">
         新規登録
       </Link>
+      <Link href="/app-info" className="text-center text-sm text-neutral-600">
+        アプリ情報
+      </Link>
 
       {resetNotice && (
         <View

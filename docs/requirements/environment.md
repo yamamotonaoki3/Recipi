@@ -81,6 +81,7 @@
 | 変数 | 用途 | 値の性質 | 例プレースホルダ | 備考 |
 | --- | --- | --- | --- | --- |
 | `EXPO_PUBLIC_API_BASE_URL` | バックエンド API の**ホストまで**（例: `http://localhost:8000`。`/api/v1` などのパスは付けない） | per-env | `http://localhost:8000` | Android エミュレータからは `http://10.0.2.2:8000`、実機は LAN IP。**秘密は入れない**（クライアントに埋め込まれる） |
+| `EXPO_PUBLIC_GITHUB_OWNER` / `EXPO_PUBLIC_GITHUB_REPO` | 更新機能（[features/update.md](features/update.md)）がGitHub Releaseを参照するリポジトリ | 固定 | `yamamotonaoki3` / `Recipi` | バックエンドAPI URLとは完全に別系統。省略時はコード内のフォールバック定数を使う |
 
 > フロントには**秘密情報を置かない**。`EXPO_PUBLIC_` が付いた変数はビルド成果物に埋め込まれ、誰でも読める。
 >
