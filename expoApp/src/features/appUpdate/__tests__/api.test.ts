@@ -91,6 +91,18 @@ describe("checkForUpdate", () => {
     expect(result.state).toBe("updateAvailable");
   });
 
+  it("プレリリース同士は数値識別子を数値として比較する（beta.11 > beta.2、Codexレビュー指摘への対応）", async () => {
+    mockGetCurrentAppVersion.mockResolvedValue("1.0.0-beta.2");
+    mockFetchOnce({
+      json: async () => ({
+        tag_name: "v1.0.0-beta.11",
+        html_url: "https://github.com/owner/repo/releases/tag/v1.0.0-beta.11",
+      }),
+    });
+    const result = await checkForUpdate();
+    expect(result.state).toBe("updateAvailable");
+  });
+
   it("不正な形式のタグ（末尾に余分な文字）は比較不能としてupToDateを返す", async () => {
     mockFetchOnce({
       json: async () => ({

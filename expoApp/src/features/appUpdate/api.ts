@@ -37,11 +37,38 @@ function parseSemVer(version: string): ParsedVersion | null {
 }
 
 /**
+ * SemVer仕様（https://semver.org/#spec-item-11）どおりのプレリリース識別子比較。
+ * ドット区切りの各識別子を、数値同士は数値として、それ以外は文字列として比較する
+ * （数値識別子は常に非数値識別子より小さい）。識別子の個数が少ない方が、
+ * 共通部分が全て等しければ小さい（Codexレビュー指摘: 単純な文字列比較では
+ * `beta.11` < `beta.2` になってしまい、実際の優先順位と食い違うため）。
+ */
+function comparePrereleaseIdentifiers(a: string, b: string): number {
+  const partsA = a.split(".");
+  const partsB = b.split(".");
+  const len = Math.max(partsA.length, partsB.length);
+  for (let i = 0; i < len; i++) {
+    const pa = partsA[i];
+    const pb = partsB[i];
+    if (pa === undefined) return -1;
+    if (pb === undefined) return 1;
+    const na = /^\d+$/.test(pa) ? Number(pa) : null;
+    const nb = /^\d+$/.test(pb) ? Number(pb) : null;
+    if (na !== null && nb !== null) {
+      if (na !== nb) return na - nb;
+      continue;
+    }
+    if (na !== null) return -1; // 数値識別子 < 非数値識別子
+    if (nb !== null) return 1;
+    if (pa !== pb) return pa < pb ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
  * `a`が`b`より新しければ true。比較不能なら false（安全側＝更新なし扱い）。
  * SemVerの優先順位規則どおり、コア版が同じならプレリリース版は正式版より
- * 古いものとして扱う（Codexレビュー指摘）。プレリリース同士の詳細な
- * ドット区切り比較までは行わず、文字列比較に留める（過剰実装を避ける。
- * このプロジェクトの運用ではプレリリースタグ自体を使わない想定）。
+ * 古いものとして扱う（Codexレビュー指摘）。
  */
 function isNewerVersion(a: string, b: string): boolean {
   const va = parseSemVer(a);
@@ -53,7 +80,7 @@ function isNewerVersion(a: string, b: string): boolean {
   if (va.prerelease === vb.prerelease) return false;
   if (va.prerelease === null) return true; // 正式版 > プレリリース
   if (vb.prerelease === null) return false;
-  return va.prerelease > vb.prerelease;
+  return comparePrereleaseIdentifiers(va.prerelease, vb.prerelease) > 0;
 }
 
 function findAssetUrl(assets: unknown, suffix: string): string | undefined {

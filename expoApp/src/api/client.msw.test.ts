@@ -280,7 +280,10 @@ describe("client.ts とbackendReachability連携（Issue #318）", () => {
   it("404等の業務エラーはbackendが応答している証拠としてreachable扱いにする", async () => {
     useBackendReachability.getState().markUnreachable();
     server.use(
-      http.get(`${BASE_URL}/api/v1/recipes/:recipe_id`, () => new HttpResponse(null, { status: 404 })),
+      http.get(
+        `${BASE_URL}/api/v1/recipes/:recipe_id`,
+        () => new HttpResponse(null, { status: 404 }),
+      ),
     );
     await api.GET("/api/v1/recipes/{recipe_id}", { params: { path: { recipe_id: "r1" } } });
     expect(useBackendReachability.getState().status).toBe("ok");
