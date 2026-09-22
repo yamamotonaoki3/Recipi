@@ -151,6 +151,141 @@ def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
     )
 
 
+_VALIDATION_FIELD_LABELS = {
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "currentPassword": "現在のパスワード",
+    "newPassword": "新しいパスワード",
+    "displayName": "表示名",
+    "securityQuestion": "秘密の質問",
+    "securityAnswer": "答え",
+    "rememberMe": "ログイン状態の保持",
+    "title": "タイトル",
+    "description": "説明",
+    "servings": "何人分",
+    "ingredientGroups": "材料グループ",
+    "ingredients": "材料",
+    "steps": "手順",
+    "body": "本文",
+    "imageKey": "画像",
+    "feed": "フィード",
+    "q": "検索語",
+    "cursor": "ページングカーソル",
+    "limit": "件数",
+    "ids": "通知ID",
+    "recipeId": "レシピID",
+    "userId": "ユーザーID",
+    "commentId": "感想ID",
+    "items": "項目",
+}
+
+
+def _validation_field(loc: tuple[Any, ...] | list[Any]) -> str:
+    """エラー位置から利用者向けの項目名を取り出す。"""
+    for part in reversed(loc):
+        if isinstance(part, str) and part not in {"body", "query", "path", "header", "cookie"}:
+            return part.replace("_", " ") if "_" in part else part
+    return "入力項目"
+
+
+def _validation_label(field: str) -> str:
+    camel = "".join(
+        word if index == 0 else word[:1].upper() + word[1:]
+        for index, word in enumerate(field.split(" "))
+    )
+    return _VALIDATION_FIELD_LABELS.get(field, _VALIDATION_FIELD_LABELS.get(camel, field))
+
+
+def _validation_context_number(error: dict[str, Any], key: str) -> str | None:
+    value = error.get("ctx", {}).get(key)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value)
+    return None
+
+
+def _localized_validation_message(error: dict[str, Any]) -> str:
+    """Pydanticのエラーを、入力値を含めず日本語へ変換する。"""
+    error_type = str(error.get("type", ""))
+    field = _validation_field(error.get("loc", []))
+    label = _validation_label(field)
+    original = str(error.get("msg", ""))
+
+    # 独自バリデータの日本語は、Pydanticの接頭辞だけ外してそのまま使う。
+    custom = original.removeprefix("Value error, ")
+    if any("\u3000" <= char <= "\u9fff" for char in custom):
+        return custom
+
+    if "email" in original.lower() or error_type in {"email_parsing", "value_error.email"}:
+        return "有効なメールアドレスを入力してください"
+    if error_type == "missing":
+        return f"{label}を入力してください"
+    if error_type in {"none_required", "string_type", "int_type", "float_type", "bool_type"}:
+        return f"{label}の入力形式が不正です"
+    if error_type == "string_too_short":
+        minimum = _validation_context_number(error, "min_length")
+        if minimum:
+            return f"{label}は{minimum}文字以上で入力してください"
+        return f"{label}の文字数を確認してください"
+    if error_type == "string_too_long":
+        maximum = _validation_context_number(error, "max_length")
+        if maximum:
+            return f"{label}は{maximum}文字以内で入力してください"
+        return f"{label}の文字数を確認してください"
+    if error_type == "greater_than_equal":
+        minimum = _validation_context_number(error, "ge")
+        if minimum:
+            return f"{label}は{minimum}以上で指定してください"
+        return f"{label}の範囲を確認してください"
+    if error_type == "greater_than":
+        minimum = _validation_context_number(error, "gt")
+        if minimum:
+            return f"{label}は{minimum}より大きい値で指定してください"
+        return f"{label}の範囲を確認してください"
+    if error_type == "less_than_equal":
+        maximum = _validation_context_number(error, "le")
+        if maximum:
+            return f"{label}は{maximum}以下で指定してください"
+        return f"{label}の範囲を確認してください"
+    if error_type == "less_than":
+        maximum = _validation_context_number(error, "lt")
+        if maximum:
+            return f"{label}は{maximum}未満で指定してください"
+        return f"{label}の範囲を確認してください"
+    if error_type == "too_short":
+        minimum = _validation_context_number(error, "min_length")
+        if minimum:
+            return f"{label}は{minimum}件以上指定してください"
+        return f"{label}の件数を確認してください"
+    if error_type == "too_long":
+        maximum = _validation_context_number(error, "max_length")
+        if maximum:
+            return f"{label}は{maximum}件以内で指定してください"
+        return f"{label}の件数を確認してください"
+    if error_type in {"uuid_parsing", "uuid_type"}:
+        return f"{label}の形式が不正です"
+    if error_type in {"int_parsing", "float_parsing", "finite_number"}:
+        return f"{label}は数値で指定してください"
+    if error_type == "bool_parsing":
+        return f"{label}は真偽値で指定してください"
+    if error_type in {"list_type", "dict_type", "mapping_type"}:
+        return f"{label}の入力形式が不正です"
+    if error_type in {"literal_error", "enum"}:
+        return f"{label}の指定が不正です"
+    return f"{label}の入力内容を確認してください"
+
+
+def _safe_validation_errors(exc: RequestValidationError) -> list[dict[str, Any]]:
+    """入力値やPydantic内部情報を除いた安定したエラー配列を作る。"""
+    return [
+        {
+            "loc": list(error.get("loc", [])),
+            "msg": _localized_validation_message(error),
+            "type": str(error.get("type", "validation_error")),
+        }
+        for error in exc.errors()
+    ]
+
+
 @app.exception_handler(RequestValidationError)
 def handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
     """FastAPI 標準のバリデーションエラー（デフォルト 422）を 400 に統一する。"""
@@ -160,7 +295,7 @@ def handle_validation_error(request: Request, exc: RequestValidationError) -> JS
             "error": {
                 "code": "VALIDATION_ERROR",
                 "message": "リクエストの内容が不正です",
-                "details": {"errors": jsonable_encoder(exc.errors())},
+                "details": {"errors": jsonable_encoder(_safe_validation_errors(exc))},
             }
         },
         headers=_cors_error_headers(request),
