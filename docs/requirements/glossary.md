@@ -70,7 +70,7 @@
 | 定期バッチ / cron | 決めた間隔でコマンドを自動実行する仕組み。カウント列の数え直し・一時アップロード GC・ストレージ削除・古いデータの掃除に使う。[processing-model.md](processing-model.md) §8 |
 | 多層防御 | 1 つの対策が漏れても次で拾えるよう守りを重ねること。カウントはトランザクションで増減し（第 1 層）、ズレたら補正バッチで直す（第 2 層） |
 | 削除キュー（`pending_storage_deletions`） | あとで消す画像オブジェクトキーの ToDo リスト。ストレージ障害を削除 API に波及させないため、いったんキューに積んで定期バッチでまとめて消す。[processing-model.md](processing-model.md) §9 |
-| ジョブキュー（arq / Celery + Redis） | やることをキューに積み専用ワーカーが実行する仕組み。再試行・可視化に強いが Redis と運用コストが増える。Recipi は MVP では使わず Phase 10 以降に再検討 |
+| ジョブキュー（arq / Celery + Redis） | やることをキューに積み専用ワーカーが実行する仕組み。再試行・可視化に強いが Redis と運用コストが増える。Recipi は学習用アプリのため導入しないことを確定した（[todo.md](todo.md) #18・#50） |
 | 品質チェック（静的解析） | 実行せずにコードを解析して誤り・スタイル崩れを弾くこと。backend は ruff（lint/format）＋ mypy（型）、frontend は ESLint ＋ Prettier ＋ `tsc`。[testing.md](testing.md) |
 | 単体テスト / 結合テスト / E2E テスト | 単体 = 関数・部品を単独で検証（外部依存はモック）。結合 = 複数部品を実 DB / ストレージにつないで検証。E2E = ユーザー操作の流れを端から端まで（Web = Playwright、Android = Appium + WebdriverIO）。[testing.md](testing.md) §1 |
 | ブラックボックステスト | 内部実装を見ず、仕様（受け入れ基準・API 契約・画面仕様）から入力と期待結果を決めるテスト。[testing.md](testing.md) §2 |

@@ -16,6 +16,10 @@
 
 機能ごとの仕様と受け入れ基準は [`docs/requirements/features/`](docs/requirements/features/) にまとめています。
 
+## 対応プラットフォーム
+
+Android / デスクトップ（Windows・macOS）に対応しています。**iOS はこの学習プロジェクトでは対象外**です。Windows 環境では Xcode/Mac が無く iOS のネイティブアプリをローカルビルドできません。EAS Build のクラウドビルドで、Apple Developer Program への加入なしで作れるのはシミュレータ向けビルドまで（シミュレータの実行自体には Mac/Xcode が必要）で、自分の端末の実機で試すにはMac上のローカルXcodeビルド（無料だがプロビジョニングが短期で失効）か有料の Apple Developer Program（年額 $99）が要り、TestFlight・App Store・Ad Hoc 配布にも同じ Program が必須なため割愛しました（frontend-kotlin トラックの iOS も同様の理由で未着手）。
+
 ## 技術構成
 
 | 領域 | 使用技術 |

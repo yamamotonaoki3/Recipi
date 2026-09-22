@@ -30,7 +30,7 @@
 
 ```mermaid
 flowchart TD
-    Entry["プラットフォーム別エントリ<br/>（各クライアントの Android / iOS / Desktop エントリ）"]
+    Entry["プラットフォーム別エントリ<br/>（各クライアントの Android / Desktop エントリ。iOS は対象外）"]
     Entry --> Root["App ルート（各クライアントのルート画面 / ルーター）"]
     Root --> Splash["スプラッシュ（認証判定）"]
     Splash -->|未ログイン| AuthFlow["認証フロー<br/>ログイン / サインアップ / パスワードリセット"]

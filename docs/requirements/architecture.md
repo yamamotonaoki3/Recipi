@@ -26,10 +26,9 @@ Recipi/
 │   ├── __tests__/ or *.test.tsx   jest-expo + React Native Testing Library + MSW
 │   ├── e2e/            E2E フロー（Phase 1 以降）。web/ = Playwright、android/ = Appium + WebdriverIO
 │   ├── package.json / app.json / app.config.ts / tsconfig.json
-├── shared/         ★Kotlin トラック。KMP共有モジュール（commonMain）。フロント内部の共通ロジック（単位の表示整形 等）＋ OpenAPI から生成した Kotlin API クライアント / DTO
-├── composeApp/     ★Kotlin トラック。Compose Multiplatform。commonMain / androidMain / iosMain / desktopMain、Ktor Client、画面/ViewModel。implementation(project(":shared"))
-├── iosApp/         ★Kotlin トラック。Xcode プロジェクト（iOS の殻）
-├── desktopApp/     ★Kotlin トラック。デスクトップ起動エントリ（main()）＋ Compose のパッケージ設定（.msi / .dmg）
+├── shared/         ★Kotlin トラック（未着手）。KMP共有モジュール（commonMain）。フロント内部の共通ロジック（単位の表示整形 等）＋ OpenAPI から生成した Kotlin API クライアント / DTO
+├── composeApp/     ★Kotlin トラック（未着手）。Compose Multiplatform。commonMain / androidMain / desktopMain、Ktor Client、画面/ViewModel。implementation(project(":shared"))（iOS は対象外のため iosMain・iosApp/ は作らない）
+├── desktopApp/     ★Kotlin トラック（未着手）。デスクトップ起動エントリ（main()）＋ Compose のパッケージ設定（.msi / .dmg）
 ├── infra/
 │   └── docker-compose.yml   api（FastAPI / Uvicorn） + postgres + minio（フロントは compose 外で実行）
 ├── docs/
@@ -48,14 +47,14 @@ Recipi/
 
 ### (A) TypeScript トラック（`expoApp/`）
 
-- Expo（Expo Router）で iOS / Android。UI は NativeWind、データ取得は TanStack Query + openapi-fetch。
+- Expo（Expo Router）で Android（iOS は対象外）。UI は NativeWind、データ取得は TanStack Query + openapi-fetch。
 - **Desktop（Windows・macOS）**は `src-tauri/` の Tauri 2 が **React Native Web ビルド**を読み込み、`.msi` / `.dmg` を生成する。
 - プラットフォーム固有機能は Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store`）と Tauri プラグイン（デスクトップのセキュアストレージ 等）で吸収する。`expect`/`actual` は使わない。
 - Expo プロジェクトの詳細構成（EAS / ローカルビルド、Tauri 連携）は Phase 0（frontend-ts）で確定する（→ [todo.md](todo.md)）。
 
-### (B) Kotlin トラック（`shared/` `composeApp/` `iosApp/` `desktopApp/`）
+### (B) Kotlin トラック（`shared/` `composeApp/` `desktopApp/`。未着手・随時）
 
-- `composeApp` の UI コードは `commonMain` に集約し、Android / iOS / Desktop で共有。プラットフォーム固有部分（画像選択、カメラ、セキュアストレージ等）は `expect` / `actual` で `androidMain` / `iosMain` / `desktopMain` に実装する。
+- `composeApp` の UI コードは `commonMain` に集約し、Android / Desktop で共有する想定（iOS は対象外のため `iosApp/`・`iosMain` は作らない。このトラック自体が現状未着手）。プラットフォーム固有部分（画像選択、カメラ、セキュアストレージ等）は `expect` / `actual` で `androidMain` / `desktopMain` に実装する。
 - `desktopApp` は Compose Multiplatform Desktop（JVM）のエントリポイントとパッケージング設定。`./gradlew :desktopApp:run` で起動、`packageDistributionForCurrentOS` で `.msi` / `.dmg` を生成。
 - Gradle マルチモジュール（KMP + desktop ターゲット、`backend` / `expoApp` を含まない）の詳細設定は Phase 0（frontend-kotlin）で確定する（→ [todo.md](todo.md)）。
 
@@ -80,7 +79,7 @@ Recipi/
 - **1 リクエスト = 1 DB トランザクション**を原則とし、外部 I/O（ストレージ・AI プロバイダ）はトランザクション外に置く。
 - レスポンス後の即時の後処理（通知 fan-out）は **FastAPI `BackgroundTasks`**（プロセス内・ブローカー無し）。失われても整合性を壊さないものだけを載せる。削除キューへの行 INSERT や単一行の通知は発火元と同一トランザクション（DB だけで完結し取りこぼしを避けたいため）。
 - 定期処理（カウント列補正・一時アップロード GC・ストレージ削除ジョブ・期限切れトークン / 古い通知の掃除・閲覧履歴の上限・通知 outbox のスイープ。コマンドは Issue #70・#72 で実装済み）は **`backend/` の管理用 CLI コマンドを cron / コンテナスケジューラで起動**する。`api` サービスに常駐スレッドは持たせない。Docker Compose への新サービス追加は無し（スケジューラはホスト / オーケストレータ側）。
-- 専用ジョブキュー（arq / Celery + Redis）は Phase 10 以降に必要性を測って再検討（[processing-model.md](processing-model.md) §3）。
+- 専用ジョブキュー（arq / Celery + Redis）は導入しない（確定・[processing-model.md](processing-model.md) §3・[todo.md](todo.md) #18・#50）。
 
 ## ローカル実行環境（Docker Compose）
 

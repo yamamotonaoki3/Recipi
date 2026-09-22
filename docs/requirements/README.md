@@ -1,6 +1,6 @@
 # Recipi 要件定義書
 
-Recipi は、手軽にレシピを登録・共有・検索できるアプリ。モバイルファーストで、**Android / iOS / デスクトップ（Windows・macOS）** に対応。フォロー / お気に入り / 感想 / 通知などの軽いソーシャル機能を持つ。
+Recipi は、手軽にレシピを登録・共有・検索できるアプリ。モバイルファーストで、**Android / デスクトップ（Windows・macOS）** に対応。**iOS はこの学習プロジェクトでは対象外**（[todo.md](todo.md) #3。Windows 環境では Xcode/Mac が無く iOS のネイティブアプリをローカルビルドできない（EAS Build のクラウドビルドで、Apple Developer Program への加入なしで作れるのはシミュレータ向けビルドまで（シミュレータの実行自体には Mac/Xcode が必要）。自分の端末の実機で試すには、Mac 上のローカル Xcode ビルド（無料だがプロビジョニングが短期で失効）か、有料の Apple Developer Program〈年額 $99〉のいずれかが要り、TestFlight・App Store・Ad Hoc 配布にも同じ Program が必須）ため、この学習プロジェクトでは割愛）。フォロー / お気に入り / 感想 / 通知などの軽いソーシャル機能を持つ。
 
 ## ステータス
 
