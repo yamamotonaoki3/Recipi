@@ -69,6 +69,11 @@ export type KnownIssue = Allowance & {
  *   `/auth/refresh` でセッションを復元しようとする（features/auth.md）。未ログインなら
  *   401 が返るのが正しい挙動で、ブラウザはこれを必ずコンソールに出す（アプリ側では止められない）。
  *   URL を `/auth/refresh` だけに限定し、他の 401 は隠さない。
+ * - 起動時の更新確認: ルートレイアウト（`AppUpdateGate`。Issue #318）は起動のたびに
+ *   GitHub Release APIを直接呼ぶ。このリポジトリにまだGitHub Releaseが1つも無い間は
+ *   404が返るのが正しい挙動で、ブラウザは必ずコンソールに出す（アプリ側では止められない）。
+ *   Stage 3（Issue #319）でリリース自動化が入りReleaseが作られるようになったら、
+ *   この行は不要になるが、消さなくても実害はない（200では発火しない許可のため）。
  */
 export const BUILTIN_ALLOWANCES: readonly Allowance[] = [
   {
@@ -76,6 +81,13 @@ export const BUILTIN_ALLOWANCES: readonly Allowance[] = [
     message: /status of 401 \(Unauthorized\)/,
     url: /\/api\/v1\/auth\/refresh$/,
     reason: "未ログインで開いたときのセッション復元の失敗（仕様どおり。features/auth.md）",
+  },
+  {
+    kind: "console",
+    message: /status of 404/,
+    url: /api\.github\.com\/repos\/.+\/releases\/latest$/,
+    reason:
+      "起動時のGitHub Release更新確認（Issue #318）。Releaseが1つも無い間は404が仕様どおりの応答",
   },
 ];
 
