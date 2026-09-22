@@ -133,6 +133,7 @@ export default function PasswordResetScreen() {
               onChangeText={(value) => {
                 setSecurityAnswer(value);
                 setFieldErrors((previous) => ({ ...previous, securityAnswer: undefined }));
+                setErrorMessage(null);
               }}
               placeholder="答え"
               className="rounded-lg border border-neutral-300 px-3 py-3 text-base"
@@ -148,6 +149,7 @@ export default function PasswordResetScreen() {
             onChangeText={(value) => {
               setNewPassword(value);
               setFieldErrors((previous) => ({ ...previous, newPassword: undefined }));
+              setErrorMessage(null);
             }}
             placeholder="新しいパスワード"
             errorMessage={fieldErrors.newPassword}
@@ -159,6 +161,7 @@ export default function PasswordResetScreen() {
             onChangeText={(value) => {
               setNewPasswordConfirm(value);
               setFieldErrors((previous) => ({ ...previous, newPasswordConfirm: undefined }));
+              setErrorMessage(null);
             }}
             placeholder="新しいパスワード（確認）"
             errorMessage={fieldErrors.newPasswordConfirm}

@@ -501,6 +501,7 @@ function CommentSection({
           submitLabel="送信"
           submitting={createComment.isPending}
           error={createError}
+          onErrorDismiss={() => setCreateError(null)}
           resetOnSuccess
           onSubmit={handleCreate}
         />
@@ -543,6 +544,7 @@ function CommentSection({
               saving={savingCommentIds.has(comment.id)}
               deleting={deletingCommentIds.has(comment.id)}
               saveError={saveError?.id === comment.id ? saveError.message : null}
+              onSaveErrorDismiss={() => setSaveError(null)}
             />
           ))}
           {comments.hasNextPage && !isMoreCommentError && (

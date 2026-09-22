@@ -37,6 +37,8 @@ type CommentItemProps = {
   onSave: (draft: CommentDraft) => Promise<boolean>;
   saving: boolean;
   saveError?: string | null;
+  /** 本文編集時に、親が持つ saveError を消してもらうための通知（Issue #320）。 */
+  onSaveErrorDismiss?: () => void;
   /**
    * 削除の通信中なら true。その間は「編集」「削除」を押せなくし、行を薄く出す
    * （同じ感想をもう一度削除して、2 回目の失敗が表示されるのを防ぐ。Issue #130）。
@@ -54,6 +56,7 @@ export function CommentItem({
   onSave,
   saving,
   saveError,
+  onSaveErrorDismiss,
   deleting = false,
 }: CommentItemProps) {
   const [editing, setEditing] = useState(false);
@@ -95,6 +98,7 @@ export function CommentItem({
           initialImage={{ key: comment.imageUrl ? "current" : null, url: comment.imageUrl }}
           submitting={saving}
           error={saveError}
+          onErrorDismiss={onSaveErrorDismiss}
           onCancel={() => setEditing(false)}
           onSubmit={async (draft) => {
             const ok = await onSave(draft);

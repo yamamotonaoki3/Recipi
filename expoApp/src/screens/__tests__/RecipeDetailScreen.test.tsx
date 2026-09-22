@@ -702,6 +702,26 @@ describe("RecipeDetailScreen の感想", () => {
     expect(getByTestId("comment-composer-input").props.value).toBe("おいしい");
   });
 
+  it("投稿失敗後に本文を変えると、再送信前にサーバーのエラーが消える（Issue #320）", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe());
+    mockCreateComment.mockRejectedValue(
+      new ApiError("自分のレシピには感想を書けません", "FORBIDDEN", 403),
+    );
+    const { findByTestId, getByTestId, queryByTestId } = await render(
+      <RecipeDetailScreen basePath="/home" />,
+      { wrapper },
+    );
+    await findByTestId("comment-empty");
+
+    await fireEvent.changeText(getByTestId("comment-composer-input"), "おいしい");
+    await fireEvent.press(getByTestId("comment-composer-submit"));
+    await findByTestId("comment-composer-error");
+
+    await fireEvent.changeText(getByTestId("comment-composer-input"), "おいしかった");
+
+    expect(queryByTestId("comment-composer-error")).toBeNull();
+  });
+
   it("自分の感想の本文を編集すると、画像は触らないので imageKey を送らない", async () => {
     mockGetRecipe.mockResolvedValue(makeRecipe({ commentCount: 1 }));
     mockListComments.mockResolvedValue({ items: [makeComment("c1")], nextCursor: null });
@@ -723,6 +743,25 @@ describe("RecipeDetailScreen の感想", () => {
     expect(mockUpdateComment).toHaveBeenCalledWith("c1", { body: "直した" });
     await waitFor(() => expect(queryByTestId("comment-c1-editor")).toBeNull());
     expect(getByTestId("comment-c1-body").props.children).toBe("直した");
+  });
+
+  it("編集の保存に失敗後に本文を変えると、再送信前にサーバーのエラーが消える（Issue #320）", async () => {
+    mockGetRecipe.mockResolvedValue(makeRecipe({ commentCount: 1 }));
+    mockListComments.mockResolvedValue({ items: [makeComment("c1")], nextCursor: null });
+    mockUpdateComment.mockRejectedValue(new ApiError("感想を保存できませんでした", "FORBIDDEN", 403));
+    const { findByTestId, getByTestId, queryByTestId } = await render(
+      <RecipeDetailScreen basePath="/home" />,
+      { wrapper },
+    );
+
+    await fireEvent.press(await findByTestId("comment-c1-edit"));
+    await fireEvent.changeText(getByTestId("comment-c1-editor-input"), "直した");
+    await fireEvent.press(getByTestId("comment-c1-editor-submit"));
+    await findByTestId("comment-c1-editor-error");
+
+    await fireEvent.changeText(getByTestId("comment-c1-editor-input"), "もう一度直した");
+
+    expect(queryByTestId("comment-c1-editor-error")).toBeNull();
   });
 
   it("感想の保存中は本文とキャンセルを操作できない", async () => {
