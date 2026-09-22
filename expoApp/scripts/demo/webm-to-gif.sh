@@ -8,9 +8,14 @@
 # 使い方: scripts/demo/webm-to-gif.sh <入力.webm> [出力.gif]
 set -euo pipefail
 
+# スクリプト自身の場所を基準にデフォルト出力先を解決する（カレントディレクトリ
+# 依存だと、どこから実行するかで出力先が変わってしまうため）。
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_OUTPUT="$SCRIPT_DIR/../../../docs/assets/demo.gif"
+
 FFMPEG="${FFMPEG_BIN:-ffmpeg}"
 INPUT="$1"
-OUTPUT="${2:-../../../docs/assets/demo.gif}"
+OUTPUT="${2:-$DEFAULT_OUTPUT}"
 PALETTE="$(mktemp --suffix=.png)"
 
 trap 'rm -f "$PALETTE"' EXIT
