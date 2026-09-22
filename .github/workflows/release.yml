@@ -1,0 +1,300 @@
+# GitHub Releaseの発行（Issue #319）。
+#
+# `v*.*.*` 形式のタグをpushすると起動する。
+# 流れ:
+#   verify-version（タグ形式・バージョン整合性・出所を検証）
+#   → build-windows（未署名 .msi、署名鍵不要）
+#   → approve（release-approval Environment、必須レビュアー承認）
+#     → build-android（承認後のみ。署名鍵はEnvironment Secretsにあるため
+#       承認前には到達できない）
+#   → publish-release（両方の成果物をdownload-artifactで取得しReleaseへ添付）
+#
+# 方針:
+# - コード署名は行わない（todo.md #31で確定。未署名配布）。checksumは破損確認用で、
+#   署名検証の代替ではない。
+# - 本番API URLは`secrets.AWS_API_BASE_URL`（deploy-backend.ymlと同じ、手動登録済み）を
+#   再利用する。新規AWS権限は追加しない。
+# - Android署名鍵（ANDROID_RELEASE_KEYSTORE_BASE64等）は`release-approval`
+#   EnvironmentのEnvironment Secretsとして登録する（リポジトリ全体のSecretsにはしない。
+#   Environment Secretsは、そのEnvironmentを参照するジョブが承認を得るまで渡らない）。
+# - 既存Releaseは上書きしない（`gh release create`は既存タグへの再作成が失敗する）。
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      version_code: ${{ steps.parse.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # タグの出所検証（main到達済みか）にはコミット履歴全体が必要。
+          fetch-depth: 0
+
+      - name: タグ形式を検証（プレリリースサフィックスを拒否）
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "タグ '$TAG' はv<major>.<minor>.<patch>形式ではありません（プレリリースサフィックス等は非対応）" >&2
+            exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: バージョンを解析し、各コンポーネントの上限を検証
+        id: parse
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          for N in "$MAJOR" "$MINOR" "$PATCH"; do
+            if [ "$N" -ge 1000 ]; then
+              echo "バージョンの各コンポーネントは1000未満である必要があります（versionCode計算式の前提）: $VERSION" >&2
+              exit 1
+            fi
+          done
+          VERSION_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: package.json/app.json/tauri.conf.json/Cargo.tomlのバージョン一致を検証
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          PKG_VERSION=$(node -p "require('./expoApp/package.json').version")
+          APP_VERSION=$(node -p "require('./expoApp/app.json').expo.version")
+          TAURI_VERSION=$(node -p "require('./expoApp/src-tauri/tauri.conf.json').version")
+          CARGO_VERSION=$(grep -m1 '^version' expoApp/src-tauri/Cargo.toml | sed -E 's/version *= *"([^"]+)"/\1/')
+          for PAIR in "package.json:$PKG_VERSION" "app.json:$APP_VERSION" "tauri.conf.json:$TAURI_VERSION" "Cargo.toml:$CARGO_VERSION"; do
+            NAME="${PAIR%%:*}"
+            VAL="${PAIR#*:}"
+            if [ "$VAL" != "$VERSION" ]; then
+              echo "バージョン不一致: タグ=$VERSION, $NAME=$VAL" >&2
+              exit 1
+            fi
+          done
+
+      - name: タグの出所を検証（mainに到達済みか）
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "タグ ${TAG} のコミット ${GITHUB_SHA} はmainブランチに到達していません" >&2
+            exit 1
+          fi
+
+  build-windows:
+    needs: verify-version
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: expoApp
+    env:
+      EXPO_PUBLIC_API_BASE_URL: ${{ secrets.AWS_API_BASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: expoApp/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust の依存をキャッシュ
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: expoApp/src-tauri
+
+      - name: 依存をインストール
+        run: npm ci
+
+      - name: Web ビルド
+        run: npm run build:web
+
+      - name: 未署名の .msi を作る
+        run: npx tauri build --bundles msi
+
+      - name: SHA-256 checksumを生成
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src-tauri/target/release/bundle/msi
+          for f in *.msi; do
+            sha256sum "$f" > "$f.sha256"
+          done
+
+      - name: 成果物を保存
+        uses: actions/upload-artifact@v7
+        with:
+          name: recipi-windows
+          path: |
+            expoApp/src-tauri/target/release/bundle/msi/*.msi
+            expoApp/src-tauri/target/release/bundle/msi/*.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  build-android:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    # Environment Secrets（署名鍵）は、このEnvironmentへの必須レビュアー承認を
+    # 得るまでジョブに渡らない（GitHub Actionsの仕様）。
+    environment: release-approval
+    defaults:
+      run:
+        working-directory: expoApp
+    env:
+      EXPO_PUBLIC_API_BASE_URL: ${{ secrets.AWS_API_BASE_URL }}
+      VERSION_CODE: ${{ needs.verify-version.outputs.version_code }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: expoApp/package-lock.json
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: 依存をインストール
+        run: npm ci
+
+      - name: app.jsonのversionCodeを更新
+        run: node scripts/ci/patchAndroidVersionCode.js "$VERSION_CODE"
+
+      - name: Android ネイティブプロジェクトを生成（expo prebuild）
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: 署名鍵をデコードし、gradle.propertiesに設定
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          cat >> android/gradle.properties <<EOF
+          RECIPI_RELEASE_STORE_FILE=release.keystore
+          RECIPI_RELEASE_STORE_PASSWORD=$ANDROID_RELEASE_KEYSTORE_PASSWORD
+          RECIPI_RELEASE_KEY_ALIAS=$ANDROID_RELEASE_KEY_ALIAS
+          RECIPI_RELEASE_KEY_PASSWORD=$ANDROID_RELEASE_KEY_PASSWORD
+          EOF
+
+      - name: build.gradleのreleaseビルドタイプにrelease鍵の署名設定を適用
+        run: node scripts/ci/patchAndroidReleaseSigning.js
+
+      - name: APKをビルド（release variant）
+        run: ./gradlew assembleRelease --build-cache
+        working-directory: expoApp/android
+
+      - name: 本番API URLが正しく埋め込まれ、開発用URLが混入していないことを確認
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          if unzip -p "$APK" 'assets/*' 'index.android.bundle' 2>/dev/null | grep -q 'localhost:8000'; then
+            echo "開発用API URL（localhost:8000）が成果物に混入しています" >&2
+            exit 1
+          fi
+
+      - name: 署名を検証（意図した鍵で署名されているか）
+        env:
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          BUILD_TOOLS=$(ls "$ANDROID_HOME"/build-tools | sort -V | tail -1)
+          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+          EXPECTED_FP=$(keytool -list -v -keystore android/app/release.keystore \
+            -storepass "$ANDROID_RELEASE_KEYSTORE_PASSWORD" 2>/dev/null | grep 'SHA256:' | head -1)
+          ACTUAL_FP=$("$APKSIGNER" verify --print-certs "$APK" | grep 'SHA-256 digest' | head -1)
+          if [ -z "$EXPECTED_FP" ] || [ -z "$ACTUAL_FP" ]; then
+            echo "署名情報の取得に失敗しました" >&2
+            exit 1
+          fi
+
+      - name: SHA-256 checksumを生成
+        run: |
+          set -euo pipefail
+          cd android/app/build/outputs/apk/release
+          sha256sum app-release.apk > app-release.apk.sha256
+
+      - name: 成果物を保存
+        uses: actions/upload-artifact@v7
+        with:
+          name: recipi-android
+          path: |
+            expoApp/android/app/build/outputs/apk/release/app-release.apk
+            expoApp/android/app/build/outputs/apk/release/app-release.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    needs: [verify-version, build-windows, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Windows成果物を取得
+        uses: actions/download-artifact@v7
+        with:
+          name: recipi-windows
+          path: artifacts/windows
+
+      - name: Android成果物を取得
+        uses: actions/download-artifact@v7
+        with:
+          name: recipi-android
+          path: artifacts/android
+
+      - name: バックエンドの対応コミットSHAを記録
+        run: echo "BACKEND_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - name: Releaseを作成
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes "$(cat <<EOF
+          ## Recipi v${VERSION}
+
+          - 公開日: $(date -u +%Y-%m-%d)
+          - 対応backendコミット: ${BACKEND_SHA}
+
+          ### 未署名配布についての注意
+
+          このアプリは学習用途のため、コード署名を行っていません。インストール時にWindowsでは「発行元不明」、AndroidapkのインストールではOSの確認画面が表示されます。内容を確認のうえ許可してください。
+
+          - Windows: SmartScreenの警告が出たら「詳細情報」→「実行」で進めます。
+          - Android: 提供元不明のアプリのインストールを許可する設定が必要な場合があります。
+
+          checksum（SHA-256）はダウンロードしたファイルの破損確認用です。署名検証の代替ではありません。
+          EOF
+          )" \
+            artifacts/windows/*.msi \
+            artifacts/windows/*.sha256 \
+            artifacts/android/*.apk \
+            artifacts/android/*.sha256

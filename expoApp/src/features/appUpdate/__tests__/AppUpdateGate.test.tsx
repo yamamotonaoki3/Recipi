@@ -14,10 +14,14 @@ import { useUpdateDismissal } from "../updateDismissal";
 const mockCheckForUpdate = jest.fn();
 const mockOpenReleasePage = jest.fn();
 const mockUseHealth = jest.fn();
+const mockStartInstall = jest.fn();
 
 jest.mock("../api", () => ({ checkForUpdate: () => mockCheckForUpdate() }));
 jest.mock("../openExternal", () => ({
   openReleasePage: (url: string) => mockOpenReleasePage(url),
+}));
+jest.mock("../installer", () => ({
+  startInstall: (release: unknown) => mockStartInstall(release),
 }));
 jest.mock("../config", () => ({
   getLatestReleaseUrl: () => "https://github.com/owner/repo/releases/latest",
@@ -29,6 +33,8 @@ beforeEach(async () => {
   mockCheckForUpdate.mockResolvedValue({ state: "upToDate" });
   mockOpenReleasePage.mockReset();
   mockOpenReleasePage.mockResolvedValue({ ok: true });
+  mockStartInstall.mockReset();
+  mockStartInstall.mockResolvedValue({ ok: true });
   mockUseHealth.mockReset();
   mockUseHealth.mockReturnValue({ isFetching: false, refetch: jest.fn() });
   // zustandストアの更新は、同期版act()だとReact 19のuseSyncExternalStoreと
@@ -77,6 +83,23 @@ describe("AppUpdateGate", () => {
     await fireEvent.press(await findByTestId("update-notification-banner-dismiss"));
     expect(queryByTestId("update-notification-banner")).toBeNull();
     expect(useUpdateDismissal.getState().dismissedVersion).toBe("1.2.3");
+  });
+
+  it("「更新する」を押すとインストール案内ダイアログを表示し、続けるでstartInstallを呼ぶ（Issue #319）", async () => {
+    const release = {
+      version: "1.2.3",
+      title: "v1.2.3",
+      publishedAt: "",
+      bodyUrl: "https://example.com/release",
+      assets: { msiUrl: "https://example.com/app.msi" },
+    };
+    mockCheckForUpdate.mockResolvedValue({ state: "updateAvailable", release });
+    const { findByTestId } = await render(<AppUpdateGate />);
+    await fireEvent.press(await findByTestId("update-notification-banner-update"));
+    expect(await findByTestId("install-guide-dialog")).toBeTruthy();
+
+    await fireEvent.press(await findByTestId("install-guide-dialog-confirm"));
+    expect(mockStartInstall).toHaveBeenCalledWith(release);
   });
 
   it("backend接続不能なら警告ダイアログを表示する", async () => {
