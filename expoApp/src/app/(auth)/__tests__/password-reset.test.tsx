@@ -154,9 +154,7 @@ describe("PasswordResetScreen", () => {
 
     await fireEvent.changeText(getByTestId("password-reset-security-answer"), "別の答え");
 
-    expect(
-      queryByText("試行回数が上限に達しました。しばらくしてからお試しください"),
-    ).toBeNull();
+    expect(queryByText("試行回数が上限に達しました。しばらくしてからお試しください")).toBeNull();
   });
 
   it("送信中に入力を変えたあとに古いリクエストが失敗しても、エラーを表示しない（Issue #320）", async () => {
@@ -190,8 +188,6 @@ describe("PasswordResetScreen", () => {
       rejectConfirm(new ApiError("試行しすぎ", "TOO_MANY_REQUESTS", 429));
     });
 
-    expect(
-      queryByText("試行回数が上限に達しました。しばらくしてからお試しください"),
-    ).toBeNull();
+    expect(queryByText("試行回数が上限に達しました。しばらくしてからお試しください")).toBeNull();
   });
 });

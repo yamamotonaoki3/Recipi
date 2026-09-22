@@ -774,7 +774,9 @@ describe("RecipeDetailScreen の感想", () => {
   it("編集の保存に失敗後に本文を変えると、再送信前にサーバーのエラーが消える（Issue #320）", async () => {
     mockGetRecipe.mockResolvedValue(makeRecipe({ commentCount: 1 }));
     mockListComments.mockResolvedValue({ items: [makeComment("c1")], nextCursor: null });
-    mockUpdateComment.mockRejectedValue(new ApiError("感想を保存できませんでした", "FORBIDDEN", 403));
+    mockUpdateComment.mockRejectedValue(
+      new ApiError("感想を保存できませんでした", "FORBIDDEN", 403),
+    );
     const { findByTestId, getByTestId, queryByTestId } = await render(
       <RecipeDetailScreen basePath="/home" />,
       { wrapper },
@@ -796,7 +798,9 @@ describe("RecipeDetailScreen の感想", () => {
       items: [makeComment("c1"), makeComment("c2")],
       nextCursor: null,
     });
-    mockUpdateComment.mockRejectedValue(new ApiError("感想を保存できませんでした", "FORBIDDEN", 403));
+    mockUpdateComment.mockRejectedValue(
+      new ApiError("感想を保存できませんでした", "FORBIDDEN", 403),
+    );
     const { findByTestId, getByTestId, queryByTestId } = await render(
       <RecipeDetailScreen basePath="/home" />,
       { wrapper },
