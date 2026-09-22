@@ -139,17 +139,17 @@ COMMIT;
 
 ## 7. 受け入れ基準
 
-- [ ] フォローすると相手のフォロワー数と自分のフォロー数が +1 される
-- [ ] フォロー解除で -1 される
-- [ ] 同じ相手を二重フォローしても 1 件のまま（冪等）
-- [ ] 自分自身をフォローしようとすると 400
-- [ ] 「フォロー中」「フォロワー」タブの一覧が実データと一致する
-- [ ] 他ユーザーのプロフィールから、そのユーザーの「フォロー中」「フォロワー」一覧を閲覧できる
-- [ ] 相互フォロー（双方が follow）が成立し、両者の一覧に相手が出る
-- [ ] ユーザー行 / プロフィールからフォロー状態を切り替えられる
-- [ ] フォロー・フォロワー一覧の名前をタップすると、その人のプロフィール（＝その人のレシピ一覧を含む）へ遷移する
-- [ ] 同じユーザーへ同時にフォローが来てもカウントが正しい（エラーは返らない）
-- [ ] フォローされると被フォロー者に通知が届く
+- [x] フォローすると相手のフォロワー数と自分のフォロー数が +1 される（`backend/tests/test_follows.py::test_follow_increments_both_counts`）
+- [x] フォロー解除で -1 される（`backend/tests/test_follows.py::test_unfollow_decrements_both_counts`）
+- [x] 同じ相手を二重フォローしても 1 件のまま（冪等）（`backend/tests/test_follows.py::test_double_follow_is_idempotent`）
+- [x] 自分自身をフォローしようとすると 400（`backend/tests/test_follows.py::test_follow_self_returns_400`）
+- [x] 「フォロー中」「フォロワー」タブの一覧が実データと一致する（API 側: `backend/tests/test_follows.py::test_following_and_followers_lists`。画面側は API 呼び出し先・タブ切替のモックテストまで: `ConnectionsScreen.test.tsx`「一覧の出し分け」「行」）
+- [x] 他ユーザーのプロフィールから、そのユーザーの「フォロー中」「フォロワー」一覧を閲覧できる（一覧 API 自体: `backend/tests/test_follows.py::test_other_users_following_and_followers_are_visible`。プロフィール画面からの遷移経路: `expoApp/src/screens/__tests__/UserProfileScreen.test.tsx`「フォロー数 / フォロワー数のタップで一覧の該当タブへ」）
+- [x] 相互フォロー（双方が follow）が成立し、両者の一覧に相手が出る（`backend/tests/test_follows.py::test_mutual_follow`）
+- [x] ユーザー行 / プロフィールからフォロー状態を切り替えられる（共通フック: `expoApp/src/features/follow/__tests__/hooks.test.tsx`「useToggleFollow（楽観更新）」。一覧のユーザー行: `ConnectionsScreen.test.tsx`「行のフォローボタンは返事を待たずに『フォロー中』になる」。プロフィール画面: `UserProfileScreen.test.tsx`「フォロー（楽観更新）」）
+- [x] フォロー・フォロワー一覧の名前をタップすると、その人のプロフィール（行タップでの URL 遷移まで）へ遷移する（`ConnectionsScreen.test.tsx`「他人の行はその人のプロフィールへ、自分の行はマイページへ」。遷移先のレシピ一覧表示自体は本テスト対象外）
+- [x] 同じユーザーへ同時にフォローが来てもカウントが正しい（エラーは返らない）（`backend/tests/test_follows.py::test_concurrent_follows_keep_the_count_correct`）
+- [x] フォローされると被フォロー者に通知（`followed`）レコードが作成される（`backend/tests/test_follows.py::test_follow_creates_a_followed_notification`。通知一覧 API / UI での到達確認は本テスト対象外）
 
 ## 8. 未確定・メモ
 
