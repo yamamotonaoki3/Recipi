@@ -6,6 +6,7 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 
 ## 記録の索引
 
+- [2026-09-23 Windows から ECR へ Docker イメージを push するとき（Issue #331）](#2026-09-23-windows-から-ecr-へ-docker-イメージを-push-するときissue-331)
 - [2026-08-31 要件定義書 PR #2 の Codex レビューで採用した指摘（設計チェックリスト）](#2026-08-31-要件定義書のcodexレビューで採用した指摘)
 - [2026-08-31 画面設計 PR #7 の Codex レビューで採用した指摘](#2026-08-31-画面設計のcodexレビューで採用した指摘)
 - [2026-09-01 材料リスト拡張 PR #9 の Codex レビューで採用した指摘](#2026-09-01-材料リスト拡張のcodexレビューで採用した指摘)
@@ -1155,3 +1156,12 @@ E2E 10 件が通ったが、**新エンドポイントを検証するものは 1
 1. **「取得できたことの確認」と「値が一致することの確認」を混同しない**。APK署名検証で `EXPECTED_FP`/`ACTUAL_FP` を取得後、`-z` で空チェックだけ行い、**両者を実際に比較する行が抜けていた**（値が違っていても素通りする）。さらに `keytool` は `SHA256: AA:BB:...`、`apksigner` は `aabb...`（コロン無し小文字）と出力形式が異なるため、比較前にラベル除去・コロン除去・大文字小文字の正規化が必要。「検証ステップを書いた」だけでは検証になっていないか、取得した2つの値を実際にdiffしているかを見直す。
 2. **`actions/checkout` の `fetch-depth: 0` で履歴を持っていても、その後の `git fetch <remote> <branch>` を安易に再実行しない**。`--depth=1` を付けると深さ0で取得済みの履歴を切り詰めてしまい `merge-base --is-ancestor` が壊れる。さらに `git fetch origin main`（refspec省略）は **`actions/checkout` のfetch設定次第で `refs/remotes/origin/main` を更新せず `FETCH_HEAD` にしか入らない**ことがある。参照するref名を判定に使うなら `git fetch origin main:refs/remotes/origin/main` のように**更新先refspecを明示する**。
 3. 両方とも「動きそうに見えるが特定の状況（鍵の不一致、checkoutの内部実装差）でだけ無言ですり抜ける」タイプの不備で、Jest・ESLint等の通常のCIでは検出できない。**署名検証・出所検証など「セキュリティ上の担保」を謳うCIステップは、実際に不一致ケースを想定してロジックを読み返す**（「エラーが出ないから通っている」で終わらせない）。
+
+## 2026-09-23 Windows から ECR へ Docker イメージを push するとき（Issue #331）
+
+**きっかけ**: Terraform で作り直した ECR にバックエンドイメージを初めて push する際、PowerShell の `aws ecr get-login-password | docker login` が `400 Bad Request` で失敗した。AWS 側の認証トークンは有効で、`cmd /c` から同じログインを実行すると成功した。
+
+1. **「認証エラー」と表示されても、AWS の認証・ECR・Docker への受け渡しを分けて確かめる**。ECR のAPIを読むだけでは、Docker がそのトークンを正しく受け取れるとは限らない。認証トークンそのものを出力せず、ECRへ認証付きでアクセスしたときのHTTPステータスだけを確認すると、AWS側かローカル側かを切り分けられる。
+2. **Windows PowerShell のネイティブコマンド間パイプでECRログインが400になる場合は、`cmd /c` で同じパイプを実行する**。`cmd /c "aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <registry>"` が `Login Succeeded` なら、PowerShellのパイプ処理が原因である。トークンをファイルや変数の表示へ逃がさず、この経路でDockerの資格情報だけを更新する。
+3. **ECRに「イメージがある」ことは、pushの進捗表示では判断しない**。`docker push` の最後に `digest: sha256:...` が出たことを確認し、さらに `aws ecr describe-images` でコミットのフルSHAタグとpush日時を読む。Terraform の `backend_image_tag`、ローカルで付けたタグ、ECRのタグが一致して初めて、ECSが取り出せるイメージを用意できたと言える。
+4. **初回のTerraform planでECSのイメージ文字列が見えなくても、直ちに設定ミスとは限らない**。RDSやCloudFrontのようにapplyまで値が決まらない依存先があると、ECSの `container_definitions` 全体が `known after apply` になる。この場合は `terraform.tfvars` の `backend_image_tag` と、ECR内のタグの一致を別途確認する。
