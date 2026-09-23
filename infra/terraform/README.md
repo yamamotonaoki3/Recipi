@@ -211,6 +211,8 @@ state 用バケット（1 で作ったもの）は残す。次に立てるとき
 | `AWS_ECS_SUBNET_IDS` | `terraform output -json private_subnet_ids` の 2 件 | カンマ区切り（`subnet-aaa,subnet-bbb`。空白を入れない） |
 | `AWS_ECS_SECURITY_GROUP_ID` | `terraform output -raw ecs_security_group_id` | `sg-...` |
 
+なお、Android署名鍵（`ANDROID_RELEASE_KEYSTORE_BASE64` 等4点）はここに含めず、`release-approval` Environment の Environment Secrets として別途登録する（手順は `.github/workflows/release.yml` 冒頭コメント参照）。
+
 ## 監視（Issue #172）
 
 CloudWatch でログを集め、異常があれば SNS からメールで知らせる。
