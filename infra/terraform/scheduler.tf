@@ -61,15 +61,23 @@ resource "aws_iam_role_policy" "scheduler" {
     Statement = [
       {
         # タスク定義のリビジョンは #167 のデプロイで上がるので、末尾は :* にする。
-        # RunTask にタグ（recipi:job。下の aws_scheduler_schedule）を渡すには
-        # ecs:RunTask だけでなく ecs:TagResource も要る（無いと AccessDenied。Issue #341）。
         Sid      = "RunJobTask"
         Effect   = "Allow"
-        Action   = ["ecs:RunTask", "ecs:TagResource"]
+        Action   = ["ecs:RunTask"]
         Resource = "${local.task_definition_arn_base}:*"
         Condition = {
           ArnEquals = { "ecs:cluster" = aws_ecs_cluster.main.arn }
         }
+      },
+      {
+        # RunTask にタグ（recipi:job。下の aws_scheduler_schedule）を渡すには
+        # ecs:TagResource も要る（無いと AccessDenied。Issue #341）。
+        # タグ付け対象は「起動されたタスク」（task-definition ではなく task の ARN）。
+        # Issue #341 では task_definition_arn_base に付けてしまい直っていなかった（Issue #343）。
+        Sid      = "TagJobTask"
+        Effect   = "Allow"
+        Action   = ["ecs:TagResource"]
+        Resource = "arn:aws:ecs:${var.aws_region}:${local.account_id}:task/${aws_ecs_cluster.main.name}/*"
       },
       {
         # タスク定義に書いてある 2 つのロールを ECS に渡す権限（ECS 以外には渡せない）。
