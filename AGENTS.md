@@ -50,6 +50,17 @@
 - 本番の秘密情報はリポジトリへ置かず、デプロイ先のシークレット管理機構から注入する。
 - `.claude/` などエージェント固有の内部設定や、個人環境だけに必要な設定はGitへコミットしない。
 
+## Windows から ECR へ Docker イメージを push するとき
+
+- PowerShell で `aws ecr get-login-password ... | docker login ...` を実行して `400 Bad Request` になることがある。この場合、認証トークンやパスワードを表示・保存せず、同じログインを `cmd /c` 経由で試して PowerShell のパイプ処理を切り分ける。
+
+  ```powershell
+  cmd /c "aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.<region>.amazonaws.com"
+  ```
+
+- `Login Succeeded` が出たら、すでにタグ付け済みのイメージを通常の `docker push` で push する。push 完了の根拠は待機中の表示ではなく、最後に出る `digest: sha256:...` と ECR の `describe-images` によるタグ確認とする。
+- Terraform の `backend_image_tag`、ローカルでビルドしたイメージのタグ、ECR に存在するタグを同じコミットのフル SHA で照合する。初回構築の `terraform plan` では、依存する値が未確定のため ECS の `container_definitions` 全体が `known after apply` となり、そこだけではイメージタグを確認できない場合がある。
+
 ## 設計・実装の判断
 
 - 要件にない新しい技術・依存パッケージ・構成を選定する必要がある場合は、独断で決めずにユーザーと確認する。決定後は要件定義へ記録し、バージョンと利用可否を検証する。
