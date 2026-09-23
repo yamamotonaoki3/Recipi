@@ -213,6 +213,20 @@ state 用バケット（1 で作ったもの）は残す。次に立てるとき
 
 なお、Android署名鍵（`ANDROID_RELEASE_KEYSTORE_BASE64` 等4点）はここに含めず、`release-approval` Environment の Environment Secrets として別途登録する（手順は `.github/workflows/release.yml` 冒頭コメント参照）。
 
+### デプロイ後の受け入れテスト（Issue #337）
+
+`deploy-backend` ワークフロー成功後、実際にAPIが機能するかを以下の順で確認する。**`/healthz`・`/healthz/db` は接続確認のみでスキーマの有無までは保証しない**ため、マイグレーション漏れ（`relation "..." does not exist`）はこの手順で初めて検出できる。
+
+1. `GET /healthz` → 200、`GET /healthz/db` → 200
+2. テストデータ標準（グローバル CLAUDE.md）に従い、`testuser_` prefix・`@example.com` ドメインの使い捨てアカウントで以下を実施:
+   - `POST /api/v1/auth/signup` → 201
+   - `POST /api/v1/recipes` → 201、`GET /api/v1/recipes/{id}` → 200
+   - AI校正を有効化している場合は `POST /api/v1/ai/proofread` → 200（実モデルの応答が返ることを確認）
+3. `DELETE /users/me` でテストアカウントを退会させ、本番DBに残さない
+4. CloudFrontの配信経路が生きていることを確認する（非公開バケット・OAC構成のため、存在しないキーでも403が返れば経路は正常。5xx・タイムアウトの場合のみ異常）
+
+**backendサービスへの変更は必ず `deploy-backend` ワークフロー経由で行う。** `aws ecs update-service --force-new-deployment` 等でコンテナだけを再起動する操作は、マイグレーションを経由しないため、既存タスクが古いスキーマのまま起動し続けたり、初回起動時は本節の1がすり抜けてしまう（`/healthz/db` は接続確認のみのため気づけない）。
+
 ## 監視（Issue #172）
 
 CloudWatch でログを集め、異常があれば SNS からメールで知らせる。
