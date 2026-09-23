@@ -6,6 +6,7 @@ Codex レビューで採用された指摘や実装中に発生した手直し�
 
 ## 記録の索引
 
+- [2026-09-23 本番ECSサービスをGitHub Actions経由せず直接再起動すると、マイグレーションが抜ける（Issue #337）](#2026-09-23-本番ecsサービスをgithub-actions経由せず直接再起動すると-マイグレーションが抜けるissue-337)
 - [2026-09-23 Windows から ECR へ Docker イメージを push するとき（Issue #331）](#2026-09-23-windows-から-ecr-へ-docker-イメージを-push-するときissue-331)
 - [2026-08-31 要件定義書 PR #2 の Codex レビューで採用した指摘（設計チェックリスト）](#2026-08-31-要件定義書のcodexレビューで採用した指摘)
 - [2026-08-31 画面設計 PR #7 の Codex レビューで採用した指摘](#2026-08-31-画面設計のcodexレビューで採用した指摘)
@@ -1165,3 +1166,11 @@ E2E 10 件が通ったが、**新エンドポイントを検証するものは 1
 2. **Windows PowerShell のネイティブコマンド間パイプでECRログインが400になる場合は、`cmd /c` で同じパイプを実行する**。`cmd /c "aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <registry>"` が `Login Succeeded` なら、PowerShellのパイプ処理が原因である。トークンをファイルや変数の表示へ逃がさず、この経路でDockerの資格情報だけを更新する。
 3. **ECRに「イメージがある」ことは、pushの進捗表示では判断しない**。`docker push` の最後に `digest: sha256:...` が出たことを確認し、さらに `aws ecr describe-images` でコミットのフルSHAタグとpush日時を読む。Terraform の `backend_image_tag`、ローカルで付けたタグ、ECRのタグが一致して初めて、ECSが取り出せるイメージを用意できたと言える。
 4. **初回のTerraform planでECSのイメージ文字列が見えなくても、直ちに設定ミスとは限らない**。RDSやCloudFrontのようにapplyまで値が決まらない依存先があると、ECSの `container_definitions` 全体が `known after apply` になる。この場合は `terraform.tfvars` の `backend_image_tag` と、ECR内のタグの一致を別途確認する。
+
+## 2026-09-23 本番ECSサービスをGitHub Actions経由せず直接再起動すると、マイグレーションが抜ける（Issue #337）
+
+**きっかけ**: backend復旧のため `aws ecs update-service --force-new-deployment` でコンテナを直接再起動した。ECSタスクは正常に起動し `/healthz`・`/healthz/db` も200を返したが、実際に `POST /api/v1/auth/signup` を呼ぶと `psycopg.errors.UndefinedTable: relation "users" does not exist` で500になった。
+
+1. **`/healthz/db` はDB接続確認のみで、スキーマの有無までは保証しない**。`SELECT 1` 相当の疎通確認と、実テーブルが存在するかは別物。ヘルスチェックが200でも、マイグレーション未適用のまま気づかずデプロイ完了と誤認しうる。
+2. **本番ECSサービスへの変更は、必ず `deploy-backend.yml`（ECRプッシュ→タスク定義更新→`alembic upgrade head`→サービス更新→healthzチェック、失敗時ロールバック）経由で行う**。`aws ecs update-service` 等でコンテナだけを再起動する操作は、この一連の手順（特にマイグレーション）を丸ごと迂回してしまう。
+3. **トラブルシュートで一時的にAWS CLIを直接叩いて「直った」ように見えても、正規のデプロイパイプラインを経由したかを必ず確認する**。今回は `/healthz` 系が200を返したことで一見正常に見えたが、実際のAPI呼び出しで初めて異常が発覚した。healthzだけでなく、実際のCRUD相当のリクエストまで確認して初めて「受け入れテスト」と言える（`infra/terraform/README.md`「デプロイ後の受け入れテスト」節を参照）。
