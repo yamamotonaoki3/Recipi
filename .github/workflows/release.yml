@@ -112,7 +112,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: "24.22.1"
           cache: npm
           cache-dependency-path: expoApp/package-lock.json
 
@@ -169,7 +169,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: "24.22.1"
           cache: npm
           cache-dependency-path: expoApp/package-lock.json
 
