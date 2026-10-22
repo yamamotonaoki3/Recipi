@@ -132,6 +132,7 @@ jobs:
         working-directory: expoApp
 
       - name: Playwright フローを実行（Web / Chromium）
+        id: e2e
         run: npx playwright test
         working-directory: expoApp
         env:
@@ -155,7 +156,8 @@ jobs:
       # 後始末に失敗したらジョブも失敗にする（continue-on-error は付けない）。
       # postgres はまだ動いている（止めるのは次の「後片付け」）。
       - name: E2E データの後始末（cleanup_e2e.py、残数 0 を確認）
-        if: always()
+        # テスト開始前の失敗では依存・DBが未準備で、掃除するデータもない。
+        if: ${{ always() && steps.e2e.outcome != 'skipped' && steps.e2e.outcome != '' }}
         run: python -m scripts.cleanup_e2e --all --yes
         working-directory: backend
         env:
