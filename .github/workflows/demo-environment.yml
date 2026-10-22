@@ -5,12 +5,14 @@ on:
     paths:
       - "backend/scripts/create_demo_env.py"
       - "infra/docker-compose.demo.yml"
+      - "infra/minio/**"
       - ".env.demo.example"
       - ".github/workflows/demo-environment.yml"
   pull_request:
     paths:
       - "backend/scripts/create_demo_env.py"
       - "infra/docker-compose.demo.yml"
+      - "infra/minio/**"
       - ".env.demo.example"
       - ".github/workflows/demo-environment.yml"
 

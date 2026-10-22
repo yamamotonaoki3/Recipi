@@ -107,6 +107,7 @@
 ## インフラ / 実行環境
 
 - ローカル開発は **Docker Compose 中心**（`api` + `postgres` + `minio`）。詳細は [architecture.md](architecture.md)。
+- MinIO は公式 `RELEASE.2025-10-15T17-29-55Z` の固定コミットから `infra/minio/Dockerfile` でビルドする（Go 1.27.3、Debian bookworm。Issue #347）。開発・デモ・CI は同じ定義を使う。[公式のソースビルド案内](https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z)と更新手順は [environment.md](environment.md) §4 を参照。
 - 本番は **AWS**（学習用。確認するときだけ apply し、終わったら destroy する）。構成の全体像とトレードオフは [architecture.md](architecture.md) §本番デプロイ、手順は [`infra/terraform/README.md`](../../infra/terraform/README.md)。
 - **Terraform**: `required_version = "~> 1.15"`（手元・CI は 1.15.5）。**AWS provider `~> 6.64`**、**random provider `~> 3.9`**（Issue #165 で確定。2026-09-16 時点の最新安定版）。ephemeral リソース（1.10+）と書き込み専用の引数（1.11+）を使い、DB のパスワードや鍵を tfstate に残さない。
 - **本番で使う AWS のサービス**（リージョン: ap-northeast-1。構成は `infra/terraform/`、手順は [`infra/terraform/README.md`](../../infra/terraform/README.md)、全体像は [architecture.md](architecture.md) §本番デプロイ）:

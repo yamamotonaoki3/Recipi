@@ -112,6 +112,8 @@ jobs:
       # 画像アップロードの結合テスト用ストレージ（Issue #39）。
       # `services:` ではなく docker run にしている理由は上のコメント参照。
       # バケットの作成と公開設定はテスト側（conftest の ensure_bucket）が行う。
+      - name: MinIO を公式の固定ソースからビルド
+        run: docker build -t recipi-minio:ci ../infra/minio
       - name: MinIO を起動（結合テストのストレージ）
         run: |
           # MinIO のイメージには mc クライアントが入っていないため、HTTP エンドポイントで確認する。
@@ -123,7 +125,7 @@ jobs:
             --health-interval 5s \
             --health-timeout 5s \
             --health-retries 20 \
-            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+            recipi-minio:ci server /data
           for i in $(seq 1 30); do
             if [ "$(docker inspect -f '{{.State.Health.Status}}' minio)" = "healthy" ]; then exit 0; fi
             sleep 2
