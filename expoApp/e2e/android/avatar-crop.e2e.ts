@@ -6,7 +6,7 @@
  *
  * 事前に、非公開画像の題材として使える写真を端末のギャラリーへ入れておく必要がある
  * （CI・ローカルとも `adb push` ＋ メディアスキャン。手順は `docs/requirements/testing.md`）。
- * ピッカーはシステムのアプリ（`com.google.android.providers.media.module`）で、
+ * ピッカーはシステムのアプリ（Google版またはAOSP版のmedia.module）で、
  * サムネイルは `icon_thumbnail`。「最近」の先頭（＝最新の1枚）を選ぶ。
  */
 import { $, browser } from "@wdio/globals";
@@ -14,7 +14,7 @@ import { $, browser } from "@wdio/globals";
 const id = (testId: string) => `id=${testId}`;
 const testEmail = `e2euser_avatarcrop_${Date.now()}-${process.pid}@example.com`;
 const THUMBNAIL =
-  'android=new UiSelector().resourceId("com.google.android.providers.media.module:id/icon_thumbnail")';
+  'android=new UiSelector().resourceIdMatches("com[.](google[.])?android[.]providers[.]media[.]module:id/icon_thumbnail")';
 
 async function waitFor(selector: string, timeout = 20_000) {
   await $(selector).waitForDisplayed({ timeout });
