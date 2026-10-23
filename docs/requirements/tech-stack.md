@@ -18,7 +18,7 @@
 | 項目 | 採用 | 備考 |
 | --- | --- | --- |
 | 言語 | TypeScript | |
-| ランタイム | **Node.js 24.x（現行 LTS）** | このマシンに 24.19.0 導入済み。Expo SDK 57 の最低要件 Node 22.13 を満たす |
+| ランタイム | **Node.js 24.22.1（LTS、固定）** | 2026-10-21 公開の[セキュリティ修正版](https://nodejs.org/en/blog/release/v24.22.1)。CI・リリースビルドの `actions/setup-node` も同じ版へ固定する（Issue #345）。このマシンでも同版を確認済み。Expo SDK 57 の最低要件 Node 22.13 を満たす |
 | フレームワーク | React Native + **Expo（SDK 57）** | **React Native 0.86**、New Architecture（Fabric / TurboModules）。2026 の RN 標準構成 |
 | ルーティング | **Expo Router**（ファイルベース） | React Navigation の上に乗る。web / ネイティブ共通 |
 | パッケージマネージャ | **npm**（11.x、Node 同梱） | pnpm / yarn は使わない |
