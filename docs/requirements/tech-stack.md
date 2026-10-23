@@ -56,7 +56,7 @@
 
 | 項目 | 採用 | 備考 |
 | --- | --- | --- |
-| 言語 | Python 3.14.7（固定） | このマシンに導入済み。必要な C 拡張ライブラリの Windows ビルド済み wheel を 3.14.7 で確認済み（`uvloop` のみ Windows 非対応だが Uvicorn が自動スキップするため影響なし）。`.python-version` で 3.14.7 を固定、`requires-python = ">=3.14,<3.15"`、Docker は `python:3.14.7-slim` |
+| 言語 | Python 3.14.9（固定） | Issue #349でセキュリティ修正版へ更新。専用venvでWindows wheelを確認。`.python-version`とDockerの両ステージを3.14.9に統一。`requires-python = ">=3.14,<3.15"`。OpenSSLはWindowsで3.5.9、DebianではDSA-6531-1修正済みパッケージ以上を要求。pip 26.2.2、certifi 2026.10.19を固定（[検証方法](../security/python-2026-10.md)） |
 | フレームワーク | FastAPI | ASGI。型ヒントから OpenAPI 3.1 を自動生成、Pydantic v2 でバリデーション |
 | ASGI サーバー | Uvicorn | 開発は `--reload`。本番は **単一プロセス**（ECS Fargate 0.25 vCPU / 0.5GB・1 タスク。Issue #165）。Gunicorn / Granian でワーカーを増やすかは負荷を測ってから判断 |
 | ORM | SQLModel | SQLAlchemy 2.0 + Pydantic のラッパー。FastAPI 公式チュートリアル推奨。複雑な制約は生 SQLAlchemy に降りる |

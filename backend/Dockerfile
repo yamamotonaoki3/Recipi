@@ -1,9 +1,18 @@
 # Recipi バックエンドの本番向けイメージ。
-# タグは固定する（python:3.14.7-slim。tech-stack.md）。
+# タグは固定する（python:3.14.9-slim。tech-stack.md）。
 # 「マルチステージビルド」= ビルド用と実行用でステージを分け、実行イメージを小さくする。
 
+# Debianは修正をバックポートするため、ssl.OPENSSL_VERSIONだけでは判定しない。
+# DSA-6531-1の修正版（3.5.7-1~deb13u3）以上を両ステージで保証する。
+FROM python:3.14.9-slim AS base
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade libssl3t64 openssl \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libssl3t64)" ge '3.5.7-1~deb13u3' \
+    && rm -rf /var/lib/apt/lists/*
+RUN python -m pip install --no-cache-dir pip==26.2.2
+
 # ---- ステージ 1: 依存をインストール --------------------------------------
-FROM python:3.14.7-slim AS builder
+FROM base AS builder
 
 WORKDIR /app
 
@@ -13,7 +22,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ---- ステージ 2: 実行イメージ ------------------------------------------
-FROM python:3.14.7-slim AS runtime
+FROM base AS runtime
 
 # root ではなく専用ユーザーで動かす（セキュリティ上の基本）。
 RUN useradd --create-home --uid 1000 appuser

@@ -23,7 +23,7 @@ Phase 1 以降、`app/models/`（SQLModel テーブル）、`app/api/`（ルー�
 
 ## セットアップ
 
-前提: Python 3.14.7、Docker（[`../README.md`](../README.md) 参照）。
+前提: Python 3.14.9、Docker（[`../README.md`](../README.md) 参照）。
 
 ```bash
 # 1. リポジトリルートで .env を用意
@@ -41,7 +41,7 @@ docker compose --env-file .env.development -f infra/docker-compose.yml up -d pos
 cd backend
 python -m venv .venv
 source .venv/bin/activate                     # Windows PowerShell: .\.venv\Scripts\Activate.ps1
-pip install -r requirements-dev.txt
+python -m pip install -r requirements-dev.txt
 
 # 4. マイグレーション適用（開発 DB）
 alembic upgrade head
