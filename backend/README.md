@@ -23,7 +23,7 @@ Phase 1 以降、`app/models/`（SQLModel テーブル）、`app/api/`（ルー�
 
 ## セットアップ
 
-前提: Python 3.14.7、Docker（[`../README.md`](../README.md) 参照）。
+前提: Python 3.14.9、Docker（[`../README.md`](../README.md) 参照）。
 
 ```bash
 # 1. リポジトリルートで .env を用意

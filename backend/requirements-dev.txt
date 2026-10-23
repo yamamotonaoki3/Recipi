@@ -10,3 +10,6 @@ pytest==9.1.1               # テストランナー
 pytest-asyncio==1.4.0       # async なテスト関数を動かす
 pytest-cov==7.1.0           # カバレッジ計測（行 ＋ 分岐）
 httpx==0.28.1               # テストから FastAPI を叩く HTTP クライアント（ASGITransport）
+
+# pip同梱の証明書ストアも修正版にする（Issue #349）。
+pip==26.2.2

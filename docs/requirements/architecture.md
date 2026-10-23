@@ -16,8 +16,8 @@ Recipi/
 │   ├── tests/          pytest（単体・結合）。結合は実 Postgres / MinIO
 │   ├── requirements.txt / requirements-dev.txt
 │   ├── pyproject.toml  ツール設定（ruff / mypy / pytest）、requires-python = ">=3.14,<3.15"
-│   ├── .python-version  3.14.7（検証済みの固定バージョン）
-│   └── Dockerfile      python:3.14.7-slim（タグを固定）
+│   ├── .python-version  3.14.9（検証済みの固定バージョン）
+│   └── Dockerfile      python:3.14.9-slim（タグを固定）
 ├── openapi/        backend が出力する openapi.json ＋ 生成設定（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）
 ├── expoApp/        ★TypeScript トラック（必須）。Node / Expo プロジェクト。Gradle 非登録
 │   ├── app/            Expo Router のルート（ファイルベース）

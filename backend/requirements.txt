@@ -20,3 +20,6 @@ boto3==1.43.89               # S3 互換ストレージのクライアント（#
 pillow==12.3.0               # 画像の検証 / EXIF 回転の正規化 / 縮小 / 再エンコード（#39）
 python-multipart==0.0.32     # FastAPI が multipart/form-data（UploadFile）を受けるのに必要
 httpx==0.28.1                # Ollama / Anthropic API へのタイムアウト付きHTTP呼び出し
+
+# 証明書ストアのセキュリティ修正（Issue #349）。HTTPクライアントの推移依存も固定。
+certifi==2026.10.19
