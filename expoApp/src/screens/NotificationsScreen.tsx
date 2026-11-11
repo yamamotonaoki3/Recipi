@@ -111,7 +111,7 @@ export function NotificationsScreen({ basePath = "/notifications" }: { basePath?
           )}
           // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
           ListEmptyComponent={
-            getListStatus(notifications).hasListError ? null : (
+            getListStatus(notifications).hasListError ? undefined : (
               <Text testID="notifications-empty" className="mt-10 text-center text-neutral-500">
                 通知はまだありません
               </Text>

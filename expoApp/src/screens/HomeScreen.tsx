@@ -23,6 +23,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextInputInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -174,7 +175,7 @@ export function HomeScreen({ basePath }: { basePath: string }) {
    * そこで web のときだけ DOM の `keydown` を直接購読する。
    * ネイティブには Esc キーが無いので、この購読自体を行わない。
    */
-  const searchInputRef = useRef<TextInput>(null);
+  const searchInputRef = useRef<TextInputInstance>(null);
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     // setState 関数は再描画をまたいで同一なので、依存配列は空でよい。
@@ -385,7 +386,7 @@ function FeedList({
           )}
           // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
           ListEmptyComponent={
-            status.hasListError ? null : (
+            status.hasListError ? undefined : (
               <Text
                 testID={`home-feed-empty${suffix}`}
                 className="mt-10 text-center text-neutral-500"

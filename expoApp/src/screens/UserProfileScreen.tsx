@@ -254,7 +254,7 @@ export function UserProfileScreen({ basePath }: { basePath: string }) {
         ListEmptyComponent={
           recipesQuery.isPending ? (
             <ActivityIndicator className="my-6" />
-          ) : recipesQuery.isError ? null : (
+          ) : recipesQuery.isError ? undefined : (
             <Text testID="user-profile-recipes-empty" className="mt-6 text-center text-neutral-500">
               まだ公開レシピがありません
             </Text>

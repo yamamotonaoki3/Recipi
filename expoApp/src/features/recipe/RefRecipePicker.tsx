@@ -71,7 +71,7 @@ export function RefRecipePicker({
             if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
           }}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={isFetchingNextPage ? <ActivityIndicator /> : null}
+          ListFooterComponent={isFetchingNextPage ? <ActivityIndicator /> : undefined}
         />
       </View>
     </Modal>

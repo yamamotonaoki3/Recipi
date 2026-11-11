@@ -39,7 +39,12 @@
           "cameraPermission": "レシピの写真をその場で撮影するためにカメラへのアクセスを求めています。",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

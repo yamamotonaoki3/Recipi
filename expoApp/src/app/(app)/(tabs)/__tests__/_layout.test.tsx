@@ -40,13 +40,13 @@ jest.mock("expo-router/ui", () => {
     }) => {
       mockResetOnFocus[testID] = resetOnFocus;
       const handlePress = () => {
+        let prevented = false;
         const event = {
-          defaultPrevented: false,
           preventDefault() {
-            this.defaultPrevented = true;
+            prevented = true;
           },
           isDefaultPrevented() {
-            return this.defaultPrevented;
+            return prevented;
           },
         } as Parameters<NonNullable<PressableProps["onPress"]>>[0];
 
