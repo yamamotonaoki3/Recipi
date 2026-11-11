@@ -61,3 +61,13 @@ npm ls <パッケージ> --all
 npm view <パッケージ> version dependencies   # 修正版・上流の依存の確認
 npm audit fix --dry-run          # C の対象確認（適用はしない）
 ```
+
+## 区分 A の対応結果（2026-11-12、#353）
+
+WebdriverIO 9.31 系 → 10.2.0 系へ更新した（`@wdio/{appium-service,cli,globals,local-runner,mocha-framework,spec-reporter,types}` と `webdriverio`。`@wdio/mocha-framework@10.2.0` が Mocha 12.0.3 を要求し、自動で入る）。`appium` の行は別 PR（#362）の担当のため変更していない。
+
+- `npm audit`: 57 件（high 22 / moderate 34 / low 1）→ **49 件（high 8 / moderate 40 / low 1）**。`--omit=dev` は 7 件のまま変化なし。
+- 解消: @puppeteer/browsers、extract-zip、basic-ftp、get-uri、proxy-agent 系、webdriver、@wdio/{utils,config,cli ほか}の high。残る @wdio/{appium-service,cli,local-runner,mocha-framework,runner} と webdriverio は moderate（glob / minimatch / archiver 経由で区分 D）。
+- `overrides` の `serialize-javascript: 7.1.4` は Mocha 12.0.3 が `^7.1.1` を要求し、上書き無しでも 7.1.4 に解決されるため削除した。他の overrides は維持。
+- lockfile の `node_modules/.*@img/sharp-` エントリは 26 件のまま。
+- 設定の読み込み確認: `npx wdio run wdio.conf.ts --spec e2e/android/token-refresh.e2e.ts` をデバイス・Appium 無しで起動し、設定と spec の読み込み、ワーカー起動、セッション開始要求（接続拒否で停止）まで進むことを確認。`wdio.conf.ts` と spec に変更は不要だった。実機相当の確認は `e2e-android.yml` で行う。
