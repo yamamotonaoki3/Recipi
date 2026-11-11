@@ -43,6 +43,7 @@
 - **A（#353 WebdriverIO 10 / Mocha 更新、15 件）**: @puppeteer/browsers、@wdio/appium-service、@wdio/cli、@wdio/config、@wdio/local-runner、@wdio/mocha-framework、@wdio/runner、@wdio/utils、basic-ftp、extract-zip、get-uri、pac-proxy-agent、proxy-agent、webdriver、webdriverio。E2E 専用の high がまとまって解消する。
 - **B（#354 Expo SDK 58 移行、5 件）**: decode-uri-component、query-string、expo-router、expo、@expo/fingerprint。runtime の high はここで解消する。
 - **C（同一メジャーで即対応、3 件）**: follow-redirects、body-parser、@appium/base-driver。
+  - **対応済み（2026-11-11、#361 の PR）**: appium を 3.9.0 へ更新。follow-redirects・body-parser の high は解消。@appium/base-driver は body-parser 分が解消し、glob 経由の分のみ D として残る。npm audit は 57 件から 55 件（high 22 → 17）。
 - **D（受容して記録、34 件）**: glob、minimatch、readdir-glob、archiver、test-exclude、deepmerge、Appium 一式の残り 8 件、Jest 一式の残り、typescript-eslint 5 件。いずれも dev・build 専用でアプリには同梱されない。悪用には開発機・CI 上で信頼できない入力（悪意あるグロブパターンや zip 等）を処理させる必要があり、現実的な到達性は低い。A・B・C の適用後に再監査し、残ったものを本ファイルに追記する。
 
 ## 検証コマンドと日付
