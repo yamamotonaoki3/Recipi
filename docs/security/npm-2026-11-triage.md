@@ -44,6 +44,7 @@
 - **B（#354 Expo SDK 58 移行、5 件）**: decode-uri-component、query-string、expo-router、expo、@expo/fingerprint。runtime の high はここで解消する。
 - **C（同一メジャーで即対応、3 件）**: follow-redirects、body-parser、@appium/base-driver。
   - **対応済み（2026-11-11、#361 の PR）**: appium を 3.9.0 へ更新。follow-redirects・body-parser の high は解消。@appium/base-driver は body-parser 分が解消し、glob 経由の分のみ D として残る。npm audit は 57 件から 55 件（high 22 → 17）。
+  - **対応済み（2026-11-12、#354 の PR）**: Expo SDK 57 → 58（expo 58.0.24 / expo-router 58.0.31 / React Native 0.88.1 / React 19.3.0）へ移行。decode-uri-component・query-string・expo-router の runtime high 3 件は解消し、`npm audit --omit=dev` は 7 件 → 3 件（high 0 / moderate 3）。全体は 55 件 → 52 件（high 17 → 14、本 PR 時点の main 基準）。expo・@expo/fingerprint は fingerprint が glob / minimatch を引き続き要求するため moderate のまま残る（dev・build のみ。D 扱いで受容）。
 - **D（受容して記録、34 件）**: glob、minimatch、readdir-glob、archiver、test-exclude、deepmerge、Appium 一式の残り 8 件、Jest 一式の残り、typescript-eslint 5 件。いずれも dev・build 専用でアプリには同梱されない。悪用には開発機・CI 上で信頼できない入力（悪意あるグロブパターンや zip 等）を処理させる必要があり、現実的な到達性は低い。A・B・C の適用後に再監査し、残ったものを本ファイルに追記する。
 
 ## 検証コマンドと日付

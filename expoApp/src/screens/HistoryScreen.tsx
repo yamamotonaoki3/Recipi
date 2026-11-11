@@ -103,7 +103,7 @@ export function HistoryScreen({ basePath }: { basePath: string }) {
           )}
           // 失敗中は空状態の文言を出さない（末尾の再試行を優先する。lessons #130-2）。
           ListEmptyComponent={
-            status.hasListError ? null : (
+            status.hasListError ? undefined : (
               <Text testID="history-empty" className="mt-10 text-center text-neutral-500">
                 まだ見たレシピがありません
               </Text>

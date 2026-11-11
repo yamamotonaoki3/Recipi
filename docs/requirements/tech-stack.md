@@ -18,8 +18,8 @@
 | 項目 | 採用 | 備考 |
 | --- | --- | --- |
 | 言語 | TypeScript | |
-| ランタイム | **Node.js 24.22.1（LTS、固定）** | 2026-10-21 公開の[セキュリティ修正版](https://nodejs.org/en/blog/release/v24.22.1)。CI・リリースビルドの `actions/setup-node` も同じ版へ固定する（Issue #345）。このマシンでも同版を確認済み。Expo SDK 57 の最低要件 Node 22.13 を満たす |
-| フレームワーク | React Native + **Expo（SDK 57）** | **React Native 0.86**、New Architecture（Fabric / TurboModules）。2026 の RN 標準構成 |
+| ランタイム | **Node.js 24.22.1（LTS、固定）** | 2026-10-21 公開の[セキュリティ修正版](https://nodejs.org/en/blog/release/v24.22.1)。CI・リリースビルドの `actions/setup-node` も同じ版へ固定する（Issue #345）。このマシンでも同版を確認済み。Expo SDK 58 の最低要件 Node 22.13 を満たす |
+| フレームワーク | React Native + **Expo（SDK 58）** | **React Native 0.88**、React 19.3、TypeScript 6.0（Issue #354 で SDK 57 → 58 へ移行）、New Architecture（Fabric / TurboModules）。2026 の RN 標準構成 |
 | ルーティング | **Expo Router**（ファイルベース） | React Navigation の上に乗る。web / ネイティブ共通 |
 | パッケージマネージャ | **npm**（11.x、Node 同梱） | pnpm / yarn は使わない |
 | 対象プラットフォーム | Android（Expo ネイティブ）＋ **Desktop（Windows・macOS）** | Desktop は下記のとおり RN Web ビルドを Tauri で包む。**iOS はこの学習プロジェクトでは対象外**（[todo.md](todo.md) #3。Windows 環境では Xcode/Mac が無く iOS のネイティブアプリをローカルビルドできない（EAS Build のクラウドビルドで、Apple Developer Program への加入なしで作れるのはシミュレータ向けビルドまで（シミュレータの実行自体には Mac/Xcode が必要）。自分の端末の実機で試すには、Mac 上のローカル Xcode ビルド（無料だがプロビジョニングが短期で失効）か、有料の Apple Developer Program〈年額 $99〉のいずれかが要り、TestFlight・App Store・Ad Hoc 配布にも同じ Program が必須）ため、この学習プロジェクトでは割愛） |
@@ -32,7 +32,7 @@
 | テスト | jest（`jest-expo` preset）＋ `@testing-library/react-native` ＋ `test-renderer` | ESLint 9 ＋ Prettier ＋ `tsc --noEmit`。MSW は jest-expo の RN 環境と相性が悪く Phase 1 で node 環境用に整える（[testing.md](testing.md)） |
 | バージョン固定 | `expoApp/package-lock.json`（CI は `npm ci`） | `.npmrc` に `legacy-peer-deps=true`（RN/Expo の peer 依存ずれを許容する実務的設定）。Issue #34 で確定 |
 | ネイティブ機能 | Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store` / `expo-network`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
-| 通信状態（オンライン / オフライン） | **expo-network**（`~57.0.2`。Issue #133 で確定） | Android の通信状態の変化を TanStack Query の `onlineManager` に伝える（オフライン中の一時停止と自動のやり直し、オフラインの案内）。Web / Tauri はブラウザの online / offline の知らせを TanStack Query が既定で使う |
+| 通信状態（オンライン / オフライン） | **expo-network**（`~58.0.5`。Issue #133 で確定） | Android の通信状態の変化を TanStack Query の `onlineManager` に伝える（オフライン中の一時停止と自動のやり直し、オフラインの案内）。Web / Tauri はブラウザの online / offline の知らせを TanStack Query が既定で使う |
 | ビルド / 配布 | ローカルビルド（Android APK）、Tauri の `.msi` / `.dmg`（未署名。todo.md #31） | iOS は対象外のため EAS Build は使わない |
 
 ### (B) Kotlin Multiplatform トラック（随時）

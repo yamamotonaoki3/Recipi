@@ -83,6 +83,6 @@ npm run gen:icons
 
 ## バージョン
 
-Expo SDK 57 / React Native 0.86 / Node 24。パッケージは `package-lock.json` で
+Expo SDK 58 / React Native 0.88 / Node 24。パッケージは `package-lock.json` で
 固定（CI は `npm ci`）。`.npmrc` で `legacy-peer-deps=true`（RN/Expo エコシステムの
 peer 依存の食い違いを許容するための実務的な設定）。

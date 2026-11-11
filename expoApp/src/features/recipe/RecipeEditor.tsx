@@ -23,7 +23,9 @@ import {
   TextInput,
   View,
   useWindowDimensions,
-  type TextInput as RNTextInput,
+  type ScrollViewInstance,
+  type TextInputInstance,
+  type ViewInstance,
 } from "react-native";
 
 import {
@@ -100,7 +102,7 @@ export const EDITOR_DIALOG_MAX_WIDTH = 768;
 const EDITOR_DIALOG_HEIGHT_RATIO = 0.9;
 
 /** エラー箇所の View を `anchorKey` で登録するための関数。 */
-export type RegisterAnchor = (anchorKey: string, node: View | null) => void;
+export type RegisterAnchor = (anchorKey: string, node: ViewInstance | null) => void;
 
 export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEditorProps) {
   // 外部から渡されうる値なので、既知の destination だけに絞る（下の型の説明参照）。
@@ -378,13 +380,13 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
   // 表示先は各欄の直下と ScrollView の先頭しかない。下の方で保存を押すと
   // エラーが画面外になり「押しても何も起きない」ように見えるため、
   // ポップアップから該当欄まで運べるようにする。
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // スクロール内容の原点。これ自身もスクロールに合わせて動くので、
   // 「対象のウィンドウ座標 − これのウィンドウ座標」がそのまま
   // スクロール内容の中での位置になる。
-  const contentRef = useRef<View>(null);
+  const contentRef = useRef<ViewInstance>(null);
   // anchorKey -> その欄を包む View。エラー一覧の anchorKey で引く。
-  const anchorNodes = useRef(new Map<string, View>());
+  const anchorNodes = useRef(new Map<string, ViewInstance>());
   const registerAnchor = useCallback<RegisterAnchor>((anchorKey, node) => {
     if (node) anchorNodes.current.set(anchorKey, node);
     else anchorNodes.current.delete(anchorKey);
@@ -394,19 +396,19 @@ export function RecipeEditor({ mode, recipe, basePath: rawBasePath }: RecipeEdit
   // 関数を渡すと React が解除 → 再登録を繰り返すため。
   //（動的に増減する材料 / 手順の行は、行側で `registerAnchor` を呼ぶ。）
   const formAnchorRef = useCallback(
-    (node: View | null) => registerAnchor("form", node),
+    (node: ViewInstance | null) => registerAnchor("form", node),
     [registerAnchor],
   );
   const titleAnchorRef = useCallback(
-    (node: View | null) => registerAnchor("title", node),
+    (node: ViewInstance | null) => registerAnchor("title", node),
     [registerAnchor],
   );
   const descriptionAnchorRef = useCallback(
-    (node: View | null) => registerAnchor("description", node),
+    (node: ViewInstance | null) => registerAnchor("description", node),
     [registerAnchor],
   );
   const servingsAnchorRef = useCallback(
-    (node: View | null) => registerAnchor("servings", node),
+    (node: ViewInstance | null) => registerAnchor("servings", node),
     [registerAnchor],
   );
 
@@ -1040,7 +1042,7 @@ function IngredientEditor({
   onUnlink: () => void;
   registerAnchor: RegisterAnchor;
 }) {
-  const nameRef = useRef<RNTextInput>(null);
+  const nameRef = useRef<TextInputInstance>(null);
   const [showUnitList, setShowUnitList] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
 
@@ -1310,7 +1312,7 @@ function StepEditor({
   onImageUploadingChange: (imageId: string, uploading: boolean) => void;
   registerAnchor: RegisterAnchor;
 }) {
-  const ref = useRef<RNTextInput>(null);
+  const ref = useRef<TextInputInstance>(null);
   const autoFocus = step.localId === lastAddedRowId;
   const handleUploadingChange = useCallback(
     (uploading: boolean) => onImageUploadingChange(step.localId, uploading),

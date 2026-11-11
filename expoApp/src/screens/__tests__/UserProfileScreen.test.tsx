@@ -134,7 +134,7 @@ describe("状態", () => {
 
 describe("表示", () => {
   it("表示名・自己紹介文・フォロー数・公開 ON の連絡先だけを出す", async () => {
-    const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+    const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
     const { getByTestId, queryByTestId } = await renderLoaded();
 
     expect(getByTestId("user-profile-display-name").props.children).toBe("testuser_002");
