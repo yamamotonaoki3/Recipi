@@ -71,3 +71,14 @@ WebdriverIO 9.31 系 → 10.2.0 系へ更新した（`@wdio/{appium-service,cli,
 - `overrides` の `serialize-javascript: 7.1.4` は Mocha 12.0.3 が `^7.1.1` を要求し、上書き無しでも 7.1.4 に解決されるため削除した。他の overrides は維持。
 - lockfile の `node_modules/.*@img/sharp-` エントリは 26 件のまま。
 - 設定の読み込み確認: `npx wdio run wdio.conf.ts --spec e2e/android/token-refresh.e2e.ts` をデバイス・Appium 無しで起動し、設定と spec の読み込み、ワーカー起動、セッション開始要求（接続拒否で停止）まで進むことを確認。`wdio.conf.ts` と spec に変更は不要だった。実機相当の確認は `e2e-android.yml` で行う。
+
+## 再監査結果（2026-11-12、#365）
+
+C（#361）・A（#353）・B（#354）をすべて main に取り込んだ後、`expoApp` で `npm ci` → `npm audit` を再実行した。
+
+- `npm audit`: 当初 72 件（critical 3 / high 30 / moderate 38 / low 1）→ **44 件（critical 0 / high 0 / moderate 43 / low 1）**。
+- `npm audit --omit=dev`: **3 件（moderate のみ）**。expo / @expo/fingerprint / minimatch で、いずれも Expo CLI のビルド時専用（区分 D）。アプリに同梱され実行時に到達する high / critical は 0 件。
+- 残件はすべて区分 D（受容）。理由は次のいずれか。
+  - **上流未修正**: 根本原因は `minimatch`（7.0.0〜11.0.0）と `glob` 系。`@typescript-eslint/*` は audit 上 `fixAvailable: true` と出るが、影響範囲が公開済み最新の 8.72.2 まで含むため、実際の修正版はない。
+  - **audit の修正案が降格**: `jest@29.7.0`、`appium@2.0.1`、`expo@52.0.49`、`@wdio/*@9.x`、`webdriverio@9.x`、`appium-uiautomator2-driver@9.0.2`（Appium 4 ベータ前提）。既知の脆弱性を含む旧版への降格や未リリース前提の更新になるため採用しない。
+- 再確認の条件: `minimatch` / `glob` の修正版が上流（Jest・Appium・Expo CLI・typescript-eslint）に取り込まれたとき、または次回の定期監査時に `npm audit` を再実行し、同一メジャー内で解消できるものから対応する。
