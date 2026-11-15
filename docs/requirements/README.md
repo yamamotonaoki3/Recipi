@@ -48,7 +48,6 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | 環境変数・シークレットのカタログ | [environment.md](environment.md) |
 | 開発ロードマップ / MVP ライン | [roadmap.md](roadmap.md) |
 | 未確定事項・要調査（TODO） | [todo.md](todo.md) |
-| 実装との整合性確認（2026-11-15） | [../documentation-audit.md](../documentation-audit.md) |
 | 学び・手直しの記録 | [../lessons-learned.md](../lessons-learned.md) |
 
 ## ドキュメントの関係

@@ -47,3 +47,11 @@ backend.hcl
 
 # Claude Code の内部設定（コミットしない）
 .claude/
+
+# 一時的な変更指示・実装計画・作業報告（Issue / PR で管理）
+/.superpowers/
+/docs/superpowers/
+/docs/change-requests/
+/docs/plans/
+/docs/reports/
+/docs/documentation-audit.md

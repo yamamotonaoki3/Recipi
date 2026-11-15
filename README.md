@@ -116,7 +116,6 @@ docker compose --env-file .env.demo -f infra/docker-compose.demo.yml down -v
 - [データモデル](docs/requirements/data-model.md)
 - [API仕様](docs/requirements/api.md)
 - [未対応・改善候補](docs/requirements/todo.md)
-- [ドキュメントと実装の整合性確認（2026-11-15）](docs/documentation-audit.md)
 
 ## 開発フロー
 
