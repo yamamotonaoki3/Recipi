@@ -103,20 +103,20 @@
 ### GET `/recipes/{id}`（認証任意）
 
 - 公開レシピ: 誰でも。非公開: 本人のみ。他人がアクセスした場合は 404（存在を伏せる）
-- レスポンスに `author`（id / 表示名 / アバター URL）, `isFavorited`, `favoriteCount`, `commentCount`, `thumbnailUrl`, `ingredientGroups[]`, `steps[]`（各 `body` と `imageUrl`）を含む。各画像 URL は保存されたキーからサーバーが生成する表示用の派生値
-- `ingredientGroups[]` = `[{ name: string|null, ingredients: [{ name, quantity, unit, refRecipe }] }]`。
+- レスポンスに `author`（id / 表示名 / アバター URL）, `isFavorited`, `favoriteCount`, `commentCount`, `thumbnailUrl`, `thumbnailKey`, `ingredientGroups[]`, `steps[]`（各 `body`, `imageUrl`, `imageKey`）を含む。各画像 URL は保存されたキーからサーバーが生成する表示用の派生値
+- `ingredientGroups[]` = `[{ name: string|null, ingredients: [{ name, quantity, unit, placement, refRecipe }] }]`。
   - `refRecipe`: `{ id, title }`（参照先が生きている）/ `{ id: null, title: "<スナップショット>" }`（参照先削除済み）/ `null`（通常の材料）。
 
 ```json
 // GET /recipes/{id} の材料（抜粋）
 "ingredientGroups": [
   { "name": null, "ingredients": [
-    { "name": "豚バラ肉", "quantity": 200, "unit": "g", "refRecipe": null },
-    { "name": "自家製甜麺醤だれ", "quantity": null, "unit": "大さじ",
+    { "name": "豚バラ肉", "quantity": 200, "unit": "g", "placement": "suffix", "refRecipe": null },
+    { "name": "自家製甜麺醤だれ", "quantity": null, "unit": "大さじ", "placement": "prefix",
       "refRecipe": { "id": "a1b2c3…", "title": "自家製 甜麺醤だれ" } }
   ]},
   { "name": "合わせ調味料", "ingredients": [
-    { "name": "しょうゆ", "quantity": null, "unit": "小さじ", "refRecipe": null }
+    { "name": "しょうゆ", "quantity": null, "unit": "小さじ", "placement": "prefix", "refRecipe": null }
   ]}
 ]
 ```
@@ -129,7 +129,7 @@
   "description": "定番の中華",
   "servings": 2,
   "isPublic": true,
-  "thumbnailKey": "uploads/ab12…",
+  "thumbnailKey": "private/ab12…",
   "ingredientGroups": [
     { "name": null, "ingredients": [
       { "name": "豚バラ肉",       "quantity": 200,  "unit": "g",    "refRecipeId": null },
@@ -140,7 +140,7 @@
     ]}
   ],
   "steps": [
-    { "position": 1, "body": "合わせ調味料を混ぜておく", "imageKey": "uploads/cd34…" },
+    { "position": 1, "body": "合わせ調味料を混ぜておく", "imageKey": "private/cd34…" },
     { "position": 2, "body": "炒めて合わせ調味料をからめる", "imageKey": null }
   ]
 }

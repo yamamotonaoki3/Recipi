@@ -309,11 +309,12 @@ EventBridge Scheduler が、決まった時刻に ECS のタスクとして管�
 | `recipi-cleanup-refresh-tokens` | `python -m app.jobs.cleanup_refresh_tokens` | 毎日 2:10 |
 | `recipi-cleanup-notifications` | `python -m app.jobs.cleanup_notifications` | 毎日 2:20 |
 | `recipi-cleanup-password-reset-attempts` | `python -m app.jobs.cleanup_password_reset_attempts` | 毎日 2:30 |
+| `recipi-cleanup-reauth-attempts` | `python -m app.jobs.cleanup_reauth_attempts` | 毎日 2:35 |
 | `recipi-trim-recipe-views` | `python -m app.jobs.trim_recipe_views` | 毎日 2:40 |
 | `recipi-recount-counts` | `python -m app.jobs.recount_counts` | 毎日 2:50 |
 
 - **多重起動について**: 各ジョブは `FOR UPDATE SKIP LOCKED` やユーザー単位の advisory lock で、同時に 2 本走っても壊れない（Issue #72・#85）。そのためスケジューラ側で排他はしない。1 回の実行はいずれも数十秒以内の想定で、間隔より十分短い。**データが増えて実行時間が間隔に近づいてきたら、頻度を下げる**。
-- **止めたいとき**: `terraform.tfvars` に `schedules_enabled = false` を書いて apply すると、8 本とも `DISABLED` になる（インフラは残したまま定期実行だけ止める）。
+- **止めたいとき**: `terraform.tfvars` に `schedules_enabled = false` を書いて apply すると、9 本とも `DISABLED` になる（インフラは残したまま定期実行だけ止める）。
 - 状態の確認:
 
   ```bash
@@ -365,7 +366,7 @@ fields @timestamp, level, logger, message
 ### 費用について
 
 - **Scheduler・EventBridge のルール・アラームは、現時点の無料枠の範囲**（Scheduler は月 1,400 万回、アラーム 10 個、SNS のメール 1,000 通まで）。料金は改定されうるので目安として扱い、実際は AWS の請求画面（Billing）や Pricing Calculator で確認する。
-- **課金されるのは、起動される ECS タスクの分**。1 日およそ 269 回（10 分ごと 144 ＋ 15 分ごと 96 ＋ 1 時間ごと 24 ＋ 日次 5）。1 回あたり最低課金 1 分・0.25vCPU / 0.5GB で約 0.03 円なので、**1 日およそ 10〜20 円、1 か月動かし続けて 300〜600 円**の見込み。イメージの取得は S3 のゲートウェイ型エンドポイントを通るので、NAT の通信料はほとんどかからない。
+- **課金されるのは、起動される ECS タスクの分**。1 日およそ 270 回（10 分ごと 144 ＋ 15 分ごと 96 ＋ 1 時間ごと 24 ＋ 日次 6）。1 回あたり最低課金 1 分・0.25vCPU / 0.5GB で約 0.03 円なので、**1 日およそ 10〜20 円、1 か月動かし続けて 300〜600 円**の見込み。イメージの取得は S3 のゲートウェイ型エンドポイントを通るので、NAT の通信料はほとんどかからない。
 - 学習用では**インフラを立てている時間だけ**かかる。止めるときは `schedules_enabled = false` か `terraform destroy`。
 
 ### タスク定義を API と共用していること

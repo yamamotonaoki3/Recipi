@@ -7,16 +7,19 @@ Web ビルドを Tauri 2 で包む。要件定義書は
 
 ## コードの読み方（`src/` の主要ディレクトリ）
 
-| 場所             | 役割                                                                                                                                                            |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/`       | 画面。**Expo Router のファイルベースルーティング**（`app/` の構成 = 画面遷移）。`_layout.tsx` が全画面の外枠                                                    |
-| `src/api/`       | バックエンド API。`schema.ts` は `openapi.json` からの自動生成（`npm run gen:api`）、`client.ts` が型安全な fetch、機能ごとに `useXxx` フック（TanStack Query） |
-| `src/store/`     | クライアント側の状態（**Zustand**）。認証トークンや UI トグルなど「サーバーから取らないもの」だけ。サーバーデータは `src/api/` の TanStack Query が持つ         |
-| `src/providers/` | アプリ全体を包むプロバイダ（QueryClient など）                                                                                                                  |
-| `src/global.css` | NativeWind（React Native 版 Tailwind）のベース。`className="..."` で Tailwind クラスが使える                                                                    |
-| `src-tauri/`     | デスクトップシェル（Tauri 2 / Rust）。`dist/`（Web ビルド）を読み込む                                                                                           |
+| 場所                     | 役割                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `src/app/`               | 画面。**Expo Router のファイルベースルーティング**（`app/` の構成 = 画面遷移）。`_layout.tsx` が全画面の外枠                   |
+| `src/api/`               | `schema.ts` はOpenAPIから自動生成（`npm run gen:api`）。`client.ts` と `refreshCoordinator.ts` が型安全なfetchと認証更新を担う |
+| `src/features/`          | 機能別のAPI呼び出し・TanStack Queryフック・編集フォーム・更新確認など                                                          |
+| `src/screens/`           | ルートから利用する共通の画面実装                                                                                               |
+| `src/store/`             | クライアント側の状態（**Zustand**）。認証やUIの状態を保持。サーバーデータは `src/features/` のTanStack Queryフックが扱う       |
+| `src/lib/secureStorage/` | AndroidはSecureStore、TauriはStrongholdでトークンを保存。通常WebはHttpOnly Cookie認証を使う                                    |
+| `src/providers/`         | アプリ全体を包むプロバイダ（QueryClient など）                                                                                 |
+| `src/global.css`         | NativeWind（React Native 版 Tailwind）のベース。`className="..."` で Tailwind クラスが使える                                   |
+| `src-tauri/`             | デスクトップシェル（Tauri 2 / Rust）。`dist/`（Web ビルド）を読み込む                                                          |
 
-Phase 1 以降で `src/features/`（機能別のコンポーネント）などを足していく。
+`src/app/` はルーティングと認証ゲートを担当し、画面・機能の実装を上記ディレクトリで共有する。
 
 ## セットアップ
 
@@ -28,7 +31,7 @@ npm ci                          # package-lock.json どおりに入れる
 
 cp .env.development.example .env.development
 #   → EXPO_PUBLIC_API_BASE_URL をバックエンドのホストに合わせる
-#     Web/デスクトップ/iOS シミュレータ = http://localhost:8000
+#     Web/デスクトップ                  = http://localhost:8000
 #     Android エミュレータ              = http://10.0.2.2:8000
 
 npm run web                     # ブラウザで開発（デスクトップの土台）
@@ -45,7 +48,7 @@ npm run lint                    # ESLint
 npm run format                  # Prettier --check（整形は `npx prettier --write .`）
 npm run typecheck               # tsc --noEmit
 npm test                        # jest（単体・結合）
-npm test -- --coverage          # + カバレッジ（行 60% / 分岐 50% 下限）
+npm test -- --coverage          # + カバレッジ（行 75% / 分岐 65% 下限）
 
 npm run gen:api                 # openapi.json から src/api/schema.ts を再生成
 npm run build:web               # dist/ に Web ビルド（Tauri の中身）
@@ -77,9 +80,7 @@ npm run gen:icons
 
 - **BB（仕様ベース）**: 画面 / hook が仕様どおり振る舞うか。
 - **WB（実装ベース）**: 条件分岐・状態遷移を網羅（`jest.config.js` の `coverageThreshold`）。
-- Phase 0 は API クライアント（`src/api/client`）を `jest.mock` で差し替える方式。
-  MSW（ネットワークモック）は jest-expo の react-native 実行環境と相性が悪いため、
-  本格導入は Phase 1 で node 環境のテストとして整える。
+- `jest.config.js` は2つのプロジェクトを実行する。`react-native` はjest-expoで画面・フックを検証し、APIクライアントを `jest.mock` で差し替える。`node` は `*.msw.test.ts` を対象にMSWで通信をモックし、認証更新やAPIクライアントの実際のfetch経路を検証する。
 
 ## バージョン
 

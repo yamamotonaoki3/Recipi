@@ -91,7 +91,7 @@
 - デッドロック回避のため、フォロー / フォロー解除で複数の `users` 行を触る場合は、カウント更新前に対象行を **id 昇順でロック**してから更新する（[features/follow.md](features/follow.md)）。お気に入り / 感想はそれぞれ単一の `recipes` 行だけを更新するため、複数行のロック順序問題はない。
 - **ロックの種類とタイミング**（Issue #66 で実際にデッドロックを踏んで確定）: カウント列を持つ親の行は **`FOR UPDATE` ではなく `FOR NO KEY UPDATE`** で、**関連テーブル（子）への INSERT / DELETE より先に**ロックする。子に書くと PostgreSQL は外部キーの整合性のため親の行へ自動で `FOR KEY SHARE`（共有ロック）を取り、同じ親を同時に操作した全員がそれを持てる。その後で `FOR UPDATE`（`FOR KEY SHARE` と衝突する）に上げようとすると全員が互いを待ってデッドロックする。`FOR NO KEY UPDATE` は `FOR KEY SHARE` と衝突せず、同じ種類どうしだけが順番待ちになる（カウント列は主キーではないので意味的にも正しい）。フォロー（`users`）・お気に入り（`recipes`）・感想（`recipes`）すべてこの形にする。**例外はアカウント削除の本人行だけで、`FOR UPDATE`** にする（本人に関係する行を新しく作る処理は外部キーの確認で本人行に `FOR KEY SHARE` を取るので、`FOR UPDATE` で止めて、削除中に集めた集合が増えないようにするため。Issue #71）
 - それでも `deadlock` / `serialization_failure` が発生したら、**サーバー側で**（SQLAlchemy セッション単位で）トランザクションを数回リトライする（上限は → [todo.md](todo.md)）。
-- アカウント削除は**単一のアプリケーショントランザクション**で行い、CASCADE で削除される `follows` / `favorites` / `recipe_comments` に対応して、生き残る他ユーザーの `following_count` / `follower_count` と他レシピの `favorite_count` / `comment_count` を、同一トランザクション内で減算またはピンポイントに数え直してからコミットする（[features/profile.md](features/profile.md)）。`recipe_views` も CASCADE で消えるが、カウント列キャッシュには関与しないため補正は不要。
+- 退会は**単一のアプリケーショントランザクション**で行う。本人の `follows` / `favorites` / `recipe_comments` を明示削除する前に、関係する他ユーザー・レシピのカウントを減算する。`recipe_views` も明示削除するがカウント補正は不要。users行と投稿レシピは保持する（[features/profile.md](features/profile.md)）。
 - 多層防御として、カウントを実数から数え直して補正する**定期ジョブ**を用意する（頻度は → [todo.md](todo.md)）。アカウント削除時の整合は削除トランザクション内で取り、後追いの補正ジョブ任せにしない。
 
 ## データの可視性ルール（横断・重要）
@@ -168,7 +168,7 @@
 
 ## 破壊的操作
 
-- アカウント削除は不可逆。クライアントに確認ダイアログを必須化する。削除は成功時 204。削除前に `users.token_version` を原子的に `+1` し、削除後は認証依存性のユーザー存在チェックでも拒否するため、削除前に発行されたアクセストークンでの以降のリクエストは 401 になる。リフレッシュトークンは CASCADE 削除する。専用の冪等機構は設けない。詳細は [features/profile.md](features/profile.md)。
+- アカウント削除（退会）は確認ダイアログを必須とし、成功時204を返す。単一トランザクションで `users.token_version` を原子的に+1し、`users.deleted_at` を設定する論理削除。本人のフォロー・お気に入り・感想・通知・閲覧履歴・リフレッシュトークン等は明示削除する。既発行トークンは以降401となる。アカウント・プロフィール・アバター・投稿レシピは保持し、`POST /auth/reactivate` による明示的な再開で復帰するが、削除済みの行動データは復帰しない。専用の冪等機構は設けない。詳細は [features/profile.md](features/profile.md)。
 
 ## 対応プラットフォーム
 

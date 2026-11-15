@@ -4,11 +4,11 @@
 
 ![デモ操作: ログイン→一覧→検索→詳細→レシピ登録](docs/assets/demo.gif)
 
-公開URLのデモは用意していません。代わりに、Docker Desktop があれば第三者も自分のPC上でデモデータ入りの環境を起動できます。
+公開URLのデモは用意していません。代わりに、Docker Desktop・Python・Node.jsを用意すると、自分のPC上でデモデータ入りの環境を起動できます（バージョンと手順は下記）。
 
 ## 主な機能
 
-- メールアドレス認証、ログイン保持、パスワードリセット、プロフィール編集・退会
+- メールアドレスとパスワードでのログイン、ログイン保持、秘密の質問によるパスワードリセット、プロフィール編集・退会と再開
 - アカウント設定（現在のパスワードで再認証してからのメールアドレス変更・秘密の質問の変更）
 - レシピの作成・編集・削除、材料グループ、手順ごとの画像、下書きの離脱防止
 - 公開レシピのフィード、タイトル・材料名検索、閲覧履歴
@@ -35,7 +35,7 @@ Windows（`.msi`）/ Android（`.apk`）は [GitHub Releases](https://github.com
 | フロントエンド | TypeScript / React Native / Expo Router / TanStack Query / Tauri 2 |
 | バックエンド | Python 3.14 / FastAPI / SQLModel / Alembic |
 | ローカル基盤 | PostgreSQL 18 / MinIO / Docker Compose |
-| AI校正 | 開発: Ollama `qwen3.5:9b`、本番: Anthropic API |
+| AI校正 | 開発: Ollama `qwen3.5:9b`、デモ・テスト: 固定応答（`stub`）、本番: Anthropic API |
 | 本番基盤 | AWS ECS Fargate / RDS PostgreSQL Multi-AZ / S3 + CloudFront / API Gateway / Terraform |
 | 品質 | pytest / ruff / mypy / Jest / Playwright / GitHub Actions |
 
@@ -43,7 +43,7 @@ Windows（`.msi`）/ Android（`.apk`）は [GitHub Releases](https://github.com
 
 Windows PowerShellで確認済みの手順です。デモ環境は開発環境と完全に分離され、PostgreSQLは `5433`、MinIOは `9002` / `9003` を使用します。Ollama、GPU、外部APIキーは不要です。
 
-前提: Docker Desktop、Python 3.14、Node.js（npm）。
+前提: Docker Desktop（Docker Composeを含む）、Python 3.14.9、Node.js 24.22.1（npm）。初回はMinIOをソースからビルドするため、イメージ・ソース・依存パッケージを取得できるネットワーク接続が必要です（ホストへのGo導入は不要）。
 
 ```powershell
 # 1. デモ専用のランダムなローカル設定を作る（.env.demoはGit管理外）
@@ -104,7 +104,7 @@ docker compose --env-file .env.demo -f infra/docker-compose.demo.yml down -v
 
 ## 本番環境（AWS）
 
-本番構成は Terraform で管理しています。API GatewayからVPC Link・Cloud Map・内部ALBを経由してECS Fargateへ接続し、RDS Multi-AZ、非公開S3 + CloudFront、CloudWatch + SNS、EventBridge Schedulerを利用します。
+本番構成は Terraform で管理しています。API GatewayからVPC Link・内部ALBを経由してECS Fargateへ接続し、RDS Multi-AZ、非公開S3 + CloudFront、CloudWatch + SNS、EventBridge Schedulerを利用します。
 
 学習用のため、AWS環境は常時稼働させず、検証時だけ `terraform apply` を行い、終了後に `terraform destroy` します。初回構築、Secrets ManagerへのAPIキー登録、手動デプロイ、費用・後始末は [`infra/terraform/README.md`](infra/terraform/README.md) に記載しています。
 
@@ -116,6 +116,7 @@ docker compose --env-file .env.demo -f infra/docker-compose.demo.yml down -v
 - [データモデル](docs/requirements/data-model.md)
 - [API仕様](docs/requirements/api.md)
 - [未対応・改善候補](docs/requirements/todo.md)
+- [ドキュメントと実装の整合性確認（2026-11-15）](docs/documentation-audit.md)
 
 ## 開発フロー
 

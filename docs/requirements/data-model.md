@@ -33,6 +33,7 @@ erDiagram
         string security_question
         string security_answer_hash
         int token_version "DEFAULT 0"
+        timestamptz deleted_at "NULL可・退会日時"
         string avatar_key "NULL可"
         boolean email_public "既定false"
         string x_url "NULL可"
@@ -116,6 +117,7 @@ erDiagram
         uuid user_id FK
         string token_hash UK
         uuid chain_id
+        boolean remember_me "既定true"
         timestamptz expires_at
         timestamptz revoked_at "NULL可"
         timestamptz created_at
@@ -150,14 +152,14 @@ erDiagram
 | `units` | `normalized` UNIQUE NOT NULL / `value` NOT NULL / `placement` NOT NULL DEFAULT `suffix`（`suffix` / `prefix`。`大さじ` `小さじ` のみ `prefix`） | [features/unit.md](features/unit.md) |
 | `follows` | PK(`follower_id`, `followee_id`) / 両カラム FK → `users.id`（ON DELETE CASCADE）/ CHECK(`follower_id` <> `followee_id`) / index(`followee_id`) | [features/follow.md](features/follow.md) |
 | `favorites` | PK(`user_id`, `recipe_id`) / `user_id` FK → `users.id`（ON DELETE CASCADE）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ index(`recipe_id`) / index(`user_id`, `created_at` DESC, `recipe_id` DESC)（お気に入り一覧の並び用。Issue #68） | [features/favorite.md](features/favorite.md) |
-| `refresh_tokens` | `id` PK / `user_id` FK → `users.id`（ON DELETE CASCADE）/ `token_hash` UNIQUE NOT NULL / `chain_id` NOT NULL / `expires_at` NOT NULL / `revoked_at` NULL 可 / index(`user_id`), index(`chain_id`) | [features/auth.md](features/auth.md) |
+| `refresh_tokens` | `id` PK / `user_id` FK → `users.id`（ON DELETE CASCADE）/ `token_hash` UNIQUE NOT NULL / `chain_id` NOT NULL / `remember_me` BOOLEAN NOT NULL DEFAULT true / `expires_at` NOT NULL / `revoked_at` NULL 可 / index(`user_id`), index(`chain_id`, `expires_at`), index(`expires_at`) | [features/auth.md](features/auth.md) |
 | `notifications` | `id` PK / `user_id` FK → `users.id`（ON DELETE CASCADE、受信者）/ `actor_id` FK → `users.id`（ON DELETE CASCADE、行為者）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）NULL 可 / `comment_id` FK → `recipe_comments.id`（ON DELETE CASCADE）NULL 可 / `read_at` NULL 可 / index(`user_id`, `created_at` DESC, `id` DESC) / 部分 index(`user_id`) WHERE `read_at IS NULL` / 部分一意 index(`user_id`, `recipe_id`) WHERE `type = 'followee_new_recipe'` | [features/notification.md](features/notification.md) |
 | `recipe_views` | PK(`user_id`, `recipe_id`)（レシピごとに 1 行）/ `user_id` FK → `users.id`（ON DELETE CASCADE）/ `recipe_id` FK → `recipes.id`（ON DELETE CASCADE）/ `viewed_at` timestamptz NOT NULL / index(`user_id`, `viewed_at` DESC) / index(`recipe_id`)（レシピ削除時の CASCADE 用。FK 列は自動 index されない）/ 再閲覧は `INSERT ... ON CONFLICT (user_id, recipe_id) DO UPDATE SET viewed_at = GREATEST(viewed_at, clock_timestamp())`（upsert・単調更新で並行閲覧でも時刻が巻き戻らない）/ カウント列キャッシュには関与しない | [features/view-history.md](features/view-history.md) |
 | `notification_outbox`（Phase 8） | `id` PK / `event` NOT NULL（`followee_new_recipe`）/ `recipe_id` NOT NULL FK → `recipes.id`（ON DELETE CASCADE）/ `author_id` NOT NULL FK → `users.id`（ON DELETE CASCADE）/ `created_at` NOT NULL / `processed_at` NULL 可（NULL = 未処理）/ UNIQUE(`event`, `recipe_id`) / index(`processed_at`) / index(`recipe_id`) / index(`author_id`) / 公開レシピ作成トランザクション内で 1 行 INSERT、`BackgroundTasks` ＋ 定期スイープが処理（[processing-model.md](processing-model.md) §7・§9） | [features/notification.md](features/notification.md) |
 
 > `recipe_images` テーブルは廃止（画像は `recipes.thumbnail_*` と `steps.image_*` に統合）。
 
-> 一時アップロードは所有者と使用状態を保持する（例: `uploads` テーブル。状態 `pending` → `stored` → 消費、`user_id`）。キーはアップロード前に行 INSERT で確定し、オブジェクトだけが存在して行が無い状態を作らない（[processing-model.md](processing-model.md) §9）。具体スキーマは Phase 3 で確定（→ [todo.md](todo.md) #32）。
+> 一時アップロードは `uploads` テーブルで管理する。`id`（UUID PK）、`user_id`（usersへのFK・CASCADE）、一意な `key`、`status`（`pending` / `stored` / `consumed` のCHECK）、`content_type`、`size_bytes`（0以上）、`expires_at`、`created_at` を持つ。GC用に `(status, expires_at)` と `(status, created_at)`、所有者・キーにも索引を持つ。キーはオブジェクト保存前の行INSERTで確定する（`backend/app/models/upload.py`、[processing-model.md](processing-model.md) §9）。
 
 > **ストレージ削除キュー**: 参照から外れたオブジェクトキー（差し替え / 削除された画像）をためて定期バッチで実削除するためのキュー（`pending_storage_deletions`。`delete_after` NULL 可 = この時刻まで実削除しない。Issue #71）。**キューへの登録は参照を外す書き込みと同一トランザクション**、S3 / MinIO への実 DELETE だけが定期バッチ（[processing-model.md](processing-model.md) §5・§9 / [todo.md](todo.md) #32）。
 

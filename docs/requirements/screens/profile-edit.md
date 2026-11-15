@@ -2,12 +2,12 @@
 
 ## 1. 目的
 
-自分の表示名・アバター・連絡先 / SNS リンク（項目別公開トグル付き）を編集する。アカウント削除もここから。機能仕様は [`../features/profile.md`](../features/profile.md)。
+自分の表示名・アバター・連絡先 / SNS リンク（項目別公開トグル付き）を編集する。退会は[マイページ](my-page.md)、メールアドレス・秘密の質問の変更は[アカウント設定](my-page.md#4-アカウント設定画面issue-240242243)で行う。機能仕様は [`../features/profile.md`](../features/profile.md)。
 
 ## 2. ナビゲーション
 
 - 入口: [マイページ](my-page.md)のメニュー「プロフィール編集」。
-- 出口: [マイページ](my-page.md)（保存 / 戻る）/ [ログイン](login.md)（アカウント削除）。
+- 出口: [マイページ](my-page.md)（保存 / 戻る）。
 - 戻る: 未保存の変更があれば[確認ダイアログ](components.md)。
 - 認証: 必要（本人のみ）。
 
@@ -21,10 +21,7 @@
 - X の URL（+ トグル）
 - Instagram の URL（+ トグル）
 - その他の URL（+ トグル）
-- （区切り線）
-- **アカウント削除**ボタン（赤）
-
-> 秘密の質問・答えの変更 UI はここに入れるか未確定（→ [`../todo.md`](../todo.md)）。
+> 退会と認証情報変更の導線はこのフォームに含めない（[マイページ](my-page.md)参照）。
 
 ## 4. 状態
 
@@ -40,16 +37,12 @@
 
 - アバター「変更」→ 画像選択 → `PUT /users/me/avatar`（multipart）→ 即時反映。「削除」→ `DELETE /users/me/avatar`。
 - 「保存」→ 変更のあった項目だけ `PATCH /users/me`（`displayName`, `bio`, `emailPublic`, `xUrl`, `xPublic`, ...）→ マイページへ、スナックバー「保存しました」。
-- 「アカウント削除」→ [確認ダイアログ](components.md)（本文で「投稿したレシピ・フォロー・お気に入り・感想がすべて削除され、元に戻せません」と警告）→ `DELETE /users/me` →
-  - サーバー側で全関連データを CASCADE 削除 + `token_version` +1。
-  - 端末のトークンを破棄し[ログイン](login.md)へ。以降このトークンでのリクエストは 401。
 
 ## 6. 使用 API
 
 - `GET /users/{id}`（自分、初期値）
 - `PATCH /users/me`
 - `PUT` / `DELETE /users/me/avatar`
-- `DELETE /users/me`
 - （[`../features/profile.md`](../features/profile.md)）
 
 ## 7. プラットフォーム差分

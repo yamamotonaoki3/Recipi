@@ -4,7 +4,7 @@
 
 ## 共通仕様
 
-- ベース URL: `/api/v1`
+- 機能APIのベースURL: `/api/v1`。ヘルスチェックの `/healthz`・`/healthz/db` はこの接頭辞を付けない。
 - 認証: `Authorization: Bearer <アクセストークン>`
 - アクセストークンは短命。期限切れ時は `POST /auth/refresh` でリフレッシュトークンを使って更新（ローテーション方式。[features/auth.md](features/auth.md)）
 - リクエスト / レスポンスは `application/json`（画像アップロードのみ `multipart/form-data`）
@@ -19,12 +19,19 @@
 ### 統一エラーレスポンス
 
 ```json
-{ "error": { "code": "VALIDATION_ERROR", "message": "title must not be blank", "details": [] } }
+{ "error": { "code": "VALIDATION_ERROR", "message": "リクエストの内容が不正です", "details": { "errors": [{ "loc": ["body", "title"], "msg": "タイトルを入力してください", "type": "missing" }] } } }
 ```
 
 代表的な `code`: `VALIDATION_ERROR` (400) / `UNAUTHORIZED` (401) / `FORBIDDEN` (403) / `NOT_FOUND` (404) / `CONFLICT` (409) / `TOO_MANY_REQUESTS` (429) / `INTERNAL` (500) / `AI_UNAVAILABLE` (503、AI プロバイダ障害・タイムアウト。[features/ai-proofread.md](features/ai-proofread.md))。
 
 ## エンドポイント一覧
+
+### ヘルスチェック（絶対パス）
+
+| メソッド | パス | 認証 | 概要 |
+| --- | --- | --- | --- |
+| GET | `/healthz` | 不要 | プロセス生存確認。200で `status: ok` と `env` を返す |
+| GET | `/healthz/db` | 不要 | DB疎通確認。現行実装はHTTP 200で `database: ok` / `unavailable` を返すため、判定には本文も確認する |
 
 ### 認証 — [features/auth.md](features/auth.md)
 
@@ -32,11 +39,20 @@
 | --- | --- | --- | --- |
 | POST | `/auth/signup` | 不要 | 登録（`email`, `password`, `displayName`, `securityQuestion`, `securityAnswer`）→ ユーザー + アクセス/リフレッシュトークン |
 | POST | `/auth/login` | 不要 | ログイン（`email`, `password`, `rememberMe`）→ ユーザー + アクセス/リフレッシュトークン |
+| POST | `/auth/reactivate` | 不要 | 退会中アカウントをメール・パスワードで明示的に再開。プロフィール・レシピは復帰するが、削除済みの行動データは戻らない |
 | GET | `/auth/me` | 必要 | 有効なアクセストークンに対応する現在ユーザー（`id`, `displayName`, `avatarUrl`）を取得 |
-| POST | `/auth/refresh` | 不要（リフレッシュトークンを body で送る） | 新しいアクセス/リフレッシュトークンのペア。リユース検知でチェーン失効 |
+| POST | `/auth/refresh` | 不要（WebはCookie、それ以外はbodyでリフレッシュトークンを送る） | 新しいアクセス/リフレッシュトークンのペア。リユース検知でチェーン失効 |
 | POST | `/auth/logout` | 必要 | リフレッシュトークン（チェーン）を失効 |
 | POST | `/auth/password-reset/request` | 不要 | `email` → `{ securityQuestion }` |
 | POST | `/auth/password-reset/confirm` | 不要 | `email` + `securityAnswer` + `newPassword` → 更新。429 で試行ロック |
+
+通常Webは認証応答の `refreshToken` が `null` となり、HttpOnly Cookieで受け渡す。Tauriを含むトークンクライアントはJSON本文を使う（[features/auth.md](features/auth.md)）。
+
+### クライアント設定
+
+| メソッド | パス | 認証 | 概要 |
+| --- | --- | --- | --- |
+| GET | `/client-config` | 不要 | 画像選択時の長辺上限 `imageMaxDimension` を返す（[features/image.md](features/image.md)） |
 
 ### プロフィール — [features/profile.md](features/profile.md)
 

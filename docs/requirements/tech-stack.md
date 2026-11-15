@@ -25,13 +25,13 @@
 | 対象プラットフォーム | Android（Expo ネイティブ）＋ **Desktop（Windows・macOS）** | Desktop は下記のとおり RN Web ビルドを Tauri で包む。**iOS はこの学習プロジェクトでは対象外**（[todo.md](todo.md) #3。Windows 環境では Xcode/Mac が無く iOS のネイティブアプリをローカルビルドできない（EAS Build のクラウドビルドで、Apple Developer Program への加入なしで作れるのはシミュレータ向けビルドまで（シミュレータの実行自体には Mac/Xcode が必要）。自分の端末の実機で試すには、Mac 上のローカル Xcode ビルド（無料だがプロビジョニングが短期で失効）か、有料の Apple Developer Program〈年額 $99〉のいずれかが要り、TestFlight・App Store・Ad Hoc 配布にも同じ Program が必須）ため、この学習プロジェクトでは割愛） |
 | Desktop シェル | **Tauri 2**（core 2.11 系、システム WebView + Rust コア） | RN Web（React Native Web）ビルドを読み込み、`.msi` / `.dmg` を生成。Electron より軽量。**最低 Rust 1.77.2**、Windows は **MSVC C++ Build Tools ＋ WebView2**（WebView2 は導入済み）が前提 |
 | UI / スタイル | **NativeWind**（Tailwind for RN） | デザイントークン・ダークモード対応の詳細は → [todo.md](todo.md) |
-| アイコン | **lucide-react-native**（`1.46.0`）＋ **react-native-svg**（`15.15.4`）。Issue #144 で確定 | 線で描く SVG アイコン集（MIT）。絵文字は OS ごとに絵柄が変わるため使わない。大きさ・色の既定値は `src/components/Icon.tsx` にまとめる。react-native-svg はネイティブモジュールなので、追加・更新時は dev build を作り直す |
+| アイコン | **lucide-react-native**（`1.46.0`）＋ **react-native-svg**（`15.16.0`）。Issue #144 で確定 | 線で描く SVG アイコン集（MIT）。絵文字は OS ごとに絵柄が変わるため使わない。大きさ・色の既定値は `src/components/Icon.tsx` にまとめる。react-native-svg はネイティブモジュールなので、追加・更新時は dev build を作り直す |
 | HTTP / 型 | **openapi-typescript**（型生成）＋ **openapi-fetch**（軽量クライアント） | `openapi.json` から型と fetch を生成。詳細は「型共有」節 |
 | データ取得 / キャッシュ | **TanStack Query** | 一覧のカーソルページング（`useInfiniteQuery`）、楽観更新 |
 | 状態管理（クライアント状態） | **Zustand**（Issue #34 で確定） | 認証トークン・UI トグルなど「サーバーから取らない」少量の状態。サーバーデータは TanStack Query |
-| テスト | jest（`jest-expo` preset）＋ `@testing-library/react-native` ＋ `test-renderer` | ESLint 9 ＋ Prettier ＋ `tsc --noEmit`。MSW は jest-expo の RN 環境と相性が悪く Phase 1 で node 環境用に整える（[testing.md](testing.md)） |
+| テスト | jest（`jest-expo` preset）＋ `@testing-library/react-native` ＋ `test-renderer` | ESLint 9 ＋ Prettier ＋ `tsc --noEmit`。画面・hookはjest-expo、`*.msw.test.ts` は別のnodeプロジェクトでMSWを使用する（[testing.md](testing.md)） |
 | バージョン固定 | `expoApp/package-lock.json`（CI は `npm ci`） | `.npmrc` に `legacy-peer-deps=true`（RN/Expo の peer 依存ずれを許容する実務的設定）。Issue #34 で確定 |
-| ネイティブ機能 | Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store` / `expo-network`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
+| ネイティブ機能 | Expo モジュール（`expo-image-picker` / `expo-image-manipulator` / `expo-secure-store` / `expo-network`）＋ Tauri プラグイン（デスクトップ） | `expect`/`actual` は使わない（RN の仕組みが吸収する） |
 | 通信状態（オンライン / オフライン） | **expo-network**（`~58.0.5`。Issue #133 で確定） | Android の通信状態の変化を TanStack Query の `onlineManager` に伝える（オフライン中の一時停止と自動のやり直し、オフラインの案内）。Web / Tauri はブラウザの online / offline の知らせを TanStack Query が既定で使う |
 | ビルド / 配布 | ローカルビルド（Android APK）、Tauri の `.msi` / `.dmg`（未署名。todo.md #31） | iOS は対象外のため EAS Build は使わない |
 
@@ -72,11 +72,11 @@
 
 ### AI 連携（レシピの誤字脱字チェック — Phase 11）
 
-**プラグ可能なプロバイダ**。`backend/app/ai/` に校正サービスの抽象（Protocol）を置き、`AI_PROVIDER` 環境変数で実装を切り替える。API 契約（`POST /api/v1/ai/proofread`、[features/ai-proofread.md](features/ai-proofread.md)）はプロバイダに依存しない。
+**プラグ可能なプロバイダ**。`backend/app/ai.py` に校正サービスの抽象（Protocol）を置き、`AI_PROVIDER` 環境変数で実装を切り替える。API 契約（`POST /api/v1/ai/proofread`、[features/ai-proofread.md](features/ai-proofread.md)）はプロバイダに依存しない。
 
 | 環境 | `AI_PROVIDER` | 実装 | 内容 |
 | --- | --- | --- | --- |
-| development | `local` | `OllamaProofreadProvider` | WindowsホストのOllamaで `qwen3.5:9b` をGPU推論する。API課金ゼロ・オフライン可。ホスト実行は `localhost:11434`、Docker APIからは `host.docker.internal:11434` を使う |
+| development | `local` | `OllamaProofreadProvider` | `qwen3.5:9b` を使用。ホスト実行のAPIは `localhost:11434`、ComposeのAPIは `ai` プロファイルの `ollama:11434` に接続。ホストOllamaを使う場合の上書きは [environment.md](environment.md) §4 |
 | production | `anthropic` | `AnthropicProofreadProvider` | Anthropic Messages APIの `claude-haiku-4-5-20251001`。Tool UseのJSON Schemaで候補を構造化する。`ANTHROPIC_API_KEY` は AWS Secrets Manager からECSへ注入し、SDKではなく既存の `httpx` で呼び出す |
 | test | `stub` | `StubProofreadProvider` | 決定的なダミー。モデル・API キー不要（CI に GPU も鍵も要らない） |
 
@@ -95,7 +95,7 @@
 
 - FastAPI が型ヒントとレスポンスモデルから **OpenAPI 3.1** 仕様（`openapi.json`）を自動生成する。
 - **Kotlin トラック**: **OpenAPI Generator** で Kotlin の API クライアント / DTO を生成（Ktor Client 向けジェネレータを想定。最終選定は → [todo.md](todo.md)）。生成物は `shared` モジュールに取り込む。
-- **TypeScript トラック**: **openapi-typescript** で型定義（`schema.ts`）を生成し、**openapi-fetch** で型安全な fetch クライアントを構成する。生成物は `expoApp` に取り込む。生成の CI 組み込み・差分チェックの詳細は → [todo.md](todo.md)。
+- **TypeScript トラック**: **openapi-typescript** で型定義（`schema.ts`）を生成し、**openapi-fetch** で型安全な fetch クライアントを構成する。生成物は `expoApp` に取り込む。現行の `contract.yml` がOpenAPIとTS型の再生成差分を検査する。
 - CI で `openapi.json` を再生成し、いずれかの生成物に差分が出たら失敗させる（契約テスト）。
 
 ## 共有ロジックの置き場

@@ -794,7 +794,7 @@ E2E 10 件が通ったが、**新エンドポイントを検証するものは 1
 4. **クライアントが読む URL は `localhost` にできない**。`S3_PUBLIC_URL_BASE`（画像 URL）や `EXPO_PUBLIC_API_BASE_URL` は、Android エミュレータなら `10.0.2.2`、実機なら開発マシンの LAN IP。Web / デスクトップ / iOS シミュレータは `localhost` で可。
 5. **README のコマンドは Windows と POSIX を分ける**。venv 有効化（`source .venv/bin/activate` vs `.\.venv\Scripts\Activate.ps1`）、環境変数の一時設定（`VAR=x cmd` vs `$env:VAR='x'; cmd`）は互換性がない。開発者は Windows。テストの `APP_ENV=test` はコマンドに書かず **pytest 設定側で強制**すると OS 差が出ない。
 6. **接続文字列は「本物を埋め込んだ形」で `.example` に書かない**。`postgresql+psycopg://<user>:<password>@<host>:<port>/<db>` のテンプレート、または各要素を別変数に分ける。組み立て済みの実 URL は `.gitignore` 対象の `.env.<APP_ENV>` のみ。
-7. **`docs/requirements/` 配下の相対リンクに `requirements/` を前置しない**（このミスは 3 回目）。`architecture.md` から兄弟ファイルへは `[environment.md](environment.md)`。
+7. **`docs/requirements/` 配下の相対リンクに `requirements/` を前置しない**（このミスは 3 回目）。`architecture.md` から兄弟ファイルへは `[environment.md](requirements/environment.md)`。
 8. **同じ「標準フロー」を 2 つの正の文書に別々に書かない**。`environment.md` で「ホスト実行が標準」と書くなら `architecture.md` の該当記述も合わせる（片方だけ直すと矛盾する）。
 
 ## 2026-09-02 処理方式を横断で決めるとき
@@ -1005,7 +1005,7 @@ E2E 10 件が通ったが、**新エンドポイントを検証するものは 1
 - **番号付きの手順を並べ替えさせたら、他の節からの参照と表の字下げまで見る**。今回 `codex exec` に手順の順番を直させたところ、手順自体は正しくなったが**他の節の「通し手順の N」が 1 つずれ**、番号付きリストから出した表が 3 スペース字下げのまま残って**表として描画されなくなっていた**。並べ替えの指示には「参照箇所も直す」と書き、直後に `grep -n "^### [0-9]" と "通し手順の"` で突き合わせる。
 - **一覧表をドキュメントに作るときは、記憶ではなく実装を読んで書く**（コードの Codex レビュー・P2）。AWS サービスの一覧に「Secrets Manager: DATABASE_URL・JWT_SECRET_KEY・LOG_HASH_SECRET・**ANTHROPIC_API_KEY**」と書いたが、`secrets.tf` には「**ANTHROPIC_API_KEY は作らない**（値の入っていない秘密をタスク定義から参照すると ECS がタスクを起動できない）」と理由付きで書いてあった。**「意図的に作らないもの」は、実装のコメントを読まないと存在しないことに気づけない**。ドキュメントだけを見た人が、apply 前に用意すべき秘密を誤解する。
 - **1 件見つけたら、同じ種類を全部探してから直す**。画像の配信方式を変えたとき、機能側の `features/image.md` は直したのに、機能横断の「正」である `api.md`・`data-model.md`・`todo.md` が古いままだった。しかも**同じ種類の取り残しを 2 回に分けて指摘された**（`todo.md` #58 → `api.md`・`data-model.md`）。1 回目に「署名付き」「公開バケット」で全文検索していれば 1 度で済んだ。**指摘を直すときは、その 1 行ではなく、指摘が示す*種類*で検索する**。
-- **相対リンクの機械チェックは偽陽性が出る**。`lessons-learned.md` のように「正しい書き方の例」として `[environment.md](environment.md)` を本文に書いている箇所は、リンクではないのに未解決として拾われる。件数ではなく中身を見る。
+- **相対リンクの機械チェックは偽陽性が出る**。`lessons-learned.md` のように「正しい書き方の例」として `[environment.md](requirements/environment.md)` を本文に書いている箇所は、リンクではないのに未解決として拾われる。件数ではなく中身を見る。
 
 ## 2026-09-16 非公開の画像を署名付き URL で配信するとき（Issue #185）
 

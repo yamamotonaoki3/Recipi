@@ -19,6 +19,8 @@ Recipi の画面構成・画面遷移・共通コンポーネント。要件（�
 | ログイン | [login.md](login.md) | 不要 | - |
 | サインアップ | [signup.md](signup.md) | 不要 | - |
 | パスワードリセット | [password-reset.md](password-reset.md) | 不要 | - |
+| アプリ情報・更新案内 | [更新機能の画面仕様](../features/update.md) | 不要 | - |
+| アカウント設定 | [my-page.md §4](my-page.md#4-アカウント設定画面issue-240242243) | 必要 | - |
 | ホーム（常時固定の検索窓 ＋ 4 サブタブ） | [home.md](home.md) | 必要 | ホーム |
 | 閲覧履歴 | [history.md](history.md) | 必要 | 履歴 |
 | 通知一覧 | [notifications.md](notifications.md) | 必要 | 通知 |
@@ -42,9 +44,9 @@ Recipi の画面構成・画面遷移・共通コンポーネント。要件（�
 
 ## 他ドキュメントとの関係
 
-- **機能仕様の正**: [`../features/*.md`](../features/)。画面設計と食い違ったら features を直す。
+- **機能仕様の正**: [`../features/*.md`](../features/)。画面設計と食い違ったら、featuresを正として画面設計側を直す。実装との差は要件を削除せず、未実装として追跡する。
 - **API の正**: [`../api.md`](../api.md) ＋ 各 `features/*.md` の「API」節。
 - **データモデルの正**: [`../data-model.md`](../data-model.md)。
 - **用語**: [`../glossary.md`](../glossary.md)。
 
-最終更新: 2026-08-31
+最終更新: 2026-11-15（文書整合性監査・Issue #367）

@@ -31,6 +31,8 @@
 | `recipe_commented` | ユーザー A がレシピ R に感想を投稿 | R の投稿者 | R の詳細（該当感想） |
 | `followee_new_recipe` | ユーザー A が公開レシピ R を投稿 | A のフォロワー全員 | R の詳細 |
 
+> **現行実装との差分（2026-11-15）**: 感想通知はレシピ詳細へ遷移するが、該当感想へのスクロールは未実装。`NotificationsScreen.tsx` はcommentIdを遷移先へ渡していない。[Issue #369](https://github.com/yamamotonaoki3/Recipi/issues/369) で追跡し、上記要件は保持する。
+
 ### 生成ルール
 
 - **自分の操作による自分あて通知は作らない**（例: 自分のレシピを自分でお気に入り（[favorite.md](favorite.md)）しても通知しない）。

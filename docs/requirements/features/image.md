@@ -111,7 +111,7 @@
 ### POST `/images`（認証必要、multipart）
 
 - 画像 1 枚を一時アップロード。サムネ / 手順画像 / 感想画像 共通。
-- response 201: `{ "key": "uploads/ab12…", "url": "https://…" }`
+- response 201: `{ "key": "private/ab12…", "url": "https://…" }`
 - レシピ保存時に `thumbnailKey` / `steps[].imageKey`、感想保存時に `imageKey` で参照（[recipe.md](recipe.md) / [comment.md](comment.md)）。
 
 ### PUT `/users/me/avatar`（認証必要、multipart）／ DELETE `/users/me/avatar`

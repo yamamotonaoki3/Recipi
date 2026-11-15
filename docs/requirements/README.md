@@ -48,6 +48,7 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 | 環境変数・シークレットのカタログ | [environment.md](environment.md) |
 | 開発ロードマップ / MVP ライン | [roadmap.md](roadmap.md) |
 | 未確定事項・要調査（TODO） | [todo.md](todo.md) |
+| 実装との整合性確認（2026-11-15） | [../documentation-audit.md](../documentation-audit.md) |
 | 学び・手直しの記録 | [../lessons-learned.md](../lessons-learned.md) |
 
 ## ドキュメントの関係
@@ -67,4 +68,4 @@ Recipi は、手軽にレシピを登録・共有・検索できるアプリ。�
 7. 受け入れ基準
 8. 未確定・メモ
 
-最終更新: 2026-09-03（MVP = Phase 4 まで に確定。テスト / CI 方針 [testing.md](testing.md)〈BB/WB 併用・pytest/ruff/mypy・jest-expo/MSW・Playwright（Web）/ Appium + WebdriverIO（Android）の E2E・行/分岐カバレッジ〉と環境変数カタログ [environment.md](environment.md) を追加。以前: 処理方式 [processing-model.md](processing-model.md) を追加、ボトムナビ 5 destination 化、検索をホーム上部の固定検索窓に、閲覧履歴を追加）
+最終更新: 2026-11-15（文書整合性監査・Issue #367）。以下は2026-09-03までの変更履歴（MVP = Phase 4 まで に確定。テスト / CI 方針 [testing.md](testing.md)〈BB/WB 併用・pytest/ruff/mypy・jest-expo/MSW・Playwright（Web）/ Appium + WebdriverIO（Android）の E2E・行/分岐カバレッジ〉と環境変数カタログ [environment.md](environment.md) を追加。以前: 処理方式 [processing-model.md](processing-model.md) を追加、ボトムナビ 5 destination 化、検索をホーム上部の固定検索窓に、閲覧履歴を追加）

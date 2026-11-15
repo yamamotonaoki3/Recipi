@@ -123,10 +123,13 @@ refresh tokenをJSON応答で受け取る。この印は開発・テスト環境
 | `chain_id` | uuid | NOT NULL（ローテーションの系列を識別。リユース検知でチェーン全体を失効） |
 | `expires_at` | timestamptz | NOT NULL |
 | `revoked_at` | timestamptz | NULL 可 |
+| `remember_me` | boolean | NOT NULL, DEFAULT true。ローテーション後も保持設定を引き継ぐ |
 | `created_at` | timestamptz | |
 
-- index(`user_id`) / index(`chain_id`)
+- index(`user_id`) / index(`chain_id`, `expires_at`) / index(`expires_at`)
 ## 5. API
+
+以下のトークン応答例はネイティブ・TauriなどJSONで受け渡すクライアントの例。**通常WebはHttpOnly Cookieでリフレッシュトークンを受け渡し、応答の `refreshToken` は `null`**。Webのrefresh/logoutはCookieを送信し、bodyは `{}` とする。Web Cookieの永続化は `rememberMe` に従う（OFFはセッションCookie）。
 
 ### POST `/auth/signup`（認証不要）
 
@@ -152,7 +155,7 @@ refresh tokenをJSON応答で受け取る。この印は開発・テスト環境
 { "user": { "id": "…", "displayName": "テスト太郎" }, "accessToken": "…", "refreshToken": "…" }
 ```
 
-- `rememberMe` はクライアントの保存挙動を決める情報（サーバーはリフレッシュトークンの有効期限判断などに利用してもよい）。
+- `rememberMe` はクライアントの保存挙動に加え、サーバーのトークン有効期限とWeb Cookieの永続化に使う。値は `refresh_tokens.remember_me` に保持し、ローテーション先へ引き継ぐ。
 - 401: メール未登録 / パスワード不一致
 - 409 `ACCOUNT_DEACTIVATED`: 認証情報が正しいが退会中。トークンは発行せず、クライアントは確認後に再開 API を呼ぶ。
 
@@ -168,7 +171,7 @@ refresh tokenをJSON応答で受け取る。この印は開発・テスト環境
 - 退会中アカウントだけを `deleted_at = NULL` に戻して再開する。プロフィール・アバター・レシピは復帰するが、退会時に消したフォロー・お気に入り・感想・通知・閲覧履歴は復帰しない。
 - 401: メール未登録 / パスワード不一致 / 退会中でないアカウント。
 
-### POST `/auth/refresh`（認証不要、リフレッシュトークンを body で送る）
+### POST `/auth/refresh`（認証不要、WebはCookie・その他はbodyでリフレッシュトークンを送る）
 
 ```json
 // request
