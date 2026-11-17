@@ -133,7 +133,7 @@ development ではバックエンド起動時に Ollama へ空の生成リクエ
 
 すべて Phase 11 着手前 or 実装時（→ [todo.md](../todo.md) #45）:
 
-- ~~dev のローカルモデル選定（Ollama モデル / HuggingFace の日本語 GEC モデル / llama-cpp）と実行方式（compose サービス vs in-process）、必要リソース~~ **確定**: WindowsホストのOllama、既定モデル `qwen3.5:9b`、NVIDIA GPU推論。Docker APIから使うときだけ `host.docker.internal` を使う
+- ~~dev のローカルモデル選定（Ollama モデル / HuggingFace の日本語 GEC モデル / llama-cpp）と実行方式（compose サービス vs in-process）、必要リソース~~ **確定**: WindowsホストのOllama、既定モデル `qwen3.5:9b`、NVIDIA GPU推論。ホスト実行APIは `localhost:11434`、Compose APIは既定で `ai` プロファイルの `ollama:11434` を使う。ホストOllamaへの切替にはComposeの環境変数上書きが必要（[../environment.md](../environment.md) §4）
 - ~~校正プロンプトの設計、`note` を返すか~~ **初期方針を確定**: 最小修正・意味と分量の保持・入力内命令の無視を指示し、固定評価セットで回帰確認する。AnthropicはTool UseのJSON Schemaと4件のFew-shot例を使う。ユーザー修正履歴をFew-shot例へ採用する仕組みは別Issueで扱う
 - ~~レート制限の閾値、`ai_usage` テーブルの要否、コスト予算~~ **確定**: `ai_usage` によるユーザー単位20回/時・100回/日
 - ~~対象フィールドの追加検討（タイトル・説明・手順本文・材料名は §1・§3 のとおり確定。材料グループ名を対象に加えるかは未確定）~~ **確定**: 材料グループ名も対象に含める

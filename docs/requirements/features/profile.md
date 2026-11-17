@@ -51,7 +51,7 @@
 - 「秘密の質問・答え」はサインアップ時に登録する（[auth.md](auth.md)）。後からの変更はプロフィール編集ではなく、マイページの「アカウント設定」画面で行う（Issue #242。[auth.md](auth.md) §8）。
 - **アカウント削除**（`DELETE /users/me`）:
   - 本人のみ。確認 UI 必須。
-  - 削除は**単一のアプリケーショントランザクション**で `users.deleted_at` を設定する論理削除。削除前に `users.token_version` を原子的に `+1` し、本人の `follows`（両方向）・`favorites`・`recipe_comments`・`refresh_tokens`・`notifications`・`recipe_views`・未使用 `uploads` を明示削除する。
+  - 削除は**単一のアプリケーショントランザクション**で `users.deleted_at` を設定する論理削除。削除前に `users.token_version` を原子的に `+1` し、本人の `follows`（両方向）・`favorites`・`recipe_comments`・`refresh_tokens`・`notifications`・`recipe_views`・本人の `notification_outbox`・`uploads` 管理行（消費済みを含む）を明示削除する。画像オブジェクトの削除範囲は次項のとおり。
   - 本人のプロフィールは `GET /users/{id}` と `GET /users/{id}/recipes` で 404 にする。一方、公開レシピは残し、フィード・詳細・他ユーザーのお気に入りでは投稿者を「アカウント削除済み」と表示する。投稿者プロフィールへは遷移させない。非公開レシピも保持するが、再開まで閲覧不能。
   - 消える本人の感想画像と未使用アップロードだけを削除キューへ入れる。投稿レシピのサムネ・手順画像、アバター、他ユーザーの感想・お気に入りは残す。
   - 生き残るレシピ・他ユーザーのカウント列は同一トランザクションで減算する。デッドロックは `run_with_retry()` がやり直す。
@@ -75,7 +75,7 @@
 | `other_url` | string | NULL 可（URL 形式・2048 文字まで） |
 | `other_public` | boolean | NOT NULL DEFAULT false |
 
-CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時の CASCADE」参照。
+CASCADE 経路は [data-model.md](../data-model.md)「アカウント退会（論理削除）」参照。
 
 ## 5. API
 
@@ -163,6 +163,6 @@ CASCADE 経路は [data-model.md](../data-model.md)「アカウント削除時�
 
 - SNS URL のドメイン検証の厳格度 → [todo.md](../todo.md) #14
 - アバターのデフォルト画像・トリミング UI → [todo.md](../todo.md) #15
-- 退会ユーザーの感想の扱い（現状 CASCADE 削除）→ [comment.md](comment.md) / [../todo.md](../todo.md)
+- 退会時は本人の感想を同一トランザクションで明示削除する（確定。Issue #252）。[comment.md](comment.md) / [../todo.md](../todo.md) を参照。
 - ~~秘密の質問・答えの変更手段~~ → 確定: マイページの「アカウント設定」画面（Issue #242。[auth.md](auth.md) §8）
 - メール変更フローは対象外（将来）

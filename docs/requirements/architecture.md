@@ -2,45 +2,41 @@
 
 ## リポジトリ構成（モノレポ）
 
-現行 `Recipi` リポジトリに、**1 本の Python バックエンド**と **2 つのフロントエンドトラック**（TypeScript / Kotlin）を並置する。
+現行実装は **1 本のPythonバックエンド**と **TypeScriptフロントエンド**。Kotlinトラックは計画のみで、Gradle設定・`shared/`・`composeApp/`・`desktopApp/` はまだ存在しない。下のツリーは現行の構成を示す。
 
 ```
 Recipi/
-├── settings.gradle.kts / build.gradle.kts   Kotlin フロントの Gradle モジュールを登録（backend / expoApp は含めない）
 ├── .github/
 │   └── workflows/  CI: backend.yml / frontend-ts.yml / contract.yml / e2e.yml（[testing.md](testing.md)）
 ├── backend/        Python プロジェクト（FastAPI / Uvicorn）。Gradle 非登録
 │   ├── app/            ルーティング、SQLModel テーブル定義、Pydantic モデル、認証依存性、config.py（pydantic-settings）
-│   │   └── ai/         AI 連携（校正サービスの抽象 ＋ local / anthropic / stub 実装。Phase 11）
+│   │   └── ai.py       AI校正（Protocol ＋ local / anthropic / stub 実装）
 │   ├── alembic/        マイグレーション（シード含む）
 │   ├── tests/          pytest（単体・結合）。結合は実 Postgres / MinIO
 │   ├── requirements.txt / requirements-dev.txt
 │   ├── pyproject.toml  ツール設定（ruff / mypy / pytest）、requires-python = ">=3.14,<3.15"
 │   ├── .python-version  3.14.9（検証済みの固定バージョン）
 │   └── Dockerfile      python:3.14.9-slim（タグを固定）
-├── openapi/        backend が出力する openapi.json ＋ 生成設定（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）
+├── openapi/        backendが出力するopenapi.json（TS型生成の入力）
 ├── expoApp/        ★TypeScript トラック（必須）。Node / Expo プロジェクト。Gradle 非登録
-│   ├── app/            Expo Router のルート（ファイルベース）
+│   ├── src/app/        Expo Router のルート（ファイルベース）
 │   ├── src/            画面・コンポーネント（NativeWind）・状態・api（生成 schema.ts + openapi-fetch + TanStack Query）
 │   ├── src-tauri/      Tauri 2（Windows・macOS デスクトップシェル。RN Web ビルドを読み込む）
-│   ├── __tests__/ or *.test.tsx   jest-expo + React Native Testing Library + MSW
+│   ├── src/**/__tests__/ / *.test.ts(x)   jest-expo + React Native Testing Library + MSW
 │   ├── e2e/            E2E フロー（Phase 1 以降）。web/ = Playwright、android/ = Appium + WebdriverIO
-│   ├── package.json / app.json / app.config.ts / tsconfig.json
-├── shared/         ★Kotlin トラック（未着手）。KMP共有モジュール（commonMain）。フロント内部の共通ロジック（単位の表示整形 等）＋ OpenAPI から生成した Kotlin API クライアント / DTO
-├── composeApp/     ★Kotlin トラック（未着手）。Compose Multiplatform。commonMain / androidMain / desktopMain、Ktor Client、画面/ViewModel。implementation(project(":shared"))（iOS は対象外のため iosMain・iosApp/ は作らない）
-├── desktopApp/     ★Kotlin トラック（未着手）。デスクトップ起動エントリ（main()）＋ Compose のパッケージ設定（.msi / .dmg）
+│   └── package.json / app.json / tsconfig.json
 ├── infra/
 │   └── docker-compose.yml   api（FastAPI / Uvicorn） + postgres + minio（フロントは compose 外で実行）
 ├── docs/
 │   └── requirements/       要件定義書（機能別）
-├── .env.development.example / .env.test.example / .env.production.example
+├── .env.development.example / .env.demo.example / .env.test.example / .env.production.example
 └── CLAUDE.md
 ```
 
 ## フロントエンドの 2 トラック
 
 - **(A) TypeScript（`expoApp/`、必須トラック）** と **(B) Kotlin（`composeApp/` ほか、随時トラック）**は、どちらも **1 本の FastAPI** を、同じ API 契約（`openapi/openapi.json` ＋ 本要件定義書）で叩く。UI・画面実装はトラックごとに別。
-- **API 型の整合**: 言語をまたぐためコンパイル時共有はできない。`openapi.json` を単一の正とし、Kotlin は OpenAPI Generator、TS は openapi-typescript でコードを生成する（[tech-stack.md](tech-stack.md) の「型共有」）。CI で再生成し、いずれかの生成物に差分が出たら失敗させる（契約テスト）。
+- **API型の整合**: `openapi.json` を契約の正とし、現行の `contract.yml` はFastAPIからのOpenAPI再生成と、openapi-typescriptによるTS型再生成の差分を検査する。Kotlinクライアントの生成・検査は同トラックの実装時に追加する。
 - BE / FE 横断の変更は、API 契約（`openapi.json` と本要件定義書）を介してレビューする。
 - 画面仕様（[screens/](screens/)）は **framework 非依存**で書き、両トラックが従う。
 - 進め方は **TS が必須（期限あり）、Kotlin は随時（非ブロッキング）**。自動連続実行の完了判定は backend + frontend-ts で行う（[roadmap.md](roadmap.md) / root CLAUDE.md）。
@@ -49,7 +45,7 @@ Recipi/
 
 - Expo（Expo Router）で Android（iOS は対象外）。UI は NativeWind、データ取得は TanStack Query + openapi-fetch。
 - **Desktop（Windows・macOS）**は `src-tauri/` の Tauri 2 が **React Native Web ビルド**を読み込み、`.msi` / `.dmg` を生成する。
-- プラットフォーム固有機能は Expo モジュール（`expo-camera` / `expo-image-picker` / `expo-image-manipulator` / `expo-secure-store`）と Tauri プラグイン（デスクトップのセキュアストレージ 等）で吸収する。`expect`/`actual` は使わない。
+- プラットフォーム固有機能は Expo モジュール（`expo-image-picker` / `expo-image-manipulator` / `expo-secure-store`）と Tauri プラグイン（デスクトップのセキュアストレージ 等）で吸収する。`expect`/`actual` は使わない。
 - Expo プロジェクトの詳細構成（EAS / ローカルビルド、Tauri 連携）は Phase 0（frontend-ts）で確定する（→ [todo.md](todo.md)）。
 
 ### (B) Kotlin トラック（`shared/` `composeApp/` `desktopApp/`。未着手・随時）
@@ -70,7 +66,7 @@ Recipi/
 - `app/` に FastAPI アプリ。DB アクセスは SQLModel（SQLAlchemy 2.0）、ドライバは psycopg 3、接続は `postgresql+psycopg://`。
 - スキーマ変更は Alembic マイグレーションで管理し、`units` などのシードデータも Alembic で投入する。SQLModel のモデル定義で表現できない DB 制約（複合外部キー・部分インデックス・`CHECK`・トリガー）は手書きマイグレーションで補う（[data-model.md](data-model.md)）。
 - ローカル開発は Docker Compose で `postgres` / `minio` を起動し、バックエンドは `uvicorn --reload` でホスト実行する（高速な反復のため）。フルスタック実行（E2E 等）は Compose の `api` サービス。`.env.*` のホスト名の扱いは [environment.md](environment.md) §4。本番の ASGI 実行構成は **uvicorn の単一プロセス**（ECS Fargate 0.25 vCPU / 0.5GB・通常1タスク、負荷時はAuto Scalingで最大4タスク。`infra/terraform/ecs.tf` / `ecs-autoscaling.tf`）。
-- **AI 連携（`app/ai/`、Phase 11）**: 校正サービスの抽象（Protocol）＋ 実装（`local` / `anthropic` / `stub`）。`AI_PROVIDER` 環境変数で選択（[tech-stack.md](tech-stack.md) / [features/ai-proofread.md](features/ai-proofread.md)）。開発はWindowsホストのOllama（`qwen3.5:9b`）へ接続し、ComposeにOllamaサービスは置かない。productionはSecrets Managerの `ANTHROPIC_API_KEY` をECSタスク起動時に環境変数へ注入する。Anthropic応答はTool UseのJSON Schemaで構造化する。将来の他のAI機能も同じ `app/ai/` と `/api/v1/ai/` 名前空間に置く。
+- **AI連携（`app/ai.py`）**: 校正サービスのProtocolと `local` / `anthropic` / `stub` の実装を持つ。ホスト実行のAPIは `localhost:11434` のOllamaへ接続する。Composeの `api` は `OLLAMA_BASE_URL=http://ollama:11434` へ上書きするため、同じComposeの `ai` プロファイルのOllamaを利用する（GPUが必要）。本番のAnthropicキーはSecrets Managerから注入し、httpxでTool UseのJSON Schemaを要求する。詳細は [environment.md](environment.md) / [features/ai-proofread.md](features/ai-proofread.md)。
 
 ### 処理方式（トランザクション / 同期 / 非同期 / バッチ）
 
@@ -89,7 +85,8 @@ Recipi/
 | --- | --- |
 | `api` | FastAPI（Uvicorn）。backend。`AI_PROVIDER` 等の環境変数を受け取る |
 | `postgres` | PostgreSQL |
-| `minio` | S3 互換オブジェクトストレージ（画像保存。詳細は [features/image.md](features/image.md)）。イメージは `quay.io/minio/minio` のリリースタグ固定（[environment.md](environment.md) §4・Issue #89） |
+| `minio` | S3互換ストレージ。`infra/minio/Dockerfile` で公式の固定ソースからビルドする（[environment.md](environment.md) §4・Issue #347） |
+| `ollama`（`ai` プロファイル） | ローカルAI校正用。NVIDIA GPUを使い、モデルは `ollama_data` ボリュームへ保持する。明示起動時だけ使用 |
 
 ## テスト / CI
 
@@ -123,7 +120,7 @@ Recipi/
               アプリ・監査ログ  /ecs/recipi-api            … 365 日
               API Gateway       /aws/apigateway/recipi-api … 30 日
 VPC 2AZ: public x2（IGW・NAT 1 つ）/ private x2（ALB・ECS・RDS Multi-AZ・VPC Link の ENI）
-         S3 へはゲートウェイ型エンドポイント（無料。ECR のイメージ取得が NAT を通らない）
+         S3へはゲートウェイ型エンドポイント（ECRレイヤーのS3転送がNATを通らない。ECR API等の通信はNAT経由）
 ```
 
 - **通信の許可は必要な経路だけ**に絞る（`security-groups.tf`）: 「VPC Link の SG → ALB の 8000 番」「ALB の SG → ECS の 8000 番」「ECS の SG → RDS の 5432 番」。ALB・ECSのタスクに公開 IP は付けず、RDS も外部に公開しない。外向きの通信は NAT 経由。

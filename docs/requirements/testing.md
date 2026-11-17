@@ -82,7 +82,7 @@
 | `contract.yml`    | backend / `openapi.json` / 生成設定の変更                             | `openapi.json` 再生成の diff チェック（Phase 0）＋ `schema.ts` 再生成の diff チェック（frontend 導入後）                                                                                                                                  |
 | `e2e.yml`         | `expoApp/**` / `backend/**` / `infra/**` / `openapi/**` の PR ／ 手動 | docker-compose でフルスタック起動 → **Web（Chromium / Playwright）** の E2E フロー実行 → E2E データの後始末（`cleanup_e2e.py`、残数 0 を確認）                                                                                            |
 | `e2e-android.yml` | **手動（`workflow_dispatch`）**                                       | docker-compose でフルスタック起動（`docker-compose.e2e-android.yml` で `ACCESS_TOKEN_TTL_SECONDS=60` を注入。Issue #246） → `expo prebuild` → release APK ビルド（Gradle cache）→ エミュレータ（AVD snapshot cache）→ **Android（Appium + WebdriverIO）** の E2E フロー実行                                                       |
-| `tauri.yml`       | **手動（`workflow_dispatch`）**                                       | Web ビルド → Tauri の Rust を `cargo check`                                                                                                                                                                                               |
+| `tauri.yml`       | **手動（`workflow_dispatch`）**                                       | LinuxでWebビルド＋Rustの `cargo check`、Windowsで未署名MSIをビルドしてartifactへ保存                                                                                                                                                                                               |
 
 - **通常 PR のトリガー**: `pull_request`（→ `main`。マージの必須チェックにする）＋必要な feature ブランチへの `push`。
 - **時間のかかるプラットフォーム検証**: Android E2E と Tauri は通常 PR の必須チェックから外し、Phase 完了時・リリース前・各プラットフォーム固有または認証・ナビゲーション・API クライアントなど共通基盤の変更時に手動実行する。手動結果が必要な変更は、成功を確認してからマージする。
@@ -111,8 +111,8 @@
 - backend: Docker イメージの `build`、非rootユーザーでの起動、`/healthz` が通ること。`backend/.dockerignore` は環境ファイル・テスト成果物・仮想環境をビルドコンテキストから除外する。
   - frontend: `expo export`（Web ビルド）＋ `tauri build`（未署名デスクトップパッケージ）のスモーク。
 - `infra/**` を変更する PR では Terraform の `fmt -check` / `validate`（`.github/workflows/terraform.yml`）。AWS には接続せず、`apply` もしない。
-- frontend は配布物（`.msi` 等）を手動ワークフローの artifact として取り出す運用で、ストア配布は対象外。
-- デモ用のデスクトップパッケージ（未署名 `.msi` / `.dmg`）は MVP 時点でも上記スモークの成果物として取り出せる（[roadmap.md](roadmap.md) 「MVP ライン」）。
+- フロントの通常の配布は `release.yml` がGitHub Releaseへ未署名Windows MSI・プロジェクトの鍵で署名したAndroid APK・チェックサムを添付する。手動の `tauri.yml` はWindows MSIをartifactとして保存する。ストア配布は対象外。
+- 現行CIにmacOS DMG生成ジョブはない。macOS版はMac上で `npm run tauri:build` を実行する（[expoApp/README.md](../../expoApp/README.md)）。
 
 ## 7. ツール一覧（確定）
 
@@ -121,7 +121,7 @@
 | backend lint / format          | **ruff**                                                                                 | 2026 の Python 標準。`pyproject.toml` に設定                                                                                                                                                             |
 | backend 型チェック             | **mypy**                                                                                 | strict 寄せの度合いは実装時に調整                                                                                                                                                                        |
 | backend テスト                 | **pytest**（＋ `pytest-asyncio` / `pytest-cov` / `httpx`）                               | 結合は `ASGITransport` で FastAPI を直接叩く                                                                                                                                                             |
-| backend 結合の DB / ストレージ | GitHub Actions `services:`（postgres）＋ MinIO コンテナ                                  | `testcontainers` は使わない（ランナー標準の services で足りる）。MinIO は `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`（compose と同じタグで固定。[environment.md](environment.md) §4・Issue #89） |
+| backend 結合の DB / ストレージ | GitHub Actions `services:`（postgres）＋ MinIO コンテナ                                  | `testcontainers` は使わない（ランナー標準の services で足りる）。MinIOはComposeと同じ `infra/minio/Dockerfile` から公式の固定ソースをビルドする（[environment.md](environment.md) §4・Issue #347） |
 | frontend lint / format         | **ESLint**（Expo 設定）＋ **Prettier**                                                   |                                                                                                                                                                                                          |
 | frontend 型チェック            | **`tsc --noEmit`**                                                                       |                                                                                                                                                                                                          |
 | frontend テスト                | **jest-expo ＋ @testing-library/react-native**                                           | Expo 標準。vitest は使わない                                                                                                                                                                             |

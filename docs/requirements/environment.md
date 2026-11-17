@@ -1,8 +1,8 @@
 # 環境変数・シークレットのカタログ
 
-> 全環境変数の一覧と扱い方。**実際の値**は `.gitignore` 対象の `.env.development` / `.env.test` / `.env.production` にのみ置き、**コミットするのはプレースホルダのみの `.env.*.example`**（グローバル `~/.claude/CLAUDE.md`「秘密情報の標準取り扱い要件」／ [architecture.md](architecture.md)「秘密情報の扱い」／ [non-functional.md](non-functional.md)）。
+> 全環境変数の一覧と扱い方。**実際の値**は `.gitignore` 対象の `.env.development` / `.env.demo` / `.env.test` に置く。本番の秘密はデプロイ先のシークレット管理から注入し、**コミットするのはプレースホルダのみの `.env.*.example`**（グローバル `~/.claude/CLAUDE.md`「秘密情報の標準取り扱い要件」／ [architecture.md](architecture.md)「秘密情報の扱い」／ [non-functional.md](non-functional.md)）。
 >
-> `.env.*.example` ファイル本体は Phase 0 のイシューでこの表どおりに作成する。
+> `.env.*.example` はコミット済みのテンプレート。実効設定の定義は `backend/app/config.py` を参照する。
 
 ## 1. 環境の切り替え（`APP_ENV`）
 
@@ -25,7 +25,7 @@
 
 「値の性質」列: **fixed** = どの環境でも同じ定数、**per-env** = 環境ごとに変える、**secret** = 秘密（生成した値。`.env.*` のみ）、**local-only** = ローカル / CI でのみ使う。
 
-### backend（`.env.development` / `.env.test` / `.env.production`）
+### backend（development / demo / testの環境ファイル・productionの注入値）
 
 | 変数 | 用途 | 値の性質 | 例プレースホルダ | 備考 |
 | --- | --- | --- | --- | --- |
@@ -46,8 +46,12 @@
 | `S3_BUCKET` | バケット名 | per-env | `recipi-images` | |
 | `S3_ACCESS_KEY_ID` | ストレージのアクセスキー | secret | `changeme` | dev/test は MinIO のルート資格情報と一致 |
 | `S3_SECRET_ACCESS_KEY` | ストレージのシークレットキー | secret | `changeme` | |
-| `S3_PUBLIC_URL_BASE` | 表示用 URL の基底（`<基底>/<キー>` が画像の URL になる） | per-env | `http://localhost:9000/recipi-images` | dev/test は MinIO の公開バケット。本番は CloudFront のドメイン（`https://` 必須。バケットは非公開。[features/image.md](features/image.md)） 非公開画像の署名付き URL は、`S3_ENDPOINT_URL` を指定しているとき（MinIO）に**この URL の origin で署名**する（コンテナ間の宛先 `minio:9000` ではブラウザが引けないため。Issue #268）。 |
+| `S3_PUBLIC_URL_BASE` | 表示用 URL の基底（`<基底>/<キー>` が画像の URL になる） | per-env | `http://localhost:9000/recipi-images` | dev/testはMinIO。匿名で取得できるのはアバターの `uploads/` 配下だけで、レシピ画像の `private/` は署名付きURLを使う。本番は CloudFront のドメイン（`https://` 必須。バケットは非公開。[features/image.md](features/image.md)） 非公開画像の署名付き URL は、`S3_ENDPOINT_URL` を指定しているとき（MinIO）に**この URL の origin で署名**する（コンテナ間の宛先 `minio:9000` ではブラウザが引けないため。Issue #268）。 |
 | （本番の S3） | `S3_ENDPOINT_URL`・`S3_ACCESS_KEY_ID`・`S3_SECRET_ACCESS_KEY` は**空**にする | per-env | — | 空なら AWS の標準エンドポイントと ECS のタスクロールの認証情報を使う。キーは「両方空」か「両方あり」。本番は `S3_REGION`・`S3_BUCKET`・`S3_PUBLIC_URL_BASE` が空だと起動しない。Issue #166 |
+| `UPLOAD_PENDING_TTL_SECONDS` | 未完了アップロードの猶予（秒） | fixed（目安） | `3600` | `pending` の期限と、遅延PUTに対する削除猶予に使用 |
+| `UPLOAD_STORED_TTL_SECONDS` | 保存済み・未参照画像のGC猶予（秒） | fixed（目安） | `86400` | `stored` の作成時刻から判定 |
+| `IMAGE_MAX_BYTES` | 受信する画像ファイルの最大バイト数 | fixed（目安） | `5242880`（5MiB） | 超過時は400 |
+| `IMAGE_MAX_PIXELS` | 展開する画像の最大画素数 | fixed（目安） | `40000000` | 圧縮率の高い巨大画像の展開を制限する |
 | `IMAGE_MAX_DIMENSION` | 保存・クライアント縮小時の画像長辺上限（px） | fixed（目安） | `2048` | 1以上の整数。APIの `GET /api/v1/client-config` が同じ値を公開し、クライアントは画像選択時に5分キャッシュして使う。設定取得失敗時だけ2048へフォールバックする。Issue #230 |
 | `IMAGE_URL_TTL_SECONDS` | `private/`（レシピのサムネ・手順画像・感想画像）の署名付き URL の有効期限（秒） | fixed | `3600`（1 時間） | **暫定値**。フロントのキャッシュ（TanStack Query の `staleTime` は最大 10 分）より十分長く、かつ署名に使う一時認証情報の寿命に収まる必要がある。本番での認証情報の寿命は Issue #184 で確認して調整する。期限切れ時にフロントが取り直す仕組みは Issue #186。Issue #185 |
 | `TRUSTED_PROXY_CIDRS` | API Gateway（VPC Link）の接続元として信頼する CIDR（カンマ区切り）。この範囲から来たときだけ、専用ヘッダー `X-Recipi-Client-Ip` をクライアントの IP として使う | per-env | （空） | dev/test は空。本番は VPC Link の ENI が置かれる private サブネットの CIDR（Terraform が渡す。VPC 全体にしない）。本番で空だと起動しない。Issue #166 |
@@ -68,6 +72,7 @@
 | `REFRESH_TOKEN_EXPIRED_RETENTION_DAYS` | リフレッシュトークンのチェーンが全部期限切れになってからの保持日数 | fixed（目安） | `30` | 1 以上。再利用検知との関係は [features/auth.md](features/auth.md)。Issue #72 |
 | `RECIPE_VIEWS_MAX_PER_USER` | 閲覧履歴の 1 ユーザーあたりの保持件数 | fixed（目安） | `200` | 1 以上。超過分は定期ジョブが古い順に削除。Issue #72 |
 | `PASSWORD_RESET_ATTEMPT_RETENTION_DAYS` | パスワード再設定の試行記録（成功した request を含む。メール・IP を持つ）の保持日数 | fixed（目安） | `1` | 1 以上。レート制限が数えるのは直近 15 分だけなので 1 日で足りる。Issue #85 |
+| `REAUTH_ATTEMPT_RETENTION_DAYS` | 再認証試行記録の保持日数 | fixed（目安） | `1` | `cleanup_reauth_attempts` が掃除する。直近15分の試行制限とは別 |
 | `ANTHROPIC_API_KEY` | Anthropic API キー（**Phase 11・production のみ**） | secret | （`.env.production.example` では空） | 本番のシークレット管理で注入。dev/test では未設定 |
 | `ANTHROPIC_MODEL` | 本番Anthropicモデル | per-env | `claude-haiku-4-5-20251001` | モデルIDを固定し、変更時は品質・コストを再検証 |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | developmentのOllama接続先・モデル | local | `http://localhost:11434` / `qwen3.5:9b` | `AI_PROVIDER=local` のときだけ使用。GPU推論を推奨 |
@@ -137,7 +142,7 @@ ollama ps
 ```
 
 実モデルの校正品質は、Ollamaを起動した状態で次の固定ケースを実行して確認する。
-このスクリプトは外部AIを使うためCIでは実行しない。
+このスクリプトは設定されたプロバイダを呼ぶ手動の品質確認用で、CIでは実行しない。`APP_ENV=development` / `AI_PROVIDER=local` ならローカルOllamaを使い、`anthropic` を選んだ場合だけ外部APIへ送信・課金される。
 
 ```powershell
 cd backend
@@ -149,8 +154,7 @@ cd backend
 入力と完全一致することはAPI側でも検証する。
 
 ホストでバックエンドを起動する場合は `OLLAMA_BASE_URL=http://localhost:11434`、
-Dockerの `api` からホストOllamaへ接続する場合は
-`OLLAMA_BASE_URL=http://host.docker.internal:11434` を使用する。Ollama未起動・
+Composeの `api` は `environment` で `http://ollama:11434` に上書きする。Compose版を使う場合は `docker compose --env-file .env.development -f infra/docker-compose.yml --profile ai up -d ollama` でGPU対応のOllamaを起動し、同サービス内で `ollama pull qwen3.5:9b` を実行してモデルを用意する（例: `docker compose --env-file .env.development -f infra/docker-compose.yml exec ollama ollama pull qwen3.5:9b`）。ホストOllamaへ接続したい場合は、ComposeのAPI環境変数を `http://host.docker.internal:11434` に明示的に上書きする。`.env.development` の値だけではComposeの `environment` が優先される。Ollama未起動・
 通信失敗・15秒超過時は、レシピ編集を妨げずAPIが `503 AI_UNAVAILABLE` を返す。
 校正結果は自動適用せず、画面で確認してから適用する。
 
@@ -180,4 +184,4 @@ Manager の `recipi/anthropic-api-key` にプレーンテキストとして登�
 
 ## 7. `.gitignore`
 
-既に `.env` / `.env.*` を除外し `!.env.*.example` を例外にしている。Phase 0 で `backend/.venv/` / `expoApp/.expo/` / `**/coverage/` / `.pytest_cache/` を追加する。
+既に `.env` / `.env.*` を除外し `!.env.*.example` を例外にしている。`backend/.venv/` / `expoApp/.expo/` / `**/coverage/` / `.pytest_cache/` も既に除外済み。

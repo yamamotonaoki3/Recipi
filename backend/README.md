@@ -7,7 +7,7 @@ FastAPI + SQLModel + Alembic の Python バックエンド。要件定義書は
 
 | ファイル | 役割 |
 | --- | --- |
-| `app/main.py` | FastAPI アプリの入口。`uvicorn app.main:app` の `app`。ヘルスチェックだけ実装済み |
+| `app/main.py` | FastAPI アプリの入口。各機能のルーター、ヘルスチェック、共通エラー処理・CORS・起動処理を登録する |
 | `app/config.py` | 環境変数 / `.env.<APP_ENV>` から設定を読む（`pydantic-settings`）。`settings` を他モジュールが import する |
 | `app/db.py` | DB エンジンとセッション（`get_session` 依存性）。`check_db_connection()` は疎通確認 |
 | `app/logging_config.py` | JSON ログの設定。全行に `request_id` / `user_id` / `service` / `env` を付け、パスワード・トークン等を `[REDACTED]` に伏せる |
@@ -17,9 +17,14 @@ FastAPI + SQLModel + Alembic の Python バックエンド。要件定義書は
 | `alembic/` | DB マイグレーション。`env.py` が接続先を `app.config` から取る。`versions/` に各リビジョン |
 | `tests/` | pytest。`conftest.py` が `APP_ENV=test` を強制。`@pytest.mark.integration` は実 DB が要る |
 | `scripts/export_openapi.py` | `openapi/openapi.json` を書き出す（契約テスト用） |
+| `app/models/` / `app/schemas/` | SQLModelのテーブル定義 / APIのリクエスト・レスポンス型 |
+| `app/api/` / `app/services/` | 認証・レシピ・画像・ソーシャル機能などのルーター / 業務ロジック |
+| `app/ai.py` / `app/proofread_dictionary.py` | Ollama・Anthropic・固定応答の校正プロバイダ / 料理文脈の候補辞書 |
+| `app/storage.py` | S3 / MinIOへの保存、アバター公開配信とレシピ画像の署名付きURL生成 |
+| `app/jobs/` | 通知配布の回収、画像・認証記録の掃除、カウント補正などの管理コマンド |
+| `app/startup.py` | development起動時のマイグレーション実行 |
 
-Phase 1 以降、`app/models/`（SQLModel テーブル）、`app/api/`（ルーター）、
-`app/services/`（業務ロジック）などを足していく。
+`APP_ENV=development` の起動時はマイグレーションを適用し、OllamaのウォームアップとMinIOのバケット初期化も行う。`demo` / `test` / `production` では自動初期化を行わず、それぞれの準備手順を使う（[環境変数](../docs/requirements/environment.md)）。
 
 ## セットアップ
 
@@ -81,5 +86,5 @@ alembic downgrade -1                  # 1 つ戻す
 ## 依存とバージョン
 
 `requirements.txt`（実行時）/ `requirements-dev.txt`（開発・テスト）で `==` 固定。
-検証環境: Python 3.14.7 / Windows（2026-09-04）。更新は venv で入れ直して
-動作確認してからファイルを書き換える。
+初回の依存検証は Python 3.14.7 / Windows（2026-09-04）。現在の固定バージョンは
+`.python-version` と `Dockerfile` の Python 3.14.9（[セキュリティ更新の検証](../docs/security/python-2026-10.md)）。更新時は専用venvで動作確認してからファイルを書き換える。

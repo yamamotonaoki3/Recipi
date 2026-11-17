@@ -12,7 +12,7 @@
   - **(A) TypeScript（必須トラック）**: React Native + Expo（Expo Router / New Architecture）、NativeWind、openapi-typescript + openapi-fetch、TanStack Query。Desktop（Windows・macOS）は React Native Web ビルドを **Tauri 2** でパッケージ。カリキュラム指定
   - **(B) Kotlin Multiplatform（随時トラック・非ブロッキング）**: Compose Multiplatform（Android / Desktop。iOS は対象外）、Ktor Client、kotlinx.serialization。開発者の学習用
   - ブラウザ（Web）単体配信は当面対象外
-- **バックエンド**: Python 3.14.9 + FastAPI（Uvicorn）、SQLModel（SQLAlchemy 2.0）、Alembic、psycopg 3、Pydantic v2、Argon2id（argon2-cffi）、JWT 認証（ライブラリは PyJWT / Authlib から選定、アクセス＋リフレッシュトークン / ローテーション）。パッケージ管理は venv + pip + requirements.txt（従来方式で学習、後で uv と比較）
+- **バックエンド**: Python 3.14.9 + FastAPI（Uvicorn）、SQLModel（SQLAlchemy 2.0）、Alembic、psycopg 3、Pydantic v2、Argon2id（argon2-cffi）、JWT 認証（PyJWTを採用済み。アクセス＋リフレッシュトークン / ローテーション）。パッケージ管理は venv + pip + requirements.txt（従来方式で学習、後で uv と比較）
 - **DB**: PostgreSQL
 - **画像保存**: S3 互換クラウドストレージ（ローカルは MinIO）
 - **型共有**: FastAPI が出力する OpenAPI 3.1 →（Kotlin: OpenAPI Generator ／ TS: openapi-typescript）で各クライアントの型を自動生成（コンパイル時共有はしない）
@@ -31,6 +31,13 @@
 3. ユーザーからコミット指示があったら、コミット完了後すぐにプッシュまで自動実行する。
 
 ---
+
+## ドキュメントの管理
+
+- リポジトリには、継続して参照する要件・設計・運用手順・学び・セキュリティの判断記録を置く。
+- 個別変更の依頼・受け入れ基準・実装計画はGitHub Issue、実施内容・検証結果・作業報告はPR本文で管理し、一時的な指示書・計画書・報告書をコミットしない。
+- ローカルに作業資料が必要な場合は `docs/change-requests/`、`docs/plans/`、`docs/reports/`、`docs/superpowers/` のGit管理外ディレクトリへ置く。既存の一時資料を整理するときは必要な仕様・判断を正式資料またはIssue・PRへ移し、ローカル原本は保持する。
+- コミット前にステージ済みのファイル一覧を確認し、一時資料が含まれていないことを確かめる。
 
 ## 絶対に守るルール
 

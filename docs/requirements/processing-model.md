@@ -147,7 +147,7 @@
 | プロフィール | PATCH /users/me | `users` UPDATE のみ | 同期 | — |
 | プロフィール | アバター PUT | `POST /images` と同じ段階方式: ①新キーの管理行を `pending` で INSERT → ②オブジェクトを PUT → ③**1 Tx**で `users.avatar_key` を新キーに更新 ＋ 旧キーを削除キューに登録 ＋ 新キーの管理行を消費済みに。②③失敗時は新キー行が未参照のまま残り GC が回収（§9） | 同期（②の PUT と③の削除キュー登録を含む） | ストレージ削除ジョブ・一時アップロード GC |
 | プロフィール | アバター DELETE | **1 Tx**: `users.avatar_key` を NULL に ＋ 旧キーを削除キューに登録 | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
-| プロフィール | アカウント削除（DELETE /users/me） | **単一 Tx**: 本人行を `FOR UPDATE`（本人に関係する行の新規作成を止める）→ `token_version` +1 → 関係者の users → 関係レシピ → 本人の未使用 uploads を id 順にロック → **CASCADE 削除の前に、消えるレシピ / 手順 / 感想 / アバターの画像キー ＋ 本人所有で未消費の `uploads`（`pending` / `stored`）のキーを全て集めて削除キューに INSERT**（`pending` は `delete_after` で実削除を遅らせる）→ 生き残る他ユーザー / 他レシピのカウント列を**減算**（行が消える前に）→ CASCADE 削除 → COMMIT（Issue #71 で実装）（[non-functional.md](non-functional.md) / [profile.md](features/profile.md) / [data-model.md](data-model.md)） | 同期 | カウント補正ジョブ（多層防御）・ストレージ削除ジョブ（画像） |
+| プロフィール | アカウント削除（DELETE /users/me） | **単一 Tx**: 本人行を `FOR UPDATE` → `token_version` +1 → 関係者のusers → 関係レシピ → 本人の未使用uploadsをid順にロック → 本人の感想画像と未消費uploads（`pending` / `stored`）のキーを削除キューへINSERT（pendingは実削除を遅らせる）→ 関係行が消える前にカウント列を減算 → 本人の関係行・通知outbox・uploads管理行を明示削除 → `users.deleted_at` を設定し本人のフォロー数を0にする → COMMIT。users・投稿レシピ・アバター・投稿レシピ画像・他人が付けたお気に入りと感想は保持（[profile.md](features/profile.md)） | 同期 | カウント補正ジョブ・ストレージ削除ジョブ |
 | レシピ | POST / PUT | **1 Tx**: `recipes` ＋ `ingredient_groups` ＋ `ingredients`（全入れ替え）＋ `steps`（全入れ替え）＋ `units` 未登録分の `ON CONFLICT` upsert ＋ `title_normalized` / `name_normalized` 生成。PUT で参照から外れた画像キーは同一 Tx で削除キューに登録 | 同期（削除キュー登録を含む） | ストレージ削除ジョブ・一時アップロード GC |
 | レシピ | 公開レシピの新規投稿（副作用） | 上記 Tx 内で `notification_outbox` に 1 行 → コミット後に `BackgroundTasks` が fan-out。取りこぼしは定期スイープが回収（§7・§8・§9） | **非同期**（`BackgroundTasks` ＋ outbox） | 通知 outbox スイープ・古い通知の掃除 |
 | レシピ | DELETE | **1 Tx**: サムネ・手順画像・そのレシピへの感想画像のキーを**集めて削除キューに INSERT** → CASCADE（材料 / グループ / 手順 / お気に入り / 感想 / 通知）＋ 自分の他レシピ材料の `ref_recipe_id` を SET NULL | 同期（削除キュー登録を含む） | ストレージ削除ジョブ |
@@ -185,12 +185,13 @@
 | 通知 outbox スイープ（`python -m app.jobs.notification_sweep`） | `processed_at IS NULL` かつ**作成から 5 分以上たった** `notification_outbox` 行を 1 件ずつ別 Tx で処理し（1 件の失敗は次回に回す）、fan-out をやり直す（`BackgroundTasks` の取りこぼし回収） | 通知側の一意制約で重複作成しない。`processed_at` をセット | → [todo.md](todo.md) #18 | 次回実行で回収 | プロセス断でも通知が最終的に届くことを保証する多層防御。数分〜数十分の遅延は許容 |
 | 古い通知の掃除（`python -m app.jobs.cleanup_notifications`） | 既読から 90 日（`NOTIFICATION_READ_RETENTION_DAYS`）を過ぎた通知 ＋ 処理済みから 7 日（`OUTBOX_PROCESSED_RETENTION_DAYS`）を過ぎた `notification_outbox` 行を削除（未読・未処理は残す。境界は `<=`）。`BATCH_SIZE` 行ずつ・`SKIP LOCKED`（Issue #72） | 対象を都度判定 | 90 日 / 7 日（Issue #72 で確定） | 次回実行で回収 | 通知は履歴。古いものの掃除に即時性は不要 |
 | パスワード再設定の試行記録の掃除（`python -m app.jobs.cleanup_password_reset_attempts`） | 作られてから 1 日（`PASSWORD_RESET_ATTEMPT_RETENTION_DAYS`）を過ぎた `password_reset_attempts` を削除（境界は `<=`。成功した request の記録も含む。users に外部キーが無くアカウント削除では消えないため）。`BATCH_SIZE` 行ずつ・`SKIP LOCKED`・`created_at` のインデックスで探す（Issue #85） | 対象を都度判定 | 1 日（Issue #85 で確定） | 次回実行で回収 | レート制限の正しさは直近 15 分の件数の判定で担保済み。物理削除は個人情報（メール・IP）を必要以上に持たないためで、急がない |
+| 再認証試行記録の掃除（`python -m app.jobs.cleanup_reauth_attempts`） | 作成から1日（`REAUTH_ATTEMPT_RETENTION_DAYS`）を過ぎた行を削除（`created_at <= cutoff`）。500行単位・`FOR UPDATE SKIP LOCKED` | 対象を都度判定 | 毎日2:35（日本時間） | 次回実行で回収 | 直近15分の試行制限を超えて記録を保持し続けないため |
 | 閲覧履歴のトリミング（`python -m app.jobs.trim_recipe_views`） | ユーザーあたり 200 件（`RECIPE_VIEWS_MAX_PER_USER`）を超えた `recipe_views` を古い順に削除（定期ジョブ方式で確定）。ユーザー単位の advisory lock で同じユーザーを 2 本で削らない。境界の行を読んでから「境界より古い行」を条件付きで消すので、削除中の閲覧で新しくなった行は消えない（Issue #72） | 対象を都度判定 | 200 件（Issue #72 で確定） | 次回実行で回収 | 上限超過分の掃除で、閲覧体験に影響しない |
-| `ai_usage` の日次処理（Phase 11） | レート制限をアプリ内カウンタで持つ場合の日次リセット / 集計 | 日付キーで冪等 | → [todo.md](todo.md) #45 | 次回実行で回収 | 日次境界の処理でリクエスト経路に乗せる必要がない |
+| AI校正の時間枠管理 | 現行はAPIがUTCのhour/dayごとに別の `ai_usage` 行を作成・更新する。時間枠が変われば新しい行を使うため、上限のリセットに日次ジョブは使わない | 一意キーと行ロックで枠を共有 | 校正リクエスト時 | APIで制限を判定 | 過去行の掃除・集計ジョブは未実装で、現行Schedulerの9本には含まない |
 
-## 9. アップロード管理と削除キュー（物理スキーマは Phase 3 で確定）
+## 9. アップロード管理と削除キュー（実装済み）
 
-### 一時アップロード管理（`uploads` 想定）
+### 一時アップロード管理（`uploads`）
 
 - キーはアップロード前に**行の INSERT で確定**する（`POST /images` の①）。オブジェクトだけが存在して行が無い、という状態を作らない。
 - 状態: `pending`（行だけ作成、アップロード進行中）→ `stored`（オブジェクト保存済み・本参照待ち）→ `consumed`（本参照された）。
@@ -207,10 +208,10 @@
 
 - 「参照から外れたオブジェクトキー」をためる。列の例: `key` / `reason` / `enqueued_at` / `attempts` / `last_error`。
 - **登録は発火元と同一トランザクション**（§5-2）。コミットされれば必ず後で消される。
-- **CASCADE 削除より前にキーを集める**: 行が消えた後ではキーを取り出せない。レシピ削除では CASCADE で消える `recipes.thumbnail_key` / `steps.image_key` / そのレシピへの `recipe_comments.image_key` を、アカウント削除ではさらに `users.avatar_key` と本人所有で未消費の `uploads`（`pending` / `stored`）のキーを、先に SELECT して削除キューに INSERT してから DELETE する。
+- **参照元の行を削除する前にキーを集める**: レシピ削除ではサムネ・手順・そのレシピへの感想の画像キーを、退会では本人が書いた感想の画像と未消費uploadsのキーを、先に削除キューへ登録する。退会ではアバター・投稿レシピ画像・他人の感想画像は保持する。
 - **冪等**: 同一キーの重複登録を許容し、削除ジョブ側で「既に無い」を成功として扱う。
 
-物理スキーマ（`uploads` の状態列 / 専用テーブルの別立て）の確定は **Phase 3（画像）**（→ [todo.md](todo.md) #32）。
+物理スキーマは `backend/app/models/upload.py` と `pending_storage_deletion.py` に実装済み。保持列・索引は [data-model.md](data-model.md) とモデル定義を参照する。
 
 ### 通知 outbox（`notification_outbox`・Issue #70 で実装）
 
@@ -218,7 +219,7 @@
 - 公開レシピ作成トランザクション内で 1 行 INSERT（発火とアトミック）。`BackgroundTasks` が即時処理し、落ちた分は定期スイープ（§8）が拾う。
 - **並行処理の安全化**: 処理側（`BackgroundTasks` / スイープ）は未処理行を `FOR UPDATE SKIP LOCKED` で確保してから処理する。`notifications` への INSERT は `(user_id, 'followee_new_recipe', recipe_id)` 一意制約 ＋ `ON CONFLICT DO NOTHING`。両方あるので二重起動しても通知は重複せず、途中失敗した行は `processed_at` が NULL のまま次回に再処理される。
 - **受信者の決定時点**: 受信者は「その outbox 行を処理した時点」の `follows` で決まる。`BackgroundTasks` が即時成功する通常運用では投稿とほぼ同時刻。障害でスイープ回収が数分遅れた場合、その間のフォロー増減が反映される（遅れて届く / 届かない）。`followee_new_recipe` は「フォロー中ユーザーの新着を知る」ためのもので、遅延回収時に**その時点のフォロワー**へ届くのは自然な挙動として**許容する**（通知はベストエフォート）。
-- 物理スキーマは Phase 8 で確定（→ [todo.md](todo.md) #18）。
+- 物理スキーマは `backend/app/models/notification_outbox.py` に実装済み（[data-model.md](data-model.md)）。
 
 ### fan-out の移行検討開始条件（参考・Issue #260。導入しない確定のため現在は不使用）
 
@@ -255,8 +256,8 @@ API応答時間だけが遅い場合やDB書き込みがボトルネックの場
 ## 12. 未確定（→ [todo.md](todo.md)）
 
 - ~~本番のジョブ実行基盤（cron / コンテナスケジューラ）の具体と、多重起動防止の方法~~ → **Issue #173 で確定**: **EventBridge Scheduler → ECS RunTask**（API と同じタスク定義の `command` を上書きして 1 回だけ動かす。常駐ワーカーなし）。**多重起動の防止はスケジューラ側では行わない**（各ジョブが `FOR UPDATE SKIP LOCKED` や advisory lock で、同時に動いても壊れないため）。失敗は 4 経路（異常終了・起動失敗・スケジューラの起動失敗・終了コード 0 のままの失敗をログの件数で）で検知し、SNS のメールに通知する。詳細は `infra/terraform/README.md`
-- ~~各定期バッチの実行頻度~~ → **Issue #173 で確定**（§8 の台帳と `infra/terraform/scheduler.tf`）: 通知スイープ 10 分・ストレージ削除 15 分・一時アップロード GC 1 時間・その他の掃除と数え直しは日次（日本時間 2:10〜2:50 に 10 分ずつずらす）
-- ストレージ削除キューの物理スキーマ（Phase 3）
+- ~~各定期バッチの実行頻度~~ → **Issue #173 で確定**（§8 の台帳と `infra/terraform/scheduler.tf`）: 通知スイープ 10 分・ストレージ削除 15 分・一時アップロード GC 1 時間・その他の掃除と数え直しは日次（日本時間2:10・2:20・2:30・2:35〈再認証試行〉・2:40・2:50）
+- ~~ストレージ削除キューの物理スキーマ（Phase 3）~~ → 実装済み（§9）。
 - ~~通知・期限切れリフレッシュトークンの保持期間~~ → Issue #72 で確定（§8。通知 90 日・outbox 7 日・トークン 30 日・閲覧履歴 200 件。`app/config.py` の設定値）
 - ~~各ジョブを何分おきに動かすか・多重起動防止・監視~~ → **Issue #173 で確定**（上と同じ）
 - ~~大量フォロワー時の fan-out 性能測定と、専用ジョブキュー導入の判断（Phase 10 以降）~~ → 確定（2026-09-22）: 導入しない（[todo.md](todo.md) #18・#50）

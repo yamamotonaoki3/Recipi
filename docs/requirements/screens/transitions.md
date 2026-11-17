@@ -45,7 +45,7 @@ flowchart TD
     UserProfile -->|フォロー/フォロワー数| Connections
     Connections -->|行タップ（他人）| UserProfile
     Connections -->|行タップ（自分）| MyPage
-    ProfileEdit -->|アカウント削除| Login
+    MyPage -->|退会確認・実行| Login
 ```
 
 ## フロー別
@@ -109,8 +109,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    M[マイページ] --> PE[プロフィール編集]
-    PE -->|アカウント削除| Dlg{確認ダイアログ}
-    Dlg -->|キャンセル| PE
+    M[マイページ] -->|退会する| Dlg{確認ダイアログ}
+    Dlg -->|キャンセル| M
     Dlg -->|実行| L[ログイン画面]
 ```
